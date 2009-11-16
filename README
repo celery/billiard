@@ -1,0 +1,37 @@
+============================================================================
+billiard - Multiprocessing Task Pool
+============================================================================
+
+:Version: 0.0.1
+
+Introduction
+============
+
+.. Please write an introduction to your package here.
+
+Installation
+============
+
+You can install ``billiard`` either via the Python Package Index (PyPI)
+or from source.
+
+To install using ``pip``,::
+
+    $ pip install billiard
+
+
+To install using ``easy_install``,::
+
+    $ easy_install billiard
+
+
+If you have downloaded a source tarball you can install it
+by doing the following,::
+
+    $ python setup.py build
+    # python setup.py install # as root
+
+Examples
+========
+
+.. Please write some examples using your package here.
