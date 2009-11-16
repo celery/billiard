@@ -1,5 +1,5 @@
 ============================================================================
-billiard - Multiprocessing Task Pool
+billiard - Multiprocessing Pool Extensions
 ============================================================================
 
 :Version: 0.0.1
@@ -7,7 +7,7 @@ billiard - Multiprocessing Task Pool
 Introduction
 ============
 
-.. Please write an introduction to your package here.
+This package contains extensions to the multiprocessing Pool.
 
 Installation
 ============
