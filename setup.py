@@ -75,17 +75,18 @@ setup(
     platforms=["any"],
     packages=packages,
     data_files=data_files,
+    license="BSD",
     zip_safe=False,
     test_suite="nose.collector",
     install_requires=[
     ],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
-        "Framework :: Django",
         "Operating System :: OS Independent",
         "Programming Language :: Python",
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Libraries :: Python Modules",
+        "License :: OSI Approved :: BSD License",
     ],
     long_description=codecs.open('README', "r", "utf-8").read(),
 )
