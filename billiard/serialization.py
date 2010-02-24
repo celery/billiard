@@ -1,4 +1,5 @@
 import sys
+import types
 import operator
 try:
     import cPickle as pickle
