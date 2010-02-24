@@ -29,7 +29,6 @@ else:
         return type(name, (parent,), {'__module__': module})
 
 
-
 def find_nearest_pickleable_exception(exc):
     """With an exception instance, iterate over its super classes (by mro)
     and find the first super exception that is pickleable. It does
