@@ -6,6 +6,11 @@ except ImportError:
 
 from billiard.utils.functional import curry
 
+try:
+    _error_bases = (BaseException, )
+except NameError:
+    _error_bases = (SystemExit, KeyboardInterrupt)
+
 
 def find_nearest_pickleable_exception(exc):
     """With an exception instance, iterate over its super classes (by mro)
@@ -23,7 +28,7 @@ def find_nearest_pickleable_exception(exc):
 
     """
 
-    unwanted = (Exception, BaseException, object)
+    unwanted = (Exception, ) + _error_bases + (object, )
     is_unwanted = lambda exc: any(map(curry(operator.is_, exc), unwanted))
 
     mro_ = getattr(exc.__class__, "mro", lambda: [])
