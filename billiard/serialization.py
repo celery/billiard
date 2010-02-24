@@ -4,12 +4,18 @@ try:
 except ImportError:
     import pickle
 
-from billiard.utils.functional import curry
-
 try:
     _error_bases = (BaseException, )
 except NameError:
     _error_bases = (SystemExit, KeyboardInterrupt)
+
+
+def is_unwanted_exception_cls(exc_cls):
+    unwanted_classes = (Exception, ) + _error_bases + (object, )
+    for unwanted_cls in unwanted_classes:
+        if exc_cls is unwanted_cls:
+            return True
+    return False
 
 
 def find_nearest_pickleable_exception(exc):
@@ -28,12 +34,9 @@ def find_nearest_pickleable_exception(exc):
 
     """
 
-    unwanted = (Exception, ) + _error_bases + (object, )
-    is_unwanted = lambda exc: any(map(curry(operator.is_, exc), unwanted))
-
     mro_ = getattr(exc.__class__, "mro", lambda: [])
     for supercls in mro_():
-        if is_unwanted(supercls):
+        if is_unwanted_exception_cls(supercls):
             # only BaseException and object, from here on down,
             # we don't care about these.
             return None
