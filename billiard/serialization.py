@@ -1,3 +1,4 @@
+import sys
 import operator
 try:
     import cPickle as pickle
@@ -16,6 +17,16 @@ def is_unwanted_exception_cls(exc_cls):
         if exc_cls is unwanted_cls:
             return True
     return False
+
+if sys.version_info < (2, 5):
+
+    # Prior to Python 2.5, Exception was an old-style class
+    def subclass_exception(name, parent, unused):
+        return types.ClassType(name, (parent,), {})
+else:
+    def subclass_exception(name, parent, module):
+        return type(name, (parent,), {'__module__': module})
+
 
 
 def find_nearest_pickleable_exception(exc):
@@ -55,7 +66,7 @@ def create_exception_cls(name, module, parent=None):
     """Dynamically create an exception class."""
     if not parent:
         parent = Exception
-    return type(name, (parent, ), {"__module__": module})
+    return subclass_exception(name, parent, module)
 
 
 class UnpickleableExceptionWrapper(Exception):
@@ -95,7 +106,7 @@ class UnpickleableExceptionWrapper(Exception):
         self.exc_module = exc_module
         self.exc_cls_name = exc_cls_name
         self.exc_args = exc_args
-        super(Exception, self).__init__(exc_module, exc_cls_name, exc_args)
+        Exception.__init__(self, exc_module, exc_cls_name, exc_args)
 
 
 def get_pickleable_exception(exc):
