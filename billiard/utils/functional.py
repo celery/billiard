@@ -59,8 +59,8 @@
 #     block to make it compatible with Python 2.3, which doesn't allow
 #     assigning to ``__name__``.
 
-# Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007 Python Software Foundation.
-# All Rights Reserved.
+# Copyright (c) 2001, 2002, 2003, 2004, 2005, 2006, 2007 Python Software
+# Foundation. All Rights Reserved.
 
 ###############################################################################
 
@@ -111,6 +111,7 @@ try:
     from functools import update_wrapper
 except ImportError:
     update_wrapper = _compat_update_wrapper
+
 
 def _compat_wraps(wrapped, assigned=WRAPPER_ASSIGNMENTS,
         updated=WRAPPER_UPDATES):
