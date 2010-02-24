@@ -166,5 +166,8 @@ class DynamicPool(Pool):
         if dead:
             dead_count = len(dead)
             self._pool = alive
-            self.grow(self._size if dead_count > self._size else dead_count)
+            if dead_count > self._size:
+                self.grow(self._size)
+            else:
+                self.grow(dead_count)
             return dead_count
