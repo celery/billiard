@@ -4,6 +4,16 @@ import os
 import codecs
 
 try:
+    any([True])
+    any = any
+except NameError:
+    def any(iterable):
+        for item in iterable:
+            if item:
+                return True
+        return False
+
+try:
     from setuptools import setup, find_packages
 except ImportError:
     from ez_setup import use_setuptools

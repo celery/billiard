@@ -148,7 +148,10 @@ class DynamicPool(Pool):
         dead, alive = [], []
         for process in self._pool:
             if process and process.pid and isNumberType(process.pid):
-                dest = dead if self._is_dead(process) else alive
+                if self._is_dead(process):
+                    dest = dead
+                else:
+                    dest = alive
                 dest.append(process)
         return dead, alive
 
