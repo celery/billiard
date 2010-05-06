@@ -220,7 +220,6 @@ class Pool(object):
 
         '''
         assert self._state == RUN
-        print("ACCEPT_CALLBACK IS %s" % (repr(accept_callback), ))
         result = ApplyResult(self._cache, callback, accept_callback)
         self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
         return result
