@@ -87,27 +87,22 @@ class Pool(object):
         self._taskqueue = Queue.Queue()
         self._cache = {}
         self._state = RUN
+        self._initializer = initializer
+        self._initargs = initargs
 
         if processes is None:
             try:
                 processes = cpu_count()
             except NotImplementedError:
                 processes = 1
+        self._size = processes
 
         if initializer is not None and not hasattr(initializer, '__call__'):
             raise TypeError('initializer must be a callable')
 
         self._pool = []
         for i in range(processes):
-            w = self.Process(
-                target=worker,
-                args=(self._inqueue, self._outqueue, self._ackqueue,
-                      initializer, initargs)
-                )
-            self._pool.append(w)
-            w.name = w.name.replace('Process', 'PoolWorker')
-            w.daemon = True
-            w.start()
+            self._create_worker_process()
 
         self._task_handler = threading.Thread(
             target=Pool._handle_tasks,
@@ -142,6 +137,19 @@ class Pool(object):
                   self._task_handler, self._result_handler, self._cache),
             exitpriority=15
             )
+
+    def _create_worker_process(self):
+        w = self.Process(
+            target=worker,
+            args=(self._inqueue, self._outqueue, self._ackqueue,
+                    self._initializer, self._initargs)
+            )
+        self._pool.append(w)
+        w.name = w.name.replace('Process', 'PoolWorker')
+        w.daemon = True
+        w.start()
+        return w
+
 
     def _setup_queues(self):
         from multiprocessing.queues import SimpleQueue
@@ -307,7 +315,7 @@ class Pool(object):
             job, i = task
             try:
                 cache[job]._ack(i)
-            except (KeyError, AttributeError):
+            except (KeyError, AttributeError), exc:
                 # Object gone, or doesn't support _ack (e.g. IMapIterator)
                 pass
 

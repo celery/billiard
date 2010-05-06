@@ -77,18 +77,9 @@ class DynamicPool(Pool):
 
     def __init__(self, processes=None, initializer=None, initargs=()):
 
-        if processes is None:
-            try:
-                processes = multiprocessing.cpu_count()
-            except NotImplementedError:
-                processes = 1
-
         super(DynamicPool, self).__init__(processes=processes,
                                           initializer=initializer,
                                           initargs=initargs)
-        self._initializer = initializer
-        self._initargs = initargs
-        self._size = processes
         self.logger = multiprocessing.get_logger()
 
     def _my_cleanup(self):
@@ -108,16 +99,10 @@ class DynamicPool(Pool):
     def add_worker(self):
         """Add another worker to the pool."""
         self._my_cleanup()
-        w = self.Process(target=worker,
-                         args=(self._inqueue, self._outqueue,
-                               self._initializer, self._initargs))
-        w.name = w.name.replace("Process", "PoolWorker")
-        w.daemon = True
-        w.start()
-        self._pool.append(w)
+        worker = self._create_worker_process()
         self.logger.debug(
-            "DynamicPool: Started pool worker %s (PID: %s, Poolsize: %d)" %(
-                w.name, w.pid, len(self._pool)))
+            "DynamicPool: Started pool worker %s (PID: %s, Poolsize: %d)" % (
+                worker.name, worker.pid, len(self._pool)))
 
     def grow(self, size=1):
         """Add workers to the pool.
