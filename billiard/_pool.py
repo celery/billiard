@@ -534,11 +534,15 @@ class ApplyResult(object):
             self._cond.notify()
         finally:
             self._cond.release()
-        del self._cache[self._job]
+        if self._accepted:
+            del self._cache[self._job]
 
     def _ack(self, i):
+        self._accepted = True
         if self._accept_callback:
             self._accept_callback()
+        if self._ready:
+            del self._cache[self._job]
 
 #
 # Class whose instances are returned by `Pool.map_async()`
