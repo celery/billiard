@@ -1,8 +1,9 @@
 import os
 import errno
 import multiprocessing
-from multiprocessing.pool import Pool, worker
 from operator import isNumberType
+
+from billiard._pool import Pool, worker
 
 
 def pid_is_dead(pid):
