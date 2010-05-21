@@ -12,11 +12,14 @@ __all__ = ['Pool']
 # Imports
 #
 
+import os
+import errno
 import threading
 import Queue
 import itertools
 import collections
 import time
+from signal import signal, SIGUSR1
 
 from multiprocessing import Process, cpu_count, TimeoutError
 from multiprocessing.util import Finalize, debug
@@ -42,7 +45,18 @@ def mapstar(args):
 # Code run by worker processes
 #
 
+class TimeLimitExceeded(Exception):
+    """The time limit has been exceeded and the job has been terminated."""
+
+class SoftTimeLimitExceeded(Exception):
+    """The soft time limit has been exceeded. This exception is raised
+    to give the job a chance to clean up."""
+
+def soft_timeout_sighandler(signum, frame):
+    raise SoftTimeLimitExceeded()
+
 def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=()):
+    pid = os.getpid()
     put = outqueue.put
     get = inqueue.get
     ack = ackqueue.put
@@ -52,6 +66,8 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=()):
 
     if initializer is not None:
         initializer(*initargs)
+
+    signal(SIGUSR1, soft_timeout_sighandler)
 
     while 1:
         try:
@@ -65,7 +81,7 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=()):
             break
 
         job, i, func, args, kwds = task
-        ack((job, i))
+        ack((job, i, time.time(), pid))
         try:
             result = (True, func(*args, **kwds))
         except Exception, e:
@@ -82,11 +98,14 @@ class Pool(object):
     '''
     Process = Process
 
-    def __init__(self, processes=None, initializer=None, initargs=()):
+    def __init__(self, processes=None, initializer=None, initargs=(),
+            timeout=None, soft_timeout=None):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
         self._state = RUN
+        self.timeout = timeout
+        self.soft_timeout = soft_timeout
         self._initializer = initializer
         self._initargs = initargs
 
@@ -121,6 +140,21 @@ class Pool(object):
         self._ack_handler._state = RUN
         self._ack_handler.start()
 
+        # Thread killing timedout jobs.
+        if self.timeout or self.soft_timeout:
+            self._timeout_handler_stopped = threading.Event()
+            self._timeout_handler = threading.Thread(
+                    target=Pool._handle_timeouts,
+                    args=(self, self._timeout_handler_stopped, self._cache,
+                          self.soft_timeout, self.timeout)
+            )
+            self._timeout_handler.daemon = True
+            self._timeout_handler._state = RUN
+            self._timeout_handler.start()
+        else:
+            self._timeout_handler_stopped = None
+            self._timeout_handler = None
+
         # Thread processing results in the outqueue.
         self._result_handler = threading.Thread(
             target=Pool._handle_results,
@@ -134,7 +168,8 @@ class Pool(object):
             self, self._terminate_pool,
             args=(self._taskqueue, self._inqueue, self._outqueue,
                   self._ackqueue, self._pool, self._ack_handler,
-                  self._task_handler, self._result_handler, self._cache),
+                  self._task_handler, self._result_handler, self._cache,
+                  self._timeout_handler, self._timeout_handler_stopped),
             exitpriority=15
             )
 
@@ -149,7 +184,6 @@ class Pool(object):
         w.daemon = True
         w.start()
         return w
-
 
     def _setup_queues(self):
         from multiprocessing.queues import SimpleQueue
@@ -211,7 +245,7 @@ class Pool(object):
             return (item for chunk in result for item in chunk)
 
     def apply_async(self, func, args=(), kwds={},
-            callback=None, accept_callback=None):
+            callback=None, accept_callback=None, timeout_callback=None):
         '''
         Asynchronous equivalent of `apply()` builtin.
 
@@ -228,7 +262,8 @@ class Pool(object):
 
         '''
         assert self._state == RUN
-        result = ApplyResult(self._cache, callback, accept_callback)
+        result = ApplyResult(self._cache, callback,
+                             accept_callback, timeout_callback)
         self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
         return result
 
@@ -252,6 +287,88 @@ class Pool(object):
         self._taskqueue.put((((result._job, i, mapstar, (x,), {})
                               for i, x in enumerate(task_batches)), None))
         return result
+
+    @staticmethod
+    def _handle_timeouts(pool, sentinel_event, cache, t_soft, t_hard):
+        thread = threading.current_thread()
+        processes = pool._pool
+        dirty = set()
+
+        def _process_by_pid(pid):
+            for index, process in enumerate(processes):
+                if process.pid == pid:
+                    return process, index
+            return None, None
+
+        def _pop_by_pid(pid):
+            process, index = _process_by_pid(pid)
+            if not process:
+                return
+            p = processes.pop(index)
+            assert p is process
+            return process
+
+        def _timed_out(start, timeout):
+            if not start or not timeout:
+                return False
+            if time.time() >= start + timeout:
+                return True
+
+        def _on_soft_timeout(job, i):
+            debug('soft time limit exceeded for %i' % i)
+            process, _index = _process_by_pid(job._accept_pid)
+            if not process:
+                return
+
+            # Run timeout callback
+            if job._timeout_callback is not None:
+                job._timeout_callback(soft=True)
+
+            try:
+                os.kill(job._accept_pid, SIGUSR1)
+            except OSError, exc:
+                if exc.errno == errno.ESRCH:
+                    pass
+                else:
+                    raise
+
+            dirty.add(i)
+
+        def _on_hard_timeout(job, i):
+            debug('hard time limit exceeded for %i', i)
+            # Remove from _pool
+            process = _pop_by_pid(job._accept_pid)
+            # Remove from cache and set return value to an exception
+            job._set(i, (False, TimeLimitExceeded()))
+            # Run timeout callback
+            if job._timeout_callback is not None:
+                job._timeout_callback(soft=False)
+            if not process:
+                return
+            # Terminate the process and create a new one.
+            process.terminate()
+            pool._create_worker_process()
+
+        # Inner-loop
+        while 1:
+            if sentinel_event.isSet():
+                debug('timeout handler received sentinel.')
+                break
+
+            # Remove dirty items not in cache anymore
+            if dirty:
+                dirty = set(k for k in dirty if k in cache)
+
+            for i, job in cache.items():
+                ack_time = job._time_accepted
+                if _timed_out(ack_time, t_hard):
+                    _on_hard_timeout(job, i)
+                elif i not in dirty and _timed_out(ack_time, t_soft):
+                    _on_soft_timeout(job, i)
+
+            time.sleep(1) # Don't waste CPU cycles.
+
+        debug('timeout handler exiting')
 
     @staticmethod
     def _handle_tasks(taskqueue, put, outqueue, pool):
@@ -312,9 +429,9 @@ class Pool(object):
                 debug('ack handler got sentinel')
                 break
 
-            job, i = task
+            job, i, time_accepted, pid = task
             try:
-                cache[job]._ack(i)
+                cache[job]._ack(i, time_accepted, pid)
             except (KeyError, AttributeError), exc:
                 # Object gone, or doesn't support _ack (e.g. IMapIterator)
                 pass
@@ -331,9 +448,9 @@ class Pool(object):
                 debug('result handler ignoring extra sentinel')
                 continue
 
-            job, i = task
+            job, i, time_accepted, pid = task
             try:
-                cache[job]._ack(i)
+                cache[job]._ack(i, time_accepted, pid)
             except KeyError:
                 pass
 
@@ -444,7 +561,8 @@ class Pool(object):
 
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, ackqueue, pool,
-                        ack_handler, task_handler, result_handler, cache):
+                        ack_handler, task_handler, result_handler, cache,
+                        timeout_handler, timeout_handler_stopped):
         # this is guaranteed to only be called once
         debug('finalizing pool')
 
@@ -462,6 +580,10 @@ class Pool(object):
         ack_handler._state = TERMINATE
         ackqueue.put(None)                  # sentinel
 
+        if timeout_handler is not None:
+            timeout_handler._state = TERMINATE
+            timeout_handler_stopped.set()
+
         if pool and hasattr(pool[0], 'terminate'):
             debug('terminating workers')
             for p in pool:
@@ -476,6 +598,10 @@ class Pool(object):
         debug('joining ack handler')
         ack_handler.join(1e100)
 
+        if timeout_handler is not None:
+            debug('joining timeout handler')
+            timeout_handler.join(1e100)
+
         if pool and hasattr(pool[0], 'terminate'):
             debug('joining pool workers')
             for p in pool:
@@ -487,14 +613,18 @@ class Pool(object):
 
 class ApplyResult(object):
 
-    def __init__(self, cache, callback, accept_callback=None):
+    def __init__(self, cache, callback, accept_callback=None,
+            timeout_callback=None):
         self._cond = threading.Condition(threading.Lock())
         self._job = job_counter.next()
         self._cache = cache
         self._accepted = False
+        self._accept_pid = None
+        self._time_accepted = None
         self._ready = False
         self._callback = callback
         self._accept_callback = accept_callback
+        self._timeout_callback = timeout_callback
         cache[self._job] = self
 
     def ready(self):
@@ -537,8 +667,10 @@ class ApplyResult(object):
         if self._accepted:
             del self._cache[self._job]
 
-    def _ack(self, i):
+    def _ack(self, i, time_accepted, pid):
         self._accepted = True
+        self._time_accepted = time_accepted
+        self._accept_pid = pid
         if self._accept_callback:
             self._accept_callback()
         if self._ready:

@@ -3,7 +3,7 @@ import errno
 import multiprocessing
 from operator import isNumberType
 
-from billiard._pool import Pool, worker
+from billiard._pool import Pool, worker, SoftTimeLimitExceeded
 
 
 def pid_is_dead(pid):
@@ -74,12 +74,16 @@ def process_is_dead(process):
 class DynamicPool(Pool):
     """Version of :class:`multiprocessing.Pool` that can dynamically grow
     in size."""
+    SoftTimeLimitExceeded = SoftTimeLimitExceeded
 
-    def __init__(self, processes=None, initializer=None, initargs=()):
+    def __init__(self, processes=None, initializer=None, initargs=(),
+            timeout=None, soft_timeout=None):
 
         super(DynamicPool, self).__init__(processes=processes,
                                           initializer=initializer,
-                                          initargs=initargs)
+                                          initargs=initargs,
+                                          timeout=timeout,
+                                          soft_timeout=soft_timeout)
         self.logger = multiprocessing.get_logger()
 
     def _my_cleanup(self):
