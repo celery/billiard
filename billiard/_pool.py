@@ -19,7 +19,7 @@ import Queue
 import itertools
 import collections
 import time
-from signal import signal, SIGUSR1
+import signal
 
 from multiprocessing import Process, cpu_count, TimeoutError
 from multiprocessing.util import Finalize, debug
@@ -31,6 +31,9 @@ from multiprocessing.util import Finalize, debug
 RUN = 0
 CLOSE = 1
 TERMINATE = 2
+
+# Signal used for soft time limits.
+SIG_SOFT_TIMEOUT = getattr(signal, "SIGUSR1", None)
 
 #
 # Miscellaneous
@@ -67,7 +70,8 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=()):
     if initializer is not None:
         initializer(*initargs)
 
-    signal(SIGUSR1, soft_timeout_sighandler)
+    if SIG_SOFT_TIMEOUT is not None:
+        signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
 
     while 1:
         try:
@@ -108,6 +112,10 @@ class Pool(object):
         self.soft_timeout = soft_timeout
         self._initializer = initializer
         self._initargs = initargs
+
+        if self.soft_timeout and SIG_SOFT_TIMEOUT is None:
+            raise NotImplementedError("Soft timeouts not supported: "
+                    "Your platform does not have the SIGUSR1 signal.")
 
         if processes is None:
             try:
@@ -325,7 +333,7 @@ class Pool(object):
                 job._timeout_callback(soft=True)
 
             try:
-                os.kill(job._accept_pid, SIGUSR1)
+                os.kill(job._accept_pid, SIG_SOFT_TIMEOUT)
             except OSError, exc:
                 if exc.errno == errno.ESRCH:
                     pass
