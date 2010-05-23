@@ -59,7 +59,7 @@ def process_is_dead(process):
 
     # Only do this if os.kill exists for this platform (e.g. Windows doesn't
     # support it).
-    if callable(getattr(os, "kill", None)) and reap_process(process.pid):
+    if getattr(os, "kill", None) and reap_process(process.pid):
         return True
 
     # Then try to ping the process using its pipe.
@@ -138,8 +138,10 @@ class DynamicPool(Pool):
         dead, alive = [], []
         for process in self._pool:
             if process and process.pid and isNumberType(process.pid):
-                dest = self._is_dead(process) and dead or alive
-                dest.append(process)
+                if self._is_dead(process):
+                    dead.append(process)
+                else:
+                    alive.append(process)
         return dead, alive
 
     def replace_dead_workers(self):
@@ -153,8 +155,5 @@ class DynamicPool(Pool):
         if dead:
             dead_count = len(dead)
             self._pool = alive
-            if dead_count > self._size:
-                self.grow(self._size)
-            else:
-                self.grow(dead_count)
+            self.grow(min(dead_count, self._size))
             return dead_count
