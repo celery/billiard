@@ -102,11 +102,315 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=(),
 # Class representing a process pool
 #
 
+
+class PoolThread(threading.Thread):
+
+    def __init__(self, *args, **kwargs):
+        threading.Thread.__init__(self)
+        self._state = RUN
+        self.daemon = True
+
+    def terminate(self):
+        self._state = TERMINATE
+
+    def close(self):
+        self._state = CLOSE
+
+
+class Supervisor(PoolThread):
+
+    def __init__(self, pool):
+        self.pool = pool
+        super(Supervisor, self).__init__()
+
+    def run(self):
+        debug('worker handler starting')
+        while self._state == RUN and self.pool._state == RUN:
+            self.pool._maintain_pool()
+            time.sleep(0.1)
+        debug('worker handler exiting')
+
+
+class TaskHandler(PoolThread):
+
+    def __init__(self, taskqueue, put, outqueue, pool):
+        self.taskqueue = taskqueue
+        self.put = put
+        self.outqueue = outqueue
+        self.pool = pool
+        super(TaskHandler, self).__init__()
+
+    def run(self):
+        taskqueue = self.taskqueue
+        outqueue = self.outqueue
+        put = self.put
+        pool = self.pool
+
+        for taskseq, set_length in iter(taskqueue.get, None):
+            i = -1
+            for i, task in enumerate(taskseq):
+                if self._state:
+                    debug('task handler found thread._state != RUN')
+                    break
+                try:
+                    put(task)
+                except IOError:
+                    debug('could not put task on queue')
+                    break
+            else:
+                if set_length:
+                    debug('doing set_length()')
+                    set_length(i+1)
+                continue
+            break
+        else:
+            debug('task handler got sentinel')
+
+        try:
+            # tell result handler to finish when cache is empty
+            debug('task handler sending sentinel to result handler')
+            outqueue.put(None)
+
+            # tell workers there is no more work
+            debug('task handler sending sentinel to workers')
+            for p in pool:
+                put(None)
+        except IOError:
+            debug('task handler got IOError when sending sentinels')
+
+        debug('task handler exiting')
+
+
+class AckHandler(PoolThread):
+
+    def __init__(self, ackqueue, get, cache):
+        self.ackqueue = ackqueue
+        self.get = get
+        self.cache = cache
+
+        super(AckHandler, self).__init__()
+
+    def run(self):
+        debug('ack handler starting')
+        ackqueue = self.ackqueue
+        get = self.get
+        cache = self.cache
+
+        while 1:
+            try:
+                task = get()
+            except (IOError, EOFError), exc:
+                debug('ack handler got %s -- exiting',
+                        exc.__class__.__name__)
+
+            if self._state:
+                assert self._state == TERMINATE
+                debug('ack handler found thread._state=TERMINATE')
+                break
+
+            if task is None:
+                debug('ack handler got sentinel')
+                break
+
+            job, i, time_accepted, pid = task
+            try:
+                cache[job]._ack(i, time_accepted, pid)
+            except (KeyError, AttributeError), exc:
+                # Object gone, or doesn't support _ack (e.g. IMapIterator)
+                pass
+
+        while cache and self._state != TERMINATE:
+            try:
+                task = get()
+            except (IOError, EOFError), exc:
+                debug('ack handler got %s -- exiting',
+                        exc.__class__.__name__)
+                return
+
+            if task is None:
+                debug('result handler ignoring extra sentinel')
+                continue
+
+            job, i, time_accepted, pid = task
+            try:
+                cache[job]._ack(i, time_accepted, pid)
+            except KeyError:
+                pass
+
+        debug('ack handler exiting: len(cache)=%s, thread._state=%s',
+                len(cache), self._state)
+
+
+class TimeoutHandler(PoolThread):
+
+    def __init__(self, processes, sentinel_event, cache, t_soft, t_hard):
+        self.pool = pool
+        self.sentinel_event = sentinel_event
+        self.cache = cache
+        self.t_soft = t_soft
+        self.t_hard = t_hard
+        super(TimeoutHandler, self).__init__()
+
+    def run(self):
+        processes = self.processes
+        cache = self.cache
+        t_hard, t_soft = self.t_hard, self.t_soft
+        dirty = set()
+
+        def _process_by_pid(pid):
+            for index, process in enumerate(processes):
+                if process.pid == pid:
+                    return process, index
+            return None, None
+
+        def _pop_by_pid(pid):
+            process, index = _process_by_pid(pid)
+            if not process:
+                return
+            p = processes.pop(index)
+            assert p is process
+            return process
+
+        def _timed_out(start, timeout):
+            if not start or not timeout:
+                return False
+            if time.time() >= start + timeout:
+                return True
+
+        def _on_soft_timeout(job, i):
+            debug('soft time limit exceeded for %i' % i)
+            process, _index = _process_by_pid(job._accept_pid)
+            if not process:
+                return
+
+            # Run timeout callback
+            if job._timeout_callback is not None:
+                job._timeout_callback(soft=True)
+
+            try:
+                os.kill(job._accept_pid, SIG_SOFT_TIMEOUT)
+            except OSError, exc:
+                if exc.errno == errno.ESRCH:
+                    pass
+                else:
+                    raise
+
+            dirty.add(i)
+
+        def _on_hard_timeout(job, i):
+            debug('hard time limit exceeded for %i', i)
+            # Remove from _pool
+            process = _pop_by_pid(job._accept_pid)
+            # Remove from cache and set return value to an exception
+            job._set(i, (False, TimeLimitExceeded()))
+            # Run timeout callback
+            if job._timeout_callback is not None:
+                job._timeout_callback(soft=False)
+            if not process:
+                return
+            # Terminate the process
+            process.terminate()
+
+        # Inner-loop
+        while self._state == RUN:
+
+            # Remove dirty items not in cache anymore
+            if dirty:
+                dirty = set(k for k in dirty if k in cache)
+
+            for i, job in cache.items():
+                ack_time = job._time_accepted
+                if _timed_out(ack_time, t_hard):
+                    _on_hard_timeout(job, i)
+                elif i not in dirty and _timed_out(ack_time, t_soft):
+                    _on_soft_timeout(job, i)
+
+            time.sleep(0.5) # Don't waste CPU cycles.
+
+        debug('timeout handler exiting')
+
+
+class ResultHandler(PoolThread):
+
+    def __init__(self, outqueue, get, cache):
+        self.outqueue = outqueue
+        self.get = get
+        self.cache = cache
+        super(ResultHandler, self).__init__()
+
+    def run(self):
+        get = self.get
+        outqueue = self.outqueue
+        cache = self.cache
+
+        debug('result handler starting')
+        while 1:
+            try:
+                task = get()
+            except (IOError, EOFError), exc:
+                debug('result handler got %s -- exiting',
+                        exc.__class__.__name__)
+                return
+
+            if self._state:
+                assert self._state == TERMINATE
+                debug('result handler found thread._state=TERMINATE')
+                break
+
+            if task is None:
+                debug('result handler got sentinel')
+                break
+
+            job, i, obj = task
+            try:
+                cache[job]._set(i, obj)
+            except KeyError:
+                pass
+
+        while cache and self._state != TERMINATE:
+            try:
+                task = get()
+            except (IOError, EOFError), exc:
+                debug('result handler got %s -- exiting',
+                        exc.__class__.__name__)
+                return
+
+            if task is None:
+                debug('result handler ignoring extra sentinel')
+                continue
+            job, i, obj = task
+            try:
+                cache[job]._set(i, obj)
+            except KeyError:
+                pass
+
+        if hasattr(outqueue, '_reader'):
+            debug('ensuring that outqueue is not full')
+            # If we don't make room available in outqueue then
+            # attempts to add the sentinel (None) to outqueue may
+            # block.  There is guaranteed to be no more than 2 sentinels.
+            try:
+                for i in range(10):
+                    if not outqueue._reader.poll():
+                        break
+                    get()
+            except (IOError, EOFError):
+                pass
+
+        debug('result handler exiting: len(cache)=%s, thread._state=%s',
+              len(cache), self._state)
+
+
 class Pool(object):
     '''
     Class which supports an async version of the `apply()` builtin
     '''
     Process = Process
+    Supervisor = Supervisor
+    TaskHandler = TaskHandler
+    AckHandler = AckHandler
+    TimeoutHandler = TimeoutHandler
+    ResultHandler = ResultHandler
     SoftTimeLimitExceeded = SoftTimeLimitExceeded
 
     def __init__(self, processes=None, initializer=None, initargs=(),
@@ -139,53 +443,30 @@ class Pool(object):
         for i in range(processes):
             self._create_worker_process()
 
-        self._worker_handler = threading.Thread(
-            target=Pool._handle_workers,
-            args=(self, ),
-        )
-        self._worker_handler.daemon = True
-        self._worker_handler._state = RUN
+        self._worker_handler = self.Supervisor(self)
         self._worker_handler.start()
 
-        self._task_handler = threading.Thread(
-            target=Pool._handle_tasks,
-            args=(self._taskqueue, self._quick_put, self._outqueue, self._pool)
-            )
-        self._task_handler.daemon = True
-        self._task_handler._state = RUN
+        self._task_handler = self.TaskHandler(self._taskqueue, self._quick_put,
+                                         self._outqueue, self._pool)
         self._task_handler.start()
 
-        # Thread processing acknowledgements form the ackqueue.
-        self._ack_handler = threading.Thread(
-            target=Pool._handle_ack,
-            args=(self._ackqueue, self._quick_get_ack, self._cache)
-            )
-        self._ack_handler.daemon = True
-        self._ack_handler._state = RUN
+        # Thread processing acknowledgements from the ackqueue.
+        self._ack_handler = self.AckHandler(self._ackqueue,
+                                       self._quick_get_ack, self._cache)
         self._ack_handler.start()
 
         # Thread killing timedout jobs.
         if self.timeout or self.soft_timeout:
-            self._timeout_handler_stopped = threading.Event()
-            self._timeout_handler = threading.Thread(
-                    target=Pool._handle_timeouts,
-                    args=(self, self._timeout_handler_stopped, self._cache,
-                          self.soft_timeout, self.timeout)
-            )
-            self._timeout_handler.daemon = True
-            self._timeout_handler._state = RUN
+            self._timeout_handler = self.TimeoutHandler(
+                    self._pool, self._cache,
+                    self.soft_timeout, self.timeout)
             self._timeout_handler.start()
         else:
-            self._timeout_handler_stopped = None
             self._timeout_handler = None
 
         # Thread processing results in the outqueue.
-        self._result_handler = threading.Thread(
-            target=Pool._handle_results,
-            args=(self._outqueue, self._quick_get, self._cache)
-            )
-        self._result_handler.daemon = True
-        self._result_handler._state = RUN
+        self._result_handler = self.ResultHandler(self._outqueue,
+                                        self._quick_get, self._cache)
         self._result_handler.start()
 
         self._terminate = Finalize(
@@ -194,7 +475,7 @@ class Pool(object):
                   self._ackqueue, self._pool, self._ack_handler,
                   self._worker_handler, self._task_handler,
                   self._result_handler, self._cache,
-                  self._timeout_handler, self._timeout_handler_stopped),
+                  self._timeout_handler),
             exitpriority=15
             )
 
@@ -343,242 +624,6 @@ class Pool(object):
         return result
 
     @staticmethod
-    def _handle_workers(pool):
-        while pool._worker_handler._state == RUN and pool._state == RUN:
-            pool._maintain_pool()
-            time.sleep(0.1)
-        debug('worker handler exiting')
-
-    @staticmethod
-    def _handle_timeouts(pool, sentinel_event, cache, t_soft, t_hard):
-        thread = threading.current_thread()
-        processes = pool._pool
-        dirty = set()
-
-        def _process_by_pid(pid):
-            for index, process in enumerate(processes):
-                if process.pid == pid:
-                    return process, index
-            return None, None
-
-        def _pop_by_pid(pid):
-            process, index = _process_by_pid(pid)
-            if not process:
-                return
-            p = processes.pop(index)
-            assert p is process
-            return process
-
-        def _timed_out(start, timeout):
-            if not start or not timeout:
-                return False
-            if time.time() >= start + timeout:
-                return True
-
-        def _on_soft_timeout(job, i):
-            debug('soft time limit exceeded for %i' % i)
-            process, _index = _process_by_pid(job._accept_pid)
-            if not process:
-                return
-
-            # Run timeout callback
-            if job._timeout_callback is not None:
-                job._timeout_callback(soft=True)
-
-            try:
-                os.kill(job._accept_pid, SIG_SOFT_TIMEOUT)
-            except OSError, exc:
-                if exc.errno == errno.ESRCH:
-                    pass
-                else:
-                    raise
-
-            dirty.add(i)
-
-        def _on_hard_timeout(job, i):
-            debug('hard time limit exceeded for %i', i)
-            # Remove from _pool
-            process = _pop_by_pid(job._accept_pid)
-            # Remove from cache and set return value to an exception
-            job._set(i, (False, TimeLimitExceeded()))
-            # Run timeout callback
-            if job._timeout_callback is not None:
-                job._timeout_callback(soft=False)
-            if not process:
-                return
-            # Terminate the process
-            process.terminate()
-
-        # Inner-loop
-        while 1:
-            if sentinel_event.isSet():
-                debug('timeout handler received sentinel.')
-                break
-
-            # Remove dirty items not in cache anymore
-            if dirty:
-                dirty = set(k for k in dirty if k in cache)
-
-            for i, job in cache.items():
-                ack_time = job._time_accepted
-                if _timed_out(ack_time, t_hard):
-                    _on_hard_timeout(job, i)
-                elif i not in dirty and _timed_out(ack_time, t_soft):
-                    _on_soft_timeout(job, i)
-
-            time.sleep(1) # Don't waste CPU cycles.
-
-        debug('timeout handler exiting')
-
-
-    @staticmethod
-    def _handle_tasks(taskqueue, put, outqueue, pool):
-        thread = threading.current_thread()
-
-        for taskseq, set_length in iter(taskqueue.get, None):
-            i = -1
-            for i, task in enumerate(taskseq):
-                if thread._state:
-                    debug('task handler found thread._state != RUN')
-                    break
-                try:
-                    put(task)
-                except IOError:
-                    debug('could not put task on queue')
-                    break
-            else:
-                if set_length:
-                    debug('doing set_length()')
-                    set_length(i+1)
-                continue
-            break
-        else:
-            debug('task handler got sentinel')
-
-
-        try:
-            # tell result handler to finish when cache is empty
-            debug('task handler sending sentinel to result handler')
-            outqueue.put(None)
-
-            # tell workers there is no more work
-            debug('task handler sending sentinel to workers')
-            for p in pool:
-                put(None)
-        except IOError:
-            debug('task handler got IOError when sending sentinels')
-
-        debug('task handler exiting')
-
-    @staticmethod
-    def _handle_ack(ackqueue, get, cache):
-        thread = threading.current_thread()
-
-        while 1:
-            try:
-                task = get()
-            except (IOError, EOFError), exc:
-                debug('ack handler got %s -- exiting',
-                        exc.__class__.__name__)
-
-            if thread._state:
-                assert thread._state == TERMINATE
-                debug('ack handler found thread._state=TERMINATE')
-                break
-
-            if task is None:
-                debug('ack handler got sentinel')
-                break
-
-            job, i, time_accepted, pid = task
-            try:
-                cache[job]._ack(i, time_accepted, pid)
-            except (KeyError, AttributeError), exc:
-                # Object gone, or doesn't support _ack (e.g. IMapIterator)
-                pass
-
-        while cache and thread._state != TERMINATE:
-            try:
-                task = get()
-            except (IOError, EOFError), exc:
-                debug('ack handler got %s -- exiting',
-                        exc.__class__.__name__)
-                return
-
-            if task is None:
-                debug('result handler ignoring extra sentinel')
-                continue
-
-            job, i, time_accepted, pid = task
-            try:
-                cache[job]._ack(i, time_accepted, pid)
-            except KeyError:
-                pass
-
-        debug('ack handler exiting: len(cache)=%s, thread._state=%s',
-                len(cache), thread._state)
-
-    @staticmethod
-    def _handle_results(outqueue, get, cache):
-        thread = threading.current_thread()
-
-        while 1:
-            try:
-                task = get()
-            except (IOError, EOFError), exc:
-                debug('result handler got %s -- exiting',
-                        exc.__class__.__name__)
-                return
-
-            if thread._state:
-                assert thread._state == TERMINATE
-                debug('result handler found thread._state=TERMINATE')
-                break
-
-            if task is None:
-                debug('result handler got sentinel')
-                break
-
-            job, i, obj = task
-            try:
-                cache[job]._set(i, obj)
-            except KeyError:
-                pass
-
-        while cache and thread._state != TERMINATE:
-            try:
-                task = get()
-            except (IOError, EOFError), exc:
-                debug('result handler got %s -- exiting',
-                        exc.__class__.__name__)
-                return
-
-            if task is None:
-                debug('result handler ignoring extra sentinel')
-                continue
-            job, i, obj = task
-            try:
-                cache[job]._set(i, obj)
-            except KeyError:
-                pass
-
-        if hasattr(outqueue, '_reader'):
-            debug('ensuring that outqueue is not full')
-            # If we don't make room available in outqueue then
-            # attempts to add the sentinel (None) to outqueue may
-            # block.  There is guaranteed to be no more than 2 sentinels.
-            try:
-                for i in range(10):
-                    if not outqueue._reader.poll():
-                        break
-                    get()
-            except (IOError, EOFError):
-                pass
-
-        debug('result handler exiting: len(cache)=%s, thread._state=%s',
-              len(cache), thread._state)
-
-    @staticmethod
     def _get_tasks(func, it, size):
         it = iter(it)
         while 1:
@@ -596,24 +641,20 @@ class Pool(object):
         debug('closing pool')
         if self._state == RUN:
             self._state = CLOSE
-            self._worker_handler._state = CLOSE
+            self._worker_handler.close()
             self._taskqueue.put(None)
 
     def terminate(self):
         debug('terminating pool')
         self._state = TERMINATE
-        self._worker_handler._state = TERMINATE
+        self._worker_handler.terminate()
         self._terminate()
 
     def join(self):
         assert self._state in (CLOSE, TERMINATE)
-        debug('!joining worker handler')
         self._worker_handler.join()
-        debug('!joining task handler')
         self._task_handler.join()
-        debug('!joining result handler')
         self._result_handler.join()
-        debug('joining pool')
         for p in self._pool:
             p.join()
         debug('after join()')
@@ -630,14 +671,14 @@ class Pool(object):
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, ackqueue, pool,
                         ack_handler, worker_handler, task_handler,
-                        result_handler, cache, timeout_handler,
-                        timeout_handler_stopped):
+                        result_handler, cache, timeout_handler):
+
         # this is guaranteed to only be called once
         debug('finalizing pool')
 
-        worker_handler._state = TERMINATE
+        worker_handler.terminate()
 
-        task_handler._state = TERMINATE
+        task_handler.terminate()
         taskqueue.put(None)                 # sentinel
 
         debug('helping task handler/workers to finish')
@@ -645,15 +686,14 @@ class Pool(object):
 
         assert result_handler.is_alive() or len(cache) == 0
 
-        result_handler._state = TERMINATE
+        result_handler.terminate()
         outqueue.put(None)                  # sentinel
 
-        ack_handler._state = TERMINATE
+        ack_handler.terminate()
         ackqueue.put(None)                  # sentinel
 
         if timeout_handler is not None:
-            timeout_handler._state = TERMINATE
-            timeout_handler_stopped.set()
+            timeout_handler.terminate()
 
         # Terminate workers which haven't already finished
         if pool and hasattr(pool[0], 'terminate'):
