@@ -5,6 +5,7 @@ try:
     import cPickle as pickle
 except ImportError:
     import pickle
+from copy import deepcopy
 
 try:
     _error_bases = (BaseException, )
@@ -116,8 +117,8 @@ def get_pickleable_exception(exc):
         return nearest
 
     try:
-        pickle.dumps(exc)
-    except pickle.PickleError:
+        pickle.dumps(deepcopy(exc))
+    except Exception:
         excwrapper = UnpickleableExceptionWrapper(
                         exc.__class__.__module__,
                         exc.__class__.__name__,
