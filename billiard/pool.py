@@ -198,7 +198,6 @@ class AckHandler(PoolThread):
 
         while 1:
             try:
-                print("GETTING ACK")
                 task = get()
             except (IOError, EOFError), exc:
                 debug('ack handler got %s -- exiting',
@@ -222,7 +221,6 @@ class AckHandler(PoolThread):
 
         while cache and self._state != TERMINATE:
             try:
-                print("GETTING ACK 2")
                 task = get()
             except (IOError, EOFError), exc:
                 debug('ack handler got %s -- exiting',
@@ -365,7 +363,6 @@ class ResultHandler(PoolThread):
 
             job, i, obj = task
             try:
-                print("SET %s" % job)
                 cache[job]._set(i, obj)
             except KeyError:
                 pass
@@ -383,7 +380,6 @@ class ResultHandler(PoolThread):
                 continue
             job, i, obj = task
             try:
-                print("TERMINATE SET %s" % job)
                 cache[job]._set(i, obj)
             except KeyError:
                 pass
@@ -647,26 +643,6 @@ class Pool(object):
             self._state = CLOSE
             self._worker_handler.close()
             self._taskqueue.put(None)
-
-    def wait_for_accepted(self):
-        self._taskqueue.put(None)
-        self._ack_handler.terminate()
-        self._ack_handler.join()
-        debug('waiting for accepted jobs...')
-        i = 0
-        while True:
-            waiting = 0
-            for num, result in self._cache.items():
-                if result.accepted() and not result.ready():
-                    print("WAITING")
-                    waiting += 1
-            if not waiting:
-                break
-            if not i or not i % 10:
-                debug('waiting for %d accepted jobs...' % waiting)
-            time.sleep(0.5)
-            i += 1
-        self.close()
 
     def terminate(self):
         debug('terminating pool')
