@@ -103,45 +103,6 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=(),
 #
 
 
-class PutLock(object):
-    """Enable/disable producer flow.
-
-    :param limit: Number of items that can be produced, without being
-        consumed.
-
-    """
-
-    def __init__(self, limit):
-        self.limit = limit
-        self.tokens = 0
-        self._flow = threading.Event()
-        self._flow.set()
-
-    def fill(self):
-        """Add token.
-
-        Enables producer flow.
-
-        """
-        self.tokens -= 1
-        self._flow.set()
-
-    def deplete(self):
-        """Deplete token.
-
-        Disables producer flow if there are no tokens left.
-
-        """
-        self.tokens += 1
-        if self.tokens >= self.limit:
-            self._flow.clear()
-            self._flow.wait()
-
-    def free(self):
-        """Free any listeners waiting for flow."""
-        self._flow.set()
-
-
 class PoolThread(threading.Thread):
 
     def __init__(self, *args, **kwargs):
@@ -394,7 +355,7 @@ class ResultHandler(PoolThread):
                 return
 
             if putlock is not None:
-                putlock.fill()
+                putlock.release()
 
             if self._state:
                 assert self._state == TERMINATE
@@ -412,7 +373,7 @@ class ResultHandler(PoolThread):
                 pass
 
         if putlock is not None:
-            putlock.free()
+            putlock.release()
 
         while cache and self._state != TERMINATE:
             try:
@@ -493,7 +454,7 @@ class Pool(object):
         self._worker_handler = self.Supervisor(self)
         self._worker_handler.start()
 
-        self._putlock = PutLock(self._processes)
+        self._putlock = threading.Semaphore(self._processes)
 
         self._task_handler = self.TaskHandler(self._taskqueue, self._quick_put,
                                          self._outqueue, self._pool)
@@ -651,7 +612,7 @@ class Pool(object):
         result = ApplyResult(self._cache, callback,
                              accept_callback, timeout_callback)
         if waitforslot:
-            self._putlock.deplete()
+            self._putlock.acquire()
         self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
         return result
 
