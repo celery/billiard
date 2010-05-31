@@ -103,6 +103,45 @@ def worker(inqueue, outqueue, ackqueue, initializer=None, initargs=(),
 #
 
 
+class PutLock(object):
+    """Enable/disable producer flow.
+
+    :param limit: Number of items that can be produced, without being
+        consumed.
+
+    """
+
+    def __init__(self, limit):
+        self.limit = limit
+        self.tokens = 0
+        self._flow = threading.Event()
+        self._flow.set()
+
+    def fill(self):
+        """Add token.
+
+        Enables producer flow.
+
+        """
+        self.tokens -= 1
+        self._flow.set()
+
+    def deplete(self):
+        """Deplete token.
+
+        Disables producer flow if there are no tokens left.
+
+        """
+        self.tokens += 1
+        if self.tokens >= self.limit:
+            self._flow.clear()
+            self._flow.wait()
+
+    def free(self):
+        """Free any listeners waiting for flow."""
+        self._flow.set()
+
+
 class PoolThread(threading.Thread):
 
     def __init__(self, *args, **kwargs):
@@ -332,16 +371,18 @@ class TimeoutHandler(PoolThread):
 
 class ResultHandler(PoolThread):
 
-    def __init__(self, outqueue, get, cache):
+    def __init__(self, outqueue, get, cache, putlock):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
+        self.putlock = putlock
         super(ResultHandler, self).__init__()
 
     def run(self):
         get = self.get
         outqueue = self.outqueue
         cache = self.cache
+        putlock = self.putlock
 
         debug('result handler starting')
         while 1:
@@ -351,6 +392,9 @@ class ResultHandler(PoolThread):
                 debug('result handler got %s -- exiting',
                         exc.__class__.__name__)
                 return
+
+            if putlock is not None:
+                putlock.fill()
 
             if self._state:
                 assert self._state == TERMINATE
@@ -366,6 +410,9 @@ class ResultHandler(PoolThread):
                 cache[job]._set(i, obj)
             except KeyError:
                 pass
+
+        if putlock is not None:
+            putlock.free()
 
         while cache and self._state != TERMINATE:
             try:
@@ -446,13 +493,15 @@ class Pool(object):
         self._worker_handler = self.Supervisor(self)
         self._worker_handler.start()
 
+        self._putlock = PutLock(self._processes)
+
         self._task_handler = self.TaskHandler(self._taskqueue, self._quick_put,
                                          self._outqueue, self._pool)
         self._task_handler.start()
 
         # Thread processing acknowledgements from the ackqueue.
         self._ack_handler = self.AckHandler(self._ackqueue,
-                                       self._quick_get_ack, self._cache)
+                self._quick_get_ack, self._cache)
         self._ack_handler.start()
 
         # Thread killing timedout jobs.
@@ -466,7 +515,8 @@ class Pool(object):
 
         # Thread processing results in the outqueue.
         self._result_handler = self.ResultHandler(self._outqueue,
-                                        self._quick_get, self._cache)
+                                        self._quick_get, self._cache,
+                                        self._putlock)
         self._result_handler.start()
 
         self._terminate = Finalize(
@@ -580,7 +630,8 @@ class Pool(object):
             return (item for chunk in result for item in chunk)
 
     def apply_async(self, func, args=(), kwds={},
-            callback=None, accept_callback=None, timeout_callback=None):
+            callback=None, accept_callback=None, timeout_callback=None,
+            waitforslot=False):
         '''
         Asynchronous equivalent of `apply()` builtin.
 
@@ -599,6 +650,8 @@ class Pool(object):
         assert self._state == RUN
         result = ApplyResult(self._cache, callback,
                              accept_callback, timeout_callback)
+        if waitforslot:
+            self._putlock.deplete()
         self._taskqueue.put(([(result._job, None, func, args, kwds)], None))
         return result
 
@@ -622,6 +675,13 @@ class Pool(object):
         self._taskqueue.put((((result._job, i, mapstar, (x,), {})
                               for i, x in enumerate(task_batches)), None))
         return result
+
+    def _accepted(self):
+        return len([r._accepted and not r._ready
+                        for r in self._cache.values()])
+
+    def ready(self):
+        return self._state == RUN and self._accepted() < self._processes
 
     @staticmethod
     def _get_tasks(func, it, size):
