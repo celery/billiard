@@ -676,13 +676,6 @@ class Pool(object):
                               for i, x in enumerate(task_batches)), None))
         return result
 
-    def _accepted(self):
-        return len([r._accepted and not r._ready
-                        for r in self._cache.values()])
-
-    def ready(self):
-        return self._state == RUN and self._accepted() < self._processes
-
     @staticmethod
     def _get_tasks(func, it, size):
         it = iter(it)
