@@ -7,10 +7,46 @@ try:
 except ImportError:
     from distutils.core import setup, Extension, find_packages
 
-# Python.version.number.internal_revision
-VERSION='2.7.3.0'
-
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# -*- Distribution Meta -*-
+
+import re
+re_meta = re.compile(r'__(\w+?)__\s*=\s*(.*)')
+re_vers = re.compile(r'VERSION\s*=\s*\((.*?)\)')
+re_doc = re.compile(r'^"""(.+?)"""')
+rq = lambda s: s.strip("\"'")
+
+def add_default(m):
+    attr_name, attr_value = m.groups()
+    return ((attr_name, rq(attr_value)), )
+
+
+def add_version(m):
+    v = list(map(rq, m.groups()[0].split(", ")))
+    return (("VERSION", ".".join(v[0:3]) + "".join(v[3:])), )
+
+
+def add_doc(m):
+    return (("doc", m.groups()[0]), )
+
+pats = {re_meta: add_default,
+        re_vers: add_version,
+        re_doc: add_doc}
+here = os.path.abspath(os.path.dirname(__file__))
+meta_fh = open(os.path.join(here, "billiard/__init__.py"))
+try:
+    meta = {}
+    for line in meta_fh:
+        if line.strip() == '# -eof meta-':
+            break
+        for pattern, handler in pats.items():
+            m = pattern.match(line.strip())
+            if m:
+                meta.update(handler(m))
+finally:
+    meta_fh.close()
+
 
 # check __version__ in release mode
 if len(sys.argv) > 1 and "dist" in sys.argv[1]:
@@ -119,17 +155,16 @@ long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
 
 setup(
     name='billiard',
-    version=VERSION,
-    description="Backport of improvements to the multiprocessing package",
+    version=meta["VERSION"],
+    description=meta["doc"],
     long_description=long_description,
     packages=find_packages(exclude=['ez_setup', 'tests', 'tests.*']),
     ext_modules=extensions,
-    author='R Oudkerk / Python Software Foundation',
-    author_email='python-dev@python.org',
-    maintainer='Ask Solem',
-    maintainer_email='ask@celeryproject.org',
-    download_url='http://pypi.python.org/pypi/billiard',
-    url='http://github.com/ask/billiard',
+    author=meta["author"],
+    author_email=meta["author_email"],
+    maintainer=meta["maintainer"],
+    maintainer_email=meta["contact"],
+    url=meta["homepage"],
     license='BSD Licence',
     platforms='Unix and Windows',
     keywords="",

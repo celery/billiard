@@ -1,3 +1,19 @@
+"""Python multiprocessing fork"""
+
+from __future__ import absolute_import
+
+VERSION = (2, 7, 3, 0)
+__version__ = ".".join(map(str, VERSION[0:3])) + "".join(VERSION[3:])
+__author__ = 'R Oudkerk / Python Software Foundation'
+__author_email__ = 'python-dev@python.org'
+__maintainer__ = 'Ask Solem',
+__contact__ = "ask@celeryproject.org"
+__homepage__ = "http://github.com/ask/billiard"
+__docformat__ = "restructuredtext"
+
+# -eof meta-
+
+
 #
 # Package analogous to 'threading.py' but using processes
 #
@@ -39,9 +55,6 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 #
-from __future__ import absolute_import
-
-__version__ = '0.70a1'
 
 __all__ = [
     'Process', 'current_process', 'active_children', 'freeze_support',
@@ -52,8 +65,6 @@ __all__ = [
     'RawValue', 'RawArray', 'SUBDEBUG', 'SUBWARNING', 'set_executable',
     'forking_enable', 'forking_is_enabled'
     ]
-
-__author__ = 'R. Oudkerk (r.m.oudkerk@gmail.com)'
 
 #
 # Imports
