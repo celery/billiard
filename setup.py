@@ -24,7 +24,7 @@ def add_default(m):
 
 def add_version(m):
     v = list(map(rq, m.groups()[0].split(", ")))
-    return (("VERSION", ".".join(v[0:3]) + "".join(v[3:])), )
+    return (("VERSION", ".".join(v[0:4]) + "".join(v[4:])), )
 
 
 def add_doc(m):
@@ -143,7 +143,7 @@ extensions = [
               ),
     ]
 
-long_description = open(os.path.join(HERE, 'README.txt')).read()
+long_description = open(os.path.join(HERE, 'README.rst')).read()
 long_description += """
 
 ===========
