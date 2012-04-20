@@ -1,0 +1,80 @@
+2.6.2.1 -- 2009-07-30
+---------------------
+
+ * Issues #5155, 5313, 5331: multiprocessing.Process._bootstrap was
+   unconditionally calling "os.close(sys.stdin.fileno())" resulting in file
+   descriptor errors
+
+ * Issue #5400: Added patch for multiprocessing on netbsd compilation/support
+
+ * Fix and properly document the multiprocessing module's logging
+   support, expose the internal levels and provide proper usage
+   examples.
+
+ * Issue #5261: Patch multiprocessing's semaphore.c to support context
+   manager use: "with multiprocessing.Lock()" works now.
+
+ * Issue #3321: _multiprocessing.Connection() doesn't check handle; added checks
+   for *nix machines for negative handles and large int handles. Without this
+   check it is possible to segfault the interpreter.
+
+ * Issue #4301: Patch the logging module to add processName support, remove
+   _check_logger_class from multiprocessing.
+
+
+2.6.1.1 -- 2009-02-07
+---------------------
+
+ * Fixed an issue with `make doc`
+
+ * mp docs - fix issues 4012,3518,4193 (Python svn: r67419)
+
+ * issue4238: bsd support for cpu_count (Python svn: r67423)
+
+ * Move definition int sval into branch of ifdef where it is used.
+   Otherwise, you get a warning about an undefined variable.
+   (Python svn: r67440)
+
+ * Fixed a segfault in connection_recvbytes_into() which occured
+   with Python debug builds on 64bit Linux.
+
+ * Added reference to `Issue 1683 http://bugs.python.org/issue1683`_.
+
+ * issue 4301: patch logging to add processName, remove the old 
+   _check_logger_class code (Python svn: r68737)
+
+ * Resolve issue 3321: (segfault) _multiprocessing.Connection() 
+   doesn't check handle (Python svn: r68768)
+
+ * Documentation update
+
+
+2.6.0.2 -- 2008-11-27
+---------------------
+
+The release is based on 2.6.0+ and contains additional fixes
+from Python svn.
+
+ * Issue #5: Added monkey patch to make the threading module forward 
+   compatible with Python 2.6 and 3.0.
+ 
+ * Python Issue #4204: Fixed a compilation issue on FreeBSD 4.
+
+ * Removed ``install`` target from Makefile.
+
+ * Updated comments of Modules/mmapmodules.c. The modifications
+   and origin are clearly marked now.
+
+ * Added sphinx builder for docs and new make target ``docs``.
+
+ * Changed version schema to Python.version.number.internal_revision
+
+ * Pulled doc fixes from Python svn: r67189, r67330, r67332
+
+
+2.6.0-0.1 -- 2008-10-27
+-----------------------
+
+The release is based on Python 2.6.0.
+
+ * Initial release
