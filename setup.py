@@ -145,6 +145,7 @@ extensions = [
 
 long_description = open(os.path.join(HERE, 'README.txt')).read()
 long_description += """
+
 ===========
 Changes
 ===========
@@ -166,17 +167,15 @@ setup(
     maintainer_email=meta["contact"],
     url=meta["homepage"],
     license='BSD Licence',
-    platforms='Unix and Windows',
-    keywords="",
-    classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Programming Language :: Python',
-        'Programming Language :: C',
-        'Operating System :: Microsoft :: Windows',
-        'Operating System :: POSIX',
-        'License :: OSI Approved :: BSD License',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-        ]
+    #classifiers=[
+    #    'Development Status :: 5 - Production/Stable',
+    #    'Intended Audience :: Developers',
+    #    'Programming Language :: Python',
+    #    'Programming Language :: C',
+    #    'Operating System :: Microsoft :: Windows',
+    #    'Operating System :: POSIX',
+    #    'License :: OSI Approved :: BSD License',
+    #    'Topic :: Software Development :: Libraries :: Python Modules',
+    #    ]
     )
 
