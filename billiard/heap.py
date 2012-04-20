@@ -62,9 +62,9 @@ else:
             if fileno == -1 and not _forking_is_enabled:
                 name = os.path.join(
                     get_temp_dir(),
-                    'pym-%d-%d' % (os.getpid(), next(self._counter)))
+                    'pym-%d-%d' % (os.getpid(), self._counter.next()))
                 self.fileno = os.open(
-                    name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+                    name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0600)
                 os.unlink(name)
                 os.ftruncate(self.fileno, size)
             self.buffer = mmap.mmap(self.fileno, self.size)

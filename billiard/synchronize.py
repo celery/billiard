@@ -25,6 +25,7 @@ import _billiard
 from .process import current_process
 from .util import Finalize, register_after_fork, debug
 from .forking import assert_spawning, Popen
+from .compat import bytes, closerange
 
 # Try to import the mp.synchronize module cleanly, if it fails
 # raise ImportError for platforms lacking a working sem_open implementation.
@@ -100,7 +101,7 @@ class SemLock(object):
     @staticmethod
     def _make_name():
         return '/%s-%s-%s' % (current_process()._semprefix,
-                              os.getpid(), next(SemLock._counter))
+                              os.getpid(), SemLock._counter.next())
 
 #
 # Semaphore
@@ -352,14 +353,14 @@ if sys.platform != 'win32':
     #
 
     def _cleanup_semaphore_if_leaked(name):
-        name = name.encode('ascii') + b'\0'
+        name = name.encode('ascii') + bytes('\0')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
             raise ValueError('name too long')
         fd = _get_unlinkfd()
-        bytes = os.write(fd, name)
-        assert bytes == len(name)
+        bits = os.write(fd, name)
+        assert bits == len(name)
 
     def _get_unlinkfd():
         cp = current_process()
@@ -388,8 +389,8 @@ if sys.platform != 'win32':
             MAXFD = os.sysconf("SC_OPEN_MAX")
         except:
             MAXFD = 256
-        os.closerange(0, r)
-        os.closerange(r+1, MAXFD)
+        closerange(0, r)
+        closerange(r+1, MAXFD)
 
         # collect data written to pipe
         data = []
@@ -406,7 +407,7 @@ if sys.platform != 'win32':
                 data.append(s)
 
         # attempt to unlink each collected name
-        for name in b''.join(data).split(b'\0'):
+        for name in bytes('').join(data).split(bytes('\0')):
             try:
                 sem_unlink(name.decode('ascii'))
             except:

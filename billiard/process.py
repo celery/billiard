@@ -19,6 +19,8 @@ import signal
 import itertools
 import binascii
 
+from .compat import bytes
+
 #
 #
 #
@@ -136,40 +138,28 @@ class Process(object):
         self._popen.poll()
         return self._popen.returncode is None
 
-    @property
-    def name(self):
+    def _get_name(self):
         return self._name
 
-    @name.setter
-    def name(self, name):
+    def _set_name(self, value):
         assert isinstance(name, basestring), 'name must be a string'
-        self._name = name
+        self._name = value
+    name = property(_get_name, _set_name)
 
-    @property
-    def daemon(self):
-        '''
-        Return whether process is a daemon
-        '''
+    def _get_daemon(self):
         return self._daemonic
 
-    @daemon.setter
-    def daemon(self, daemonic):
-        '''
-        Set whether process is a daemon
-        '''
+    def _set_daemon(self, daemonic):
         assert self._popen is None, 'process has already started'
         self._daemonic = daemonic
+    daemon = property(_get_daemon, _set_daemon)
 
-    @property
-    def authkey(self):
+    def _get_authkey(self):
         return self._authkey
 
-    @authkey.setter
-    def authkey(self, authkey):
-        '''
-        Set authorization key of process
-        '''
+    def _set_authkey(self, authkey):
         self._authkey = AuthenticationString(authkey)
+    authkey = property(_get_authkey, _set_authkey)
 
     @property
     def exitcode(self):

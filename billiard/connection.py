@@ -21,6 +21,7 @@ import _billiard
 from . import current_process, AuthenticationError
 from .util import get_temp_dir, Finalize, sub_debug, debug
 from .forking import duplicate, close
+from .compat import bytes
 
 
 #
@@ -361,9 +362,9 @@ if sys.platform == 'win32':
 
 MESSAGE_LENGTH = 20
 
-CHALLENGE = b'#CHALLENGE#'
-WELCOME = b'#WELCOME#'
-FAILURE = b'#FAILURE#'
+CHALLENGE = bytes('#CHALLENGE#')
+WELCOME = bytes('#WELCOME#')
+FAILURE = bytes('#FAILURE#')
 
 def deliver_challenge(connection, authkey):
     import hmac
