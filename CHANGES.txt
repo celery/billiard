@@ -1,3 +1,14 @@
+2.7.3.0 - 2012-04-20
+--------------------
+
+- Updated from Python 2.7.3
+
+- Python 2.5 support removed (may be added again later).
+
+- Pool improvments from Celery.
+
+- no-execv patch added (http://bugs.python.org/issue8713)
+
 2.6.2.1 -- 2009-07-30
 ---------------------
 
