@@ -132,16 +132,20 @@ if 0:
     print '\Sources:\n\t%r\n' % ', '.join(multiprocessing_srcs)
 
 
-extensions = [
-    Extension('_billiard',
-              sources=multiprocessing_srcs,
-              define_macros=macros.items(),
-              libraries=libraries,
-              include_dirs=["Modules/_billiard"],
-              depends=(glob.glob('Modules/_billiard/*.h') +
-                       ['setup.py'])
-              ),
-    ]
+is_jython = sys.platform.startswith("java")
+is_pypy = hasattr(sys, "pypy_version_info")
+extensions = []
+if not (is_jython or is_pypy):
+    extensions = [
+        Extension('_billiard',
+                sources=multiprocessing_srcs,
+                define_macros=macros.items(),
+                libraries=libraries,
+                include_dirs=["Modules/_billiard"],
+                depends=(glob.glob('Modules/_billiard/*.h') +
+                        ['setup.py'])
+                ),
+        ]
 
 long_description = open(os.path.join(HERE, 'README.rst')).read()
 long_description += """

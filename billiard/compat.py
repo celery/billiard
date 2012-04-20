@@ -3,9 +3,9 @@ import os
 import sys
 
 try:
-    bytes
+    bytes = bytes
 except NameError:
-    bytes = str
+    bytes = str  # noqa
 
 
 try:
