@@ -4,7 +4,33 @@
 #
 # multiprocessing/pool.py
 #
-# Copyright (c) 2007-2008, R Oudkerk --- see COPYING.txt
+# Copyright (c) 2006-2008, R Oudkerk
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of author nor the names of any contributors may be
+#    used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
 #
 from __future__ import absolute_import
 
@@ -66,6 +92,9 @@ job_counter = itertools.count()
 
 def mapstar(args):
     return map(*args)
+
+def starmapstar(args):
+    return list(itertools.starmap(args[0], args[1]))
 
 
 def error(msg, *args, **kwargs):
@@ -260,6 +289,9 @@ class Supervisor(PoolThread):
 
     def body(self):
         debug('worker handler starting')
+
+        # Keep maintaing workers until the cache gets drained, unless the pool
+        # is termianted
         while self._state == RUN and self.pool._state == RUN:
             self.pool._maintain_pool()
             time.sleep(0.8)
@@ -525,7 +557,7 @@ class ResultHandler(PoolThread):
 
 class Pool(object):
     '''
-    Class which supports an async version of the `apply()` builtin
+    Class which supports an async version of applying functions to arguments.
     '''
     Process = Process
     Supervisor = Supervisor
@@ -560,7 +592,7 @@ class Pool(object):
                 processes = 1
         self._processes = processes
 
-        if initializer is not None and not hasattr(initializer, '__call__'):
+        if initializer is not None and not callable(initializer):
             raise TypeError('initializer must be a callable')
 
         self._pool = []
@@ -745,22 +777,40 @@ class Pool(object):
 
     def apply(self, func, args=(), kwds={}):
         '''
-        Equivalent of `apply()` builtin
+        Equivalent of `func(*args, **kwargs)`.
         '''
         assert self._state == RUN
         return self.apply_async(func, args, kwds).get()
 
+    def starmap(self, func, iterable, chunksize=None):
+        '''
+        Like `map()` method but the elements of the `iterable` are expected to
+        be iterables as well and will be unpacked as arguments. Hence
+        `func` and (a, b) becomes func(a, b).
+        '''
+        assert self._state == RUN
+        return self._map_async(func, iterable, starmapstar, chunksize).get()
+
+    def starmap_async(self, func, iterable, chunksize=None, callback=None,
+            error_callback=None):
+        '''
+        Asynchronous version of `starmap()` method.
+        '''
+        assert self._state == RUN
+        return self._map_async(func, iterable, starmapstar, chunksize,
+                               callback, error_callback)
+
     def map(self, func, iterable, chunksize=None):
         '''
-        Equivalent of `map()` builtin
+        Apply `func` to each element in `iterable`, collecting the results
+        in a list that is returned.
         '''
         assert self._state == RUN
         return self.map_async(func, iterable, chunksize).get()
 
     def imap(self, func, iterable, chunksize=1, lost_worker_timeout=None):
         '''
-        Equivalent of `itertools.imap()` -- can be MUCH slower
-        than `Pool.map()`
+        Equivalent of `map()` -- can be MUCH slower than `Pool.map()`.
         '''
         assert self._state == RUN
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
@@ -782,7 +832,7 @@ class Pool(object):
     def imap_unordered(self, func, iterable, chunksize=1,
                        lost_worker_timeout=None):
         '''
-        Like `imap()` method but ordering of results is arbitrary
+        Like `imap()` method but ordering of results is arbitrary.
         '''
         assert self._state == RUN
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
@@ -802,11 +852,11 @@ class Pool(object):
             return (item for chunk in result for item in chunk)
 
     def apply_async(self, func, args=(), kwds={},
-            callback=None, accept_callback=None, timeout_callback=None,
-            waitforslot=False, error_callback=None,
+            callback=None, error_callback=None, accept_callback=None,
+            timeout_callback=None, waitforslot=False,
             soft_timeout=None, timeout=None, lost_worker_timeout=None):
         '''
-        Asynchronous equivalent of `apply()` builtin.
+        Asynchronous equivalent of `apply()` method.
 
         Callback is called when the functions return value is ready.
         The accept callback is called when the job is accepted to be executed.
@@ -840,9 +890,18 @@ class Pool(object):
                                    func, args, kwds)], None))
             return result
 
-    def map_async(self, func, iterable, chunksize=None, callback=None):
+    def map_async(self, func, iterable, chunksize=None, callback=None,
+            error_callback=None):
         '''
-        Asynchronous equivalent of `map()` builtin
+        Asynchronous equivalent of `map()` method.
+        '''
+        return self._map_async(func, iterable, mapstar, chunksize,
+                callback, error_callback)
+
+    def _map_async(self, func, iterable, mapper, chunksize=None,
+            callback=None, error_callback=None):
+        '''
+        Helper function to implement map, starmap and their async counterparts.
         '''
         assert self._state == RUN
         if not hasattr(iterable, '__len__'):
@@ -856,8 +915,9 @@ class Pool(object):
             chunksize = 0
 
         task_batches = Pool._get_tasks(func, iterable, chunksize)
-        result = MapResult(self._cache, chunksize, len(iterable), callback)
-        self._taskqueue.put((((result._job, i, mapstar, (x,), {})
+        result = MapResult(self._cache, chunksize, len(iterable), callback,
+                           error_callback=error_callback)
+        self._taskqueue.put((((result._job, i, mapper, (x,), {})
                               for i, x in enumerate(task_batches)), None))
         return result
 
@@ -880,8 +940,8 @@ class Pool(object):
         if self._state == RUN:
             self._state = CLOSE
             self._worker_handler.close()
-            self._worker_handler.join()
             self._taskqueue.put(None)
+            self._worker_handler.join()
             if self._putlock:
                 self._putlock.clear()
 
@@ -947,10 +1007,10 @@ class Pool(object):
                     p.terminate()
 
         debug('joining task handler')
-        task_handler.join(1e100)
+        task_handler.join()
 
         debug('joining result handler')
-        result_handler.join(1e100)
+        result_handler.join()
 
         if timeout_handler is not None:
             debug('joining timeout handler')
@@ -984,7 +1044,7 @@ class ApplyResult(object):
         self._ready = False
         self._callback = callback
         self._accept_callback = accept_callback
-        self._errback = error_callback
+        self._error_callback = error_callback
         self._timeout_callback = timeout_callback
         self._timeout = timeout
         self._soft_timeout = soft_timeout
@@ -1042,9 +1102,9 @@ class ApplyResult(object):
             if self._callback and self._success:
                 safe_apply_callback(
                     self._callback, self._value)
-            if self._errback and not self._success:
+            if self._error_callback and not self._success:
                 safe_apply_callback(
-                    self._errback, self._value)
+                    self._error_callback, self._value)
         finally:
             self._mutex.release()
 
@@ -1069,8 +1129,9 @@ class ApplyResult(object):
 
 class MapResult(ApplyResult):
 
-    def __init__(self, cache, chunksize, length, callback):
-        ApplyResult.__init__(self, cache, callback)
+    def __init__(self, cache, chunksize, length, callback, error_callback):
+        ApplyResult.__init__(self, cache, callback,
+                error_callback=error_callback)
         self._success = True
         self._length = length
         self._value = [None] * length
@@ -1100,10 +1161,11 @@ class MapResult(ApplyResult):
                     self._cond.notify()
                 finally:
                     self._cond.release()
-
         else:
             self._success = False
             self._value = result
+            if self._error_callback:
+                self._error_callback(self._value)
             if self._accepted:
                 self._cache.pop(self._job, None)
             self._cond.acquire()

@@ -1,31 +1,16 @@
 """Python multiprocessing fork"""
-
-from __future__ import absolute_import
-
-VERSION = (2, 7, 3, 2)
-__version__ = ".".join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
-__author__ = 'R Oudkerk / Python Software Foundation'
-__author_email__ = 'python-dev@python.org'
-__maintainer__ = 'Ask Solem',
-__contact__ = "ask@celeryproject.org"
-__homepage__ = "http://github.com/ask/billiard"
-__docformat__ = "restructuredtext"
-
-# -eof meta-
-
-
 #
 # Package analogous to 'threading.py' but using processes
 #
-# billiard/__init__.py
+# multiprocessing/__init__.py
 #
 # This package is intended to duplicate the functionality (and much of
 # the API) of threading.py but uses processes instead of threads.  A
-# subpackage 'billiard.dummy' has the same API but is a simple
+# subpackage 'multiprocessing.dummy' has the same API but is a simple
 # wrapper for 'threading'.
 #
-# Try calling `billiard.doc.main()` to read the html
-# documentation in in a webbrowser.
+# Try calling `multiprocessing.doc.main()` to read the html
+# documentation in a webbrowser.
 #
 #
 # Copyright (c) 2006-2008, R Oudkerk
@@ -54,7 +39,21 @@ __docformat__ = "restructuredtext"
 # HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
 #
+
+from __future__ import absolute_import
+
+VERSION = (2, 7, 3, 2)
+__version__ = ".".join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
+__author__ = 'R Oudkerk / Python Software Foundation'
+__author_email__ = 'python-dev@python.org'
+__maintainer__ = 'Ask Solem',
+__contact__ = "ask@celeryproject.org"
+__homepage__ = "http://github.com/ask/billiard"
+__docformat__ = "restructuredtext"
+
+# -eof meta-
 
 __all__ = [
     'Process', 'current_process', 'active_children', 'freeze_support',
@@ -76,6 +75,7 @@ import sys
 from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
 
+
 #
 # Exceptions
 #
@@ -92,8 +92,11 @@ class TimeoutError(ProcessError):
 class AuthenticationError(ProcessError):
     pass
 
-# This is down here because _billiard uses BufferTooShort
-import _billiard
+is_jython = sys.platform.startswith("java")
+is_pypy = hasattr(sys, "pypy_version_info")
+if not (is_jython or is_pypy):
+    # This is down here because _billiard uses BufferTooShort
+    import _billiard
 
 #
 # Definitions not depending on native semaphores
@@ -128,8 +131,12 @@ def cpu_count():
         except (ValueError, KeyError):
             num = 0
     elif 'bsd' in sys.platform or sys.platform == 'darwin':
+        comm = '/sbin/sysctl -n hw.ncpu'
+        if sys.platform == 'darwin':
+            comm = '/usr' + comm
         try:
-            num = int(os.popen('sysctl -n hw.ncpu').read())
+            with os.popen(comm) as p:
+                num = int(p.read())
         except ValueError:
             num = 0
     else:

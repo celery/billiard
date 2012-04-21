@@ -2,9 +2,35 @@
 # Module providing the `SyncManager` class for dealing
 # with shared objects
 #
-# billiard/managers.py
+# multiprocessing/managers.py
 #
-# Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
+# Copyright (c) 2006-2008, R Oudkerk
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of author nor the names of any contributors may be
+#    used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
 #
 from __future__ import absolute_import
 
@@ -41,6 +67,17 @@ def reduce_array(a):
 ForkingPickler.register(array.array, reduce_array)
 
 view_types = [type(getattr({}, name)()) for name in ('items','keys','values')]
+if view_types[0] is not list:  # only needed in Py3.0
+    def rebuild_as_list(obj):
+        return list, (list(obj), )
+    for view_type in view_types:
+        ForkingPickler.register(view_type, rebuild_as_list)
+        try:
+            import copyreg
+        except ImportError:
+            pass
+        else:
+            copyreg.pickle(view_type, rebuild_as_list)
 
 #
 # Type for identifying shared objects
@@ -106,7 +143,7 @@ def all_methods(obj):
     temp = []
     for name in dir(obj):
         func = getattr(obj, name)
-        if hasattr(func, '__call__'):
+        if callable(func):
             temp.append(name)
     return temp
 
@@ -134,7 +171,7 @@ class Server(object):
         Listener, Client = listener_client[serializer]
 
         # do authentication later
-        self.listener = Listener(address=address, backlog=5)
+        self.listener = Listener(address=address, backlog=16)
         self.address = self.listener.address
 
         self.id_to_obj = {'0': (None, ())}
@@ -482,7 +519,7 @@ class BaseManager(object):
         '''
         assert self._state.value == State.INITIAL
 
-        if initializer is not None and not hasattr(initializer, '__call__'):
+        if initializer is not None and not callable(initializer):
             raise TypeError('initializer must be a callable')
 
         # pipe over which we will retrieve address of server
@@ -869,8 +906,8 @@ def MakeProxyType(name, exposed, _cache={}):
     dic = {}
 
     for meth in exposed:
-        exec '''def %s(self, *args, **kwds):
-        return self._callmethod(%r, args, kwds)''' % (meth, meth) in dic
+        exec('''def %s(self, *args, **kwds):
+        return self._callmethod(%r, args, kwds)''' % (meth, meth), dic)
 
     ProxyType = type(name, (BaseProxy,), dic)
     ProxyType._exposed_ = exposed
@@ -939,14 +976,16 @@ def Array(typecode, sequence, lock=True):
 #
 
 class IteratorProxy(BaseProxy):
-    # XXX remove methods for Py3.0 and Py2.6
-    _exposed_ = ('__next__', 'next', 'send', 'throw', 'close')
+    if sys.version_info[0] == 3:
+        _exposed = ('__next__', 'send', 'throw', 'close')
+    else:
+        _exposed_ = ('__next__', 'next', 'send', 'throw', 'close')
+        def next(self, *args):
+            return self._callmethod('next', args)
     def __iter__(self):
         return self
     def __next__(self, *args):
         return self._callmethod('__next__', args)
-    def next(self, *args):
-        return self._callmethod('next', args)
     def send(self, *args):
         return self._callmethod('send', args)
     def throw(self, *args):
@@ -968,7 +1007,6 @@ class AcquirerProxy(BaseProxy):
 
 
 class ConditionProxy(AcquirerProxy):
-    # XXX will Condition.notfyAll() name be available in Py3.0?
     _exposed_ = ('acquire', 'release', 'wait', 'notify', 'notify_all')
     def wait(self, timeout=None):
         return self._callmethod('wait', (timeout,))
@@ -976,6 +1014,23 @@ class ConditionProxy(AcquirerProxy):
         return self._callmethod('notify')
     def notify_all(self):
         return self._callmethod('notify_all')
+    def wait_for(self, predicate, timeout=None):
+        result = predicate()
+        if result:
+            return result
+        if timeout is not None:
+            endtime = _time + timeout
+        else:
+            endtime = None
+            waittime = None
+        while not result:
+            if endtime is not None:
+                waittime = endtime - _time()
+                if waittime <= 0:
+                    break
+            self.wait(waittime)
+            result = predicate()
+        return result
 
 class EventProxy(BaseProxy):
     _exposed_ = ('is_set', 'set', 'clear', 'wait')
@@ -1046,11 +1101,12 @@ ArrayProxy = MakeProxyType('ArrayProxy', (
 
 PoolProxy = MakeProxyType('PoolProxy', (
     'apply', 'apply_async', 'close', 'imap', 'imap_unordered', 'join',
-    'map', 'map_async', 'terminate'
+    'map', 'map_async', 'starmap', 'starmap_async', 'terminate',
     ))
 PoolProxy._method_to_typeid_ = {
     'apply_async': 'AsyncResult',
     'map_async': 'AsyncResult',
+    'starmap_async': 'AsyncResult',
     'imap': 'Iterator',
     'imap_unordered': 'Iterator'
     }

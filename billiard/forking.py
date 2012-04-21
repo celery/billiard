@@ -1,10 +1,37 @@
 #
 # Module for starting a process object using os.fork() or CreateProcess()
 #
-# billiard/forking.py
+# multiprocessing/forking.py
 #
-# Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
+# Copyright (c) 2006-2008, R Oudkerk
+# All rights reserved.
 #
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of author nor the names of any contributors may be
+#    used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+
 from __future__ import absolute_import
 
 import os
@@ -38,24 +65,52 @@ def assert_spawning(self):
 #
 # Try making some callable types picklable
 #
-
 from pickle import Pickler
-class ForkingPickler(Pickler):
-    dispatch = Pickler.dispatch.copy()
 
-    @classmethod
-    def register(cls, type, reduce):
-        def dispatcher(self, obj):
-            rv = reduce(obj)
-            self.save_reduce(obj=obj, *rv)
-        cls.dispatch[type] = dispatcher
+if sys.version_info[0] == 3:
+    from copyreg import dispatch_table
 
-def _reduce_method(m):
-    if m.im_self is None:
-        return getattr, (m.im_class, m.im_func.func_name)
-    else:
-        return getattr, (m.im_self, m.im_func.func_name)
-ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
+    class ForkingPickler(Pickler):
+        _extra_reducers = {}
+
+        def __init__(self, *args, **kwargs):
+            Pickler.__init__(self, *args, **kwargs)
+            self.dispatch_table = dispatch_table.copy()
+            self.dispatch_table.update(self._extra_reducers)
+
+        @classmethod
+        def register(cls, type, reduce):
+            cls._extra_reducers[type] = reduce
+
+    def _reduce_method(m):
+        if m.__self__ is None:
+            return getattr, (m.__class__, m.__func__.__name__)
+        else:
+            return getattr, (m.__self__, m.__func__.__name__)
+
+    class _C:
+        def f(self):
+            pass
+    ForkingPickler.register(type(_C().f), _reduce_method)
+
+else:
+
+    class ForkingPickler(Pickler):  # noqa
+        dispatch = Pickler.dispatch.copy()
+
+        @classmethod
+        def register(cls, type, reduce):
+            def dispatcher(self, obj):
+                rv = reduce(obj)
+                self.save_reduce(obj=obj, *rv)
+            cls.dispatch[type] = dispatcher
+
+    def _reduce_method(m):
+        if m.im_self is None:
+            return getattr, (m.im_class, m.im_func.func_name)
+        else:
+            return getattr, (m.im_self, m.im_func.func_name)
+    ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
 
 def _reduce_method_descriptor(m):
     return getattr, (m.__objclass__, m.__name__)
@@ -114,6 +169,7 @@ else:
 if sys.platform != 'win32':
     import thread
     import time
+    import select
 
     WINEXE = False
     WINSERVICE = False
@@ -121,6 +177,7 @@ if sys.platform != 'win32':
     exit = os._exit
     duplicate = os.dup
     close = os.close
+    _select = util._eintr_retry(select.select)
 
     #
     # We define a Popen class similar to the one from subprocess, but
@@ -132,9 +189,9 @@ if sys.platform != 'win32':
         _tls = thread._local()
 
         def __init__(self, process_obj):
-            self.returncode = None
             sys.stdout.flush()
             sys.stderr.flush()
+            self.returncode = None
             r, w = os.pipe()
             self.sentinel = r
 
@@ -191,26 +248,20 @@ if sys.platform != 'win32':
             return self.returncode
 
         def wait(self, timeout=None):
-            if timeout is None:
-                return self.poll(0)
-            deadline = time.time() + timeout
-            delay = 0.0005
-            while 1:
-                res = self.poll()
-                if res is not None:
-                    break
-                remaining = deadline - time.time()
-                if remaining <= 0:
-                    break
-                delay = min(delay * 2, remaining, 0.05)
-                time.sleep(delay)
-            return res
+            if self.returncode is None:
+                if timeout is not None:
+                    r = _select([self.sentinel], [], [], timeout)[0]
+                    if not r:
+                        return None
+                # This shouldn't block if select() returned successfully.
+                return self.poll(os.WNOHANG if timeout == 0.0 else 0)
+            return self.returncode
 
         def terminate(self):
             if self.returncode is None:
                 try:
                     os.kill(self.pid, signal.SIGTERM)
-                except OSError, e:
+                except OSError:
                     if self.wait(timeout=0.1) is None:
                         raise
 
@@ -292,6 +343,7 @@ else:
             self.pid = pid
             self.returncode = None
             self._handle = hp
+            self.sentinel = int(hp)
 
             # send information to child
             prep_data = get_preparation_data(process_obj._name)
@@ -536,7 +588,12 @@ def prepare(data):
         if main_name == '__init__':
             main_name = os.path.basename(os.path.dirname(main_path))
 
-        if main_name != 'ipython':
+        if main_name == '__main__':
+            main_module = sys.modules['__main__']
+            main_module.__file__ = main_path
+        elif main_name != 'ipython':
+            # Main modules not actually called __main__.py may
+            # contain additional code that should still be executed
             import imp
 
             if main_path is None:
@@ -571,4 +628,3 @@ def prepare(data):
                         obj.__module__ = '__main__'
                 except Exception:
                     pass
-
