@@ -48,20 +48,22 @@ from .forking import Popen, duplicate, close, ForkingPickler
 from .util import register_after_fork, debug, sub_debug
 from .connection import Client, Listener
 
-
-#
-#
-#
-
 if not(sys.platform == 'win32' or hasattr(_billiard, 'recvfd')):
     raise ImportError('pickling of connections not supported')
+
+
+# globals set later
+_listener = None
+_lock = None
+_cache = set()
 
 #
 # Platform specific definitions
 #
 
 if sys.platform == 'win32':
-    import _subprocess
+    # XXX Should this subprocess import be here?
+    import _subprocess  # noqa
     from _billiard import win32
 
     def send_handle(conn, handle, destination_pid):
@@ -78,17 +80,16 @@ if sys.platform == 'win32':
         return conn.recv()
 
 else:
-    def send_handle(conn, handle, destination_pid):
+    def send_handle(conn, handle, destination_pid):  # noqa
         _billiard.sendfd(conn.fileno(), handle)
 
-    def recv_handle(conn):
+    def recv_handle(conn):  # noqa
         return _billiard.recvfd(conn.fileno())
 
 #
 # Support for a per-process server thread which caches pickled handles
 #
 
-_cache = set()
 
 def _reset(obj):
     global _lock, _listener, _cache
@@ -100,6 +101,7 @@ def _reset(obj):
 
 _reset(None)
 register_after_fork(_reset, _reset)
+
 
 def _get_listener():
     global _listener
@@ -118,6 +120,7 @@ def _get_listener():
 
     return _listener
 
+
 def _serve():
     from .util import is_exiting, sub_warning
 
@@ -131,15 +134,13 @@ def _serve():
             conn.close()
         except:
             if not is_exiting():
-                import traceback
-                sub_warning(
-                    'thread for sharing handles raised exception :\n' +
-                    '-'*79 + '\n' + traceback.format_exc() + '-'*79
-                    )
+                sub_warning('thread for sharing handles raised exception',
+                            exc_info=True)
 
 #
 # Functions to be used for pickling/unpickling objects with handles
 #
+
 
 def reduce_handle(handle):
     if Popen.thread_is_spawning():
@@ -148,6 +149,7 @@ def reduce_handle(handle):
     _cache.add(dup_handle)
     sub_debug('reducing handle %d', handle)
     return (_get_listener().address, dup_handle, False)
+
 
 def rebuild_handle(pickled_data):
     address, handle, inherited = pickled_data
@@ -164,9 +166,11 @@ def rebuild_handle(pickled_data):
 # Register `_billiard.Connection` with `ForkingPickler`
 #
 
+
 def reduce_connection(conn):
     rh = reduce_handle(conn.fileno())
     return rebuild_connection, (rh, conn.readable, conn.writable)
+
 
 def rebuild_connection(reduced_handle, readable, writable):
     handle = rebuild_handle(reduced_handle)
@@ -180,22 +184,24 @@ ForkingPickler.register(_billiard.Connection, reduce_connection)
 # Register `socket.socket` with `ForkingPickler`
 #
 
+
 def fromfd(fd, family, type_, proto=0):
     s = socket.fromfd(fd, family, type_, proto)
     if s.__class__ is not socket.socket:
         s = socket.socket(_sock=s)
     return s
 
+
 def reduce_socket(s):
     reduced_handle = reduce_handle(s.fileno())
     return rebuild_socket, (reduced_handle, s.family, s.type, s.proto)
+
 
 def rebuild_socket(reduced_handle, family, type_, proto):
     fd = rebuild_handle(reduced_handle)
     _sock = fromfd(fd, family, type_, proto)
     close(fd)
     return _sock
-
 ForkingPickler.register(socket.socket, reduce_socket)
 
 #
@@ -213,5 +219,4 @@ if sys.platform == 'win32':
         return _billiard.PipeConnection(
             handle, readable=readable, writable=writable
             )
-
     ForkingPickler.register(_billiard.PipeConnection, reduce_pipe_connection)

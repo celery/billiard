@@ -1,11 +1,18 @@
 from __future__ import absolute_import
 
-from multiprocessing import (
-    ProcessError,
-    BufferTooShort,
-    TimeoutError,
-    AuthenticationError,
-)
+try:
+    from multiprocessing import (
+        ProcessError,
+        BufferTooShort,
+        TimeoutError,
+        AuthenticationError,
+    )
+except ImportError:
+    class ProcessError(Exception): pass         # noqa
+    class BufferTooShort(Exception): pass       # noqa
+    class TimeoutError(Exception): pass         # noqa
+    class AuthenticationError(Exception): pass  # noqa
+
 
 class TimeLimitExceeded(Exception):
     """The time limit has been exceeded and the job has been terminated."""
@@ -18,5 +25,3 @@ class SoftTimeLimitExceeded(Exception):
 
 class WorkerLostError(Exception):
     """The worker processing a job has exited prematurely."""
-
-

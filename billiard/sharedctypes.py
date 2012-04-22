@@ -33,7 +33,6 @@
 #
 from __future__ import absolute_import
 
-import sys
 import ctypes
 import weakref
 
@@ -41,10 +40,6 @@ from . import heap, RLock
 from .forking import assert_spawning, ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
-
-#
-#
-#
 
 typecode_to_type = {
     'c': ctypes.c_char,  'u': ctypes.c_wchar,
@@ -55,14 +50,12 @@ typecode_to_type = {
     'f': ctypes.c_float, 'd': ctypes.c_double
     }
 
-#
-#
-#
 
 def _new_value(type_):
     size = ctypes.sizeof(type_)
     wrapper = heap.BufferWrapper(size)
     return rebuild_ctype(type_, wrapper, None)
+
 
 def RawValue(typecode_or_type, *args):
     '''
@@ -73,6 +66,7 @@ def RawValue(typecode_or_type, *args):
     ctypes.memset(ctypes.addressof(obj), 0, ctypes.sizeof(obj))
     obj.__init__(*args)
     return obj
+
 
 def RawArray(typecode_or_type, size_or_initializer):
     '''
@@ -90,6 +84,7 @@ def RawArray(typecode_or_type, size_or_initializer):
         result.__init__(*size_or_initializer)
         return result
 
+
 def Value(typecode_or_type, *args, **kwds):
     '''
     Return a synchronization wrapper for a Value
@@ -105,6 +100,7 @@ def Value(typecode_or_type, *args, **kwds):
     if not hasattr(lock, 'acquire'):
         raise AttributeError("'%r' has no method 'acquire'" % lock)
     return synchronized(obj, lock)
+
 
 def Array(typecode_or_type, size_or_initializer, **kwds):
     '''
@@ -122,10 +118,12 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
         raise AttributeError("'%r' has no method 'acquire'" % lock)
     return synchronized(obj, lock)
 
+
 def copy(obj):
     new_obj = _new_value(type(obj))
     ctypes.pointer(new_obj)[0] = obj
     return new_obj
+
 
 def synchronized(obj, lock=None):
     assert not isinstance(obj, SynchronizedBase), 'object already synchronized'
@@ -151,12 +149,14 @@ def synchronized(obj, lock=None):
 # Functions for pickling/unpickling
 #
 
+
 def reduce_ctype(obj):
     assert_spawning(obj)
     if isinstance(obj, ctypes.Array):
         return rebuild_ctype, (obj._type_, obj._wrapper, obj._length_)
     else:
         return rebuild_ctype, (type(obj), obj._wrapper, None)
+
 
 def rebuild_ctype(type_, wrapper, length):
     if length is not None:
@@ -170,12 +170,13 @@ def rebuild_ctype(type_, wrapper, length):
 # Function to create properties
 #
 
+
 def make_property(name):
     try:
         return prop_cache[name]
     except KeyError:
         d = {}
-        exec(template % ((name,)*7), d)
+        exec(template % ((name, ) * 7), d)
         prop_cache[name] = d[name]
         return d[name]
 
@@ -201,6 +202,7 @@ class_cache = weakref.WeakKeyDictionary()
 #
 # Synchronized wrappers
 #
+
 
 class SynchronizedBase(object):
 

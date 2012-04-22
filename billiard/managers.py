@@ -34,40 +34,38 @@
 #
 from __future__ import absolute_import
 
-__all__ = [ 'BaseManager', 'SyncManager', 'BaseProxy', 'Token' ]
+__all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
 #
 # Imports
 #
 
-import os
 import sys
-import weakref
 import threading
 import array
 import Queue
 
 from traceback import format_exc
+from time import time as _time
+
 from . import Process, current_process, active_children, Pool, util, connection
 from .process import AuthenticationString
-from .forking import exit, Popen, assert_spawning, ForkingPickler
-from .util import Finalize, info
-
-try:
-    from cPickle import PicklingError
-except ImportError:
-    from pickle import PicklingError
+from .forking import exit, Popen, ForkingPickler
+from .util import Finalize, error, info
 
 #
 # Register some things for pickling
 #
 
+
 def reduce_array(a):
     return array.array, (a.typecode, a.tostring())
 ForkingPickler.register(array.array, reduce_array)
 
-view_types = [type(getattr({}, name)()) for name in ('items','keys','values')]
+view_types = [type(getattr({}, name)())
+                 for name in ('items', 'keys', 'values')]
 if view_types[0] is not list:  # only needed in Py3.0
+
     def rebuild_as_list(obj):
         return list, (list(obj), )
     for view_type in view_types:
@@ -82,6 +80,7 @@ if view_types[0] is not list:  # only needed in Py3.0
 #
 # Type for identifying shared objects
 #
+
 
 class Token(object):
     '''
@@ -106,6 +105,7 @@ class Token(object):
 # Function for communication with a manager's server process
 #
 
+
 def dispatch(c, id, methodname, args=(), kwds={}):
     '''
     Send a message to manager using connection `c` and return response
@@ -115,6 +115,7 @@ def dispatch(c, id, methodname, args=(), kwds={}):
     if kind == '#RETURN':
         return result
     raise convert_to_error(kind, result)
+
 
 def convert_to_error(kind, result):
     if kind == '#ERROR':
@@ -128,13 +129,16 @@ def convert_to_error(kind, result):
     else:
         return ValueError('Unrecognized message type')
 
+
 class RemoteError(Exception):
+
     def __str__(self):
-        return ('\n' + '-'*75 + '\n' + str(self.args[0]) + '-'*75)
+        return ('\n' + '-' * 75 + '\n' + str(self.args[0]) + '-' * 75)
 
 #
 # Functions for finding the method names of an object
 #
+
 
 def all_methods(obj):
     '''
@@ -147,6 +151,7 @@ def all_methods(obj):
             temp.append(name)
     return temp
 
+
 def public_methods(obj):
     '''
     Return a list of names of methods of `obj` which do not start with '_'
@@ -156,6 +161,7 @@ def public_methods(obj):
 #
 # Server which is run in a process controlled by a manager
 #
+
 
 class Server(object):
     '''
@@ -228,9 +234,9 @@ class Server(object):
                 c.send(('#TRACEBACK', format_exc()))
             except Exception:
                 pass
-            util.info('Failure to send message: %r', msg)
-            util.info(' ... request was %r', request)
-            util.info(' ... exception was %r', e)
+            info('Failure to send message: %r', msg)
+            info(' ... request was %r', request)
+            info(' ... exception was %r', e)
 
         c.close()
 
@@ -301,10 +307,10 @@ class Server(object):
                 except Exception, e:
                     send(('#UNSERIALIZABLE', repr(msg)))
             except Exception, e:
-                util.info('exception in thread serving %r',
+                info('exception in thread serving %r',
                         threading.current_thread().name)
-                util.info(' ... message was %r', msg)
-                util.info(' ... exception was %r', e)
+                info(' ... message was %r', msg)
+                info(' ... exception was %r', e)
                 conn.close()
                 sys.exit(1)
 
@@ -318,10 +324,10 @@ class Server(object):
         return repr(obj)
 
     fallback_mapping = {
-        '__str__':fallback_str,
-        '__repr__':fallback_repr,
-        '#GETVALUE':fallback_getvalue
-        }
+        '__str__': fallback_str,
+        '__repr__': fallback_repr,
+        '#GETVALUE': fallback_getvalue,
+    }
 
     def dummy(self, c):
         pass
@@ -375,10 +381,11 @@ class Server(object):
                     p.join()
 
                 util._run_finalizers()
-                util.info('manager exiting with exitcode 0')
+                info('manager exiting with exitcode 0')
             except:
-                import traceback
-                traceback.print_exc()
+                if not error("Error while manager shutdown", exc_info=True):
+                    import traceback
+                    traceback.print_exc()
         finally:
             exit(0)
 
@@ -456,6 +463,7 @@ class Server(object):
 # Class to represent state of a manager
 #
 
+
 class State(object):
     __slots__ = ['value']
     INITIAL = 0
@@ -467,13 +475,14 @@ class State(object):
 #
 
 listener_client = {
-    'pickle' : (connection.Listener, connection.Client),
-    'xmlrpclib' : (connection.XmlListener, connection.XmlClient)
-    }
+    'pickle': (connection.Listener, connection.Client),
+    'xmlrpclib': (connection.XmlListener, connection.XmlClient),
+}
 
 #
 # Definition of BaseManager
 #
+
 
 class BaseManager(object):
     '''
@@ -532,7 +541,7 @@ class BaseManager(object):
                   self._serializer, writer, initializer, initargs),
             )
         ident = ':'.join(str(i) for i in self._process._identity)
-        self._process.name = type(self).__name__  + '-' + ident
+        self._process.name = type(self).__name__ + '-' + ident
         self._process.start()
 
         # get address of server
@@ -542,7 +551,7 @@ class BaseManager(object):
 
         # register a finalizer
         self._state.value = State.STARTED
-        self.shutdown = util.Finalize(
+        self.shutdown = Finalize(
             self, type(self)._finalize_manager,
             args=(self._process, self._address, self._authkey,
                   self._state, self._Client),
@@ -566,7 +575,7 @@ class BaseManager(object):
         writer.close()
 
         # run the manager
-        util.info('manager serving at %r', server.address)
+        info('manager serving at %r', server.address)
         server.serve_forever()
 
     def _create(self, typeid, *args, **kwds):
@@ -576,7 +585,8 @@ class BaseManager(object):
         assert self._state.value == State.STARTED, 'server not yet started'
         conn = self._Client(self._address, authkey=self._authkey)
         try:
-            id, exposed = dispatch(conn, None, 'create', (typeid,)+args, kwds)
+            id, exposed = dispatch(conn, None, 'create',
+                                   (typeid,) + args, kwds)
         finally:
             conn.close()
         return Token(typeid, self._address, id), exposed
@@ -619,7 +629,7 @@ class BaseManager(object):
         Shutdown the manager process; will be registered as a finalizer
         '''
         if process.is_alive():
-            util.info('sending shutdown message to manager')
+            info('sending shutdown message to manager')
             try:
                 conn = _Client(address, authkey=authkey)
                 try:
@@ -631,13 +641,13 @@ class BaseManager(object):
 
             process.join(timeout=0.2)
             if process.is_alive():
-                util.info('manager still alive')
+                info('manager still alive')
                 if hasattr(process, 'terminate'):
-                    util.info('trying to `terminate()` manager process')
+                    info('trying to `terminate()` manager process')
                     process.terminate()
                     process.join(timeout=0.1)
                     if process.is_alive():
-                        util.info('manager still alive after terminate')
+                        info('manager still alive after terminate')
 
         state.value = State.SHUTDOWN
         try:
@@ -691,15 +701,19 @@ class BaseManager(object):
 # Subclass of set which get cleared after a fork
 #
 
+
 class ProcessLocalSet(set):
+
     def __init__(self):
         util.register_after_fork(self, lambda obj: obj.clear())
+
     def __reduce__(self):
         return type(self), ()
 
 #
 # Definition of BaseProxy
 #
+
 
 class BaseProxy(object):
     '''
@@ -799,7 +813,7 @@ class BaseProxy(object):
 
         state = self._manager and self._manager._state
 
-        self._close = util.Finalize(
+        self._close = Finalize(
             self, BaseProxy._decref,
             args=(self._token, self._authkey, state,
                   self._tls, self._idset, self._Client),
@@ -837,7 +851,7 @@ class BaseProxy(object):
             self._incref()
         except Exception, e:
             # the proxy may just be for a manager which has shutdown
-            util.info('incref failed: %s' % e)
+            info('incref failed: %s', e)
 
     def __reduce__(self):
         kwds = {}
@@ -872,6 +886,7 @@ class BaseProxy(object):
 # Function used for unpickling
 #
 
+
 def RebuildProxy(func, token, serializer, kwds):
     '''
     Function used for unpickling proxy objects.
@@ -892,6 +907,7 @@ def RebuildProxy(func, token, serializer, kwds):
 #
 # Functions to create proxies and proxy types
 #
+
 
 def MakeProxyType(name, exposed, _cache={}):
     '''
@@ -944,9 +960,12 @@ def AutoProxy(token, serializer, manager=None, authkey=None,
 # Types/callables which we will register with SyncManager
 #
 
+
 class Namespace(object):
+
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
+
     def __repr__(self):
         items = self.__dict__.items()
         temp = []
@@ -956,17 +975,24 @@ class Namespace(object):
         temp.sort()
         return 'Namespace(%s)' % str.join(', ', temp)
 
+
 class Value(object):
+
     def __init__(self, typecode, value, lock=True):
         self._typecode = typecode
         self._value = value
+
     def get(self):
         return self._value
+
     def set(self, value):
         self._value = value
+
     def __repr__(self):
-        return '%s(%r, %r)'%(type(self).__name__, self._typecode, self._value)
+        return '%s(%r, %r)' % (type(self).__name__,
+                               self._typecode, self._value)
     value = property(get, set)
+
 
 def Array(typecode, sequence, lock=True):
     return array.array(typecode, sequence)
@@ -975,51 +1001,66 @@ def Array(typecode, sequence, lock=True):
 # Proxy types used by SyncManager
 #
 
+
 class IteratorProxy(BaseProxy):
     if sys.version_info[0] == 3:
         _exposed = ('__next__', 'send', 'throw', 'close')
     else:
         _exposed_ = ('__next__', 'next', 'send', 'throw', 'close')
+
         def next(self, *args):
             return self._callmethod('next', args)
+
     def __iter__(self):
         return self
+
     def __next__(self, *args):
         return self._callmethod('__next__', args)
+
     def send(self, *args):
         return self._callmethod('send', args)
+
     def throw(self, *args):
         return self._callmethod('throw', args)
+
     def close(self, *args):
         return self._callmethod('close', args)
 
 
 class AcquirerProxy(BaseProxy):
     _exposed_ = ('acquire', 'release')
+
     def acquire(self, blocking=True):
         return self._callmethod('acquire', (blocking,))
+
     def release(self):
         return self._callmethod('release')
+
     def __enter__(self):
         return self._callmethod('acquire')
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         return self._callmethod('release')
 
 
 class ConditionProxy(AcquirerProxy):
     _exposed_ = ('acquire', 'release', 'wait', 'notify', 'notify_all')
+
     def wait(self, timeout=None):
         return self._callmethod('wait', (timeout,))
+
     def notify(self):
         return self._callmethod('notify')
+
     def notify_all(self):
         return self._callmethod('notify_all')
+
     def wait_for(self, predicate, timeout=None):
         result = predicate()
         if result:
             return result
         if timeout is not None:
-            endtime = _time + timeout
+            endtime = _time() + timeout
         else:
             endtime = None
             waittime = None
@@ -1032,29 +1073,38 @@ class ConditionProxy(AcquirerProxy):
             result = predicate()
         return result
 
+
 class EventProxy(BaseProxy):
     _exposed_ = ('is_set', 'set', 'clear', 'wait')
+
     def is_set(self):
         return self._callmethod('is_set')
+
     def set(self):
         return self._callmethod('set')
+
     def clear(self):
         return self._callmethod('clear')
+
     def wait(self, timeout=None):
         return self._callmethod('wait', (timeout,))
 
+
 class NamespaceProxy(BaseProxy):
     _exposed_ = ('__getattribute__', '__setattr__', '__delattr__')
+
     def __getattr__(self, key):
         if key[0] == '_':
             return object.__getattribute__(self, key)
         callmethod = object.__getattribute__(self, '_callmethod')
         return callmethod('__getattribute__', (key,))
+
     def __setattr__(self, key, value):
         if key[0] == '_':
             return object.__setattr__(self, key, value)
         callmethod = object.__getattribute__(self, '_callmethod')
         return callmethod('__setattr__', (key, value))
+
     def __delattr__(self, key):
         if key[0] == '_':
             return object.__delattr__(self, key)
@@ -1064,8 +1114,10 @@ class NamespaceProxy(BaseProxy):
 
 class ValueProxy(BaseProxy):
     _exposed_ = ('get', 'set')
+
     def get(self):
         return self._callmethod('get')
+
     def set(self, value):
         return self._callmethod('set', (value,))
     value = property(get, set)
@@ -1078,10 +1130,14 @@ BaseListProxy = MakeProxyType('BaseListProxy', (
     'append', 'count', 'extend', 'index', 'insert', 'pop', 'remove',
     'reverse', 'sort', '__imul__'
     ))                  # XXX __getslice__ and __setslice__ unneeded in Py3.0
+
+
 class ListProxy(BaseListProxy):
+
     def __iadd__(self, value):
         self._callmethod('extend', (value,))
         return self
+
     def __imul__(self, value):
         self._callmethod('__imul__', (value,))
         return self
@@ -1114,6 +1170,7 @@ PoolProxy._method_to_typeid_ = {
 #
 # Definition of SyncManager
 #
+
 
 class SyncManager(BaseManager):
     '''

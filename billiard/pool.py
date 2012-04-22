@@ -93,6 +93,7 @@ job_counter = itertools.count()
 def mapstar(args):
     return map(*args)
 
+
 def starmapstar(args):
     return list(itertools.starmap(args[0], args[1]))
 
@@ -150,18 +151,19 @@ class LaxBoundedSemaphore(threading._Semaphore):
 
 
 class MaybeEncodingError(Exception):
-    """Wraps unpickleable object."""
+    """Wraps possible unpickleable errors, so they can be
+    safely sent through the socket."""
 
     def __init__(self, exc, value):
-        self.exc = str(exc)
+        self.exc = repr(exc)
         self.value = repr(value)
-        Exception.__init__(self, self.exc, self.value)
+        super(MaybeEncodingError, self).__init__(self.exc, self.value)
 
     def __repr__(self):
         return "<MaybeEncodingError: %s>" % str(self)
 
     def __str__(self):
-        return "Error sending result: '%s'. Reason: '%s'." % (
+        return "Error sending result: '%r'. Reason: '%r'." % (
                     self.value, self.exc)
 
 
@@ -252,7 +254,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             put((READY, (job, i, (False, einfo))))
 
         completed += 1
-    debug('worker exiting after %d tasks' % completed)
+    debug('worker exiting after %d tasks', completed)
 
 #
 # Class representing a process pool
@@ -376,7 +378,7 @@ class TimeoutHandler(PoolThread):
                 return True
 
         def _on_soft_timeout(job, i, soft_timeout):
-            debug('soft time limit exceeded for %i' % i)
+            debug('soft time limit exceeded for %i', i)
             process, _index = _process_by_pid(job._worker_pid)
             if not process:
                 return
@@ -488,14 +490,14 @@ class ResultHandler(PoolThread):
             try:
                 state_handlers[state](*args)
             except KeyError:
-                debug("Unknown job state: %s (args=%s)" % (state, args))
+                debug("Unknown job state: %s (args=%s)", state, args)
 
         debug('result handler starting')
         while 1:
             try:
                 ready, task = poll(1.0)
             except (IOError, EOFError), exc:
-                debug('result handler got %r -- exiting' % (exc, ))
+                debug('result handler got %r -- exiting', exc)
                 return
 
             if self._state:
@@ -515,7 +517,7 @@ class ResultHandler(PoolThread):
             try:
                 ready, task = poll(1.0)
             except (IOError, EOFError), exc:
-                debug('result handler got %r -- exiting' % (exc, ))
+                debug('result handler got %r -- exiting', exc)
                 return
 
             if ready:
@@ -535,8 +537,8 @@ class ResultHandler(PoolThread):
                         debug('result handler exiting: timed out')
                         break
                     debug('result handler: all workers terminated, '
-                          'timeout in %ss' % (
-                              abs(min(now - time_terminate - 5.0, 0))))
+                          'timeout in %ss',
+                              abs(min(now - time_terminate - 5.0, 0)))
 
         if hasattr(outqueue, '_reader'):
             debug('ensuring that outqueue is not full')
@@ -634,7 +636,7 @@ class Pool(object):
             )
 
     def _create_worker_process(self):
-        sentinel = None
+        sentinel = Event()
         w = self.Process(
             target=worker,
             args=(self._inqueue, self._outqueue,
@@ -678,9 +680,9 @@ class Pool(object):
             worker = self._pool[i]
             if worker.exitcode is not None:
                 # worker exited
-                debug('Supervisor: cleaning up worker %d' % i)
+                debug('Supervisor: cleaning up worker %d', i)
                 worker.join()
-                debug('Supervisor: worked %d joined' % i)
+                debug('Supervisor: worked %d joined', i)
                 cleaned.append(worker.pid)
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
@@ -961,7 +963,7 @@ class Pool(object):
         self._result_handler.join()
         debug('result handler joined')
         for i, p in enumerate(self._pool):
-            debug('joining worker %s/%s (%r)' % (i, len(self._pool), p, ))
+            debug('joining worker %s/%s (%r)', i, len(self._pool), p)
             p.join()
 
     def restart(self):
@@ -1021,7 +1023,7 @@ class Pool(object):
             for p in pool:
                 if p.is_alive():
                     # worker has not yet exited
-                    debug('cleaning up worker %d' % p.pid)
+                    debug('cleaning up worker %d', p.pid)
                     p.join()
             debug('pool workers joined')
 DynamicPool = Pool

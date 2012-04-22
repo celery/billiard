@@ -7,10 +7,13 @@
 #
 from __future__ import absolute_import
 
+import errno
 import functools
 import itertools
 import weakref
 import atexit
+import shutil
+import tempfile
 import threading        # we want threading to install its
                         # cleanup function before multiprocessing does
 
@@ -32,6 +35,7 @@ SUBDEBUG = 5
 DEBUG = 10
 INFO = 20
 SUBWARNING = 25
+ERROR = 40
 
 LOGGER_NAME = 'multiprocessing'
 DEFAULT_LOGGING_FORMAT = '[%(levelname)s/%(processName)s] %(message)s'
@@ -39,21 +43,50 @@ DEFAULT_LOGGING_FORMAT = '[%(levelname)s/%(processName)s] %(message)s'
 _logger = None
 _log_to_stderr = False
 
-def sub_debug(msg, *args):
-    if _logger:
-        _logger.log(SUBDEBUG, msg, *args)
+#: Support for reinitialization of objects when bootstrapping a child process
+_afterfork_registry = weakref.WeakValueDictionary()
+_afterfork_counter = itertools.count()
 
-def debug(msg, *args):
-    if _logger:
-        _logger.log(DEBUG, msg, *args)
+#: Finalization using weakrefs
+_finalizer_registry = {}
+_finalizer_counter = itertools.count()
 
-def info(msg, *args):
-    if _logger:
-        _logger.log(INFO, msg, *args)
+#: set to true if the process is shutting down.
+_exiting = False
 
-def sub_warning(msg, *args):
+
+def sub_debug(msg, *args, **kwargs):
     if _logger:
-        _logger.log(SUBWARNING, msg, *args)
+        _logger.log(SUBDEBUG, msg, *args, **kwargs)
+
+
+def debug(msg, *args, **kwargs):
+    if _logger:
+        _logger.log(DEBUG, msg, *args, **kwargs)
+        return True
+    return False
+
+
+def info(msg, *args, **kwargs):
+    if _logger:
+        _logger.log(INFO, msg, *args, **kwargs)
+        return True
+    return False
+
+
+def sub_warning(msg, *args, **kwargs):
+    if _logger:
+        _logger.log(SUBWARNING, msg, *args, **kwargs)
+        return True
+    return False
+
+
+def error(msg, *args, **kwargs):
+    if _logger:
+        _logger.log(ERROR, msg, *args, **kwargs)
+        return True
+    return False
+
 
 def get_logger():
     '''
@@ -78,11 +111,11 @@ def get_logger():
             else:
                 atexit._exithandlers.remove((_exit_function, (), {}))
                 atexit._exithandlers.append((_exit_function, (), {}))
-
     finally:
         logging._releaseLock()
 
     return _logger
+
 
 def log_to_stderr(level=None):
     '''
@@ -102,26 +135,19 @@ def log_to_stderr(level=None):
     _log_to_stderr = True
     return _logger
 
-#
-# Function returning a temp directory which will be removed on exit
-#
 
 def get_temp_dir():
+    '''
+    Function returning a temp directory which will be removed on exit
+    '''
     # get name of a temp directory which will be automatically cleaned up
     if current_process()._tempdir is None:
-        import shutil, tempfile
         tempdir = tempfile.mkdtemp(prefix='pymp-')
         info('created temp directory %s', tempdir)
         Finalize(None, shutil.rmtree, args=[tempdir], exitpriority=-100)
         current_process()._tempdir = tempdir
     return current_process()._tempdir
 
-#
-# Support for reinitialization of objects when bootstrapping a child process
-#
-
-_afterfork_registry = weakref.WeakValueDictionary()
-_afterfork_counter = itertools.count()
 
 def _run_after_forkers():
     items = list(_afterfork_registry.items())
@@ -132,15 +158,9 @@ def _run_after_forkers():
         except Exception, e:
             info('after forker raised exception %s', e)
 
+
 def register_after_fork(obj, func):
     _afterfork_registry[(_afterfork_counter.next(), id(obj), func)] = obj
-
-#
-# Finalization using weakrefs
-#
-
-_finalizer_registry = {}
-_finalizer_counter = itertools.count()
 
 
 class Finalize(object):
@@ -228,9 +248,9 @@ def _run_finalizers(minpriority=None):
     the same priority will be called in reverse order of creation.
     '''
     if minpriority is None:
-        f = lambda p : p[0][0] is not None
+        f = lambda p: p[0][0] is not None
     else:
-        f = lambda p : p[0][0] is not None and p[0][0] >= minpriority
+        f = lambda p: p[0][0] is not None and p[0][0] >= minpriority
 
     items = [x for x in _finalizer_registry.items() if f(x)]
     items.sort(reverse=True)
@@ -240,15 +260,14 @@ def _run_finalizers(minpriority=None):
         try:
             finalizer()
         except Exception:
-            import traceback
-            traceback.print_exc()
+            if not error("Error calling finalizer %r", finalizer,
+                    exc_info=True):
+                import traceback
+                traceback.print_exc()
 
     if minpriority is None:
         _finalizer_registry.clear()
 
-#
-# Clean up on exit
-#
 
 def is_exiting():
     '''
@@ -256,9 +275,13 @@ def is_exiting():
     '''
     return _exiting or _exiting is None
 
-_exiting = False
 
+@atexit.register
 def _exit_function():
+    '''
+    Clean up on exit
+    '''
+
     global _exiting
 
     info('process shutting down')
@@ -277,36 +300,36 @@ def _exit_function():
     debug('running the remaining "atexit" finalizers')
     _run_finalizers()
 
-atexit.register(_exit_function)
-
-#
-# Some fork aware types
-#
 
 class ForkAwareThreadLock(object):
+
     def __init__(self):
         self._lock = threading.Lock()
         self.acquire = self._lock.acquire
         self.release = self._lock.release
         register_after_fork(self, ForkAwareThreadLock.__init__)
 
+
 class ForkAwareLocal(threading.local):
+
     def __init__(self):
-        register_after_fork(self, lambda obj : obj.__dict__.clear())
+        register_after_fork(self, lambda obj: obj.__dict__.clear())
+
     def __reduce__(self):
         return type(self), ()
 
 
-#
-# Automatic retry after EINTR
-#
-
 def _eintr_retry(func):
+    '''
+    Automatic retry after EINTR.
+    '''
+
     @functools.wraps(func)
     def wrapped(*args, **kwargs):
-        while True:
+        while 1:
             try:
                 return func(*args, **kwargs)
-            except InterruptedError:
-                continue
+            except OSError, exc:
+                if exc.errno != errno.EINTR:
+                    raise
     return wrapped

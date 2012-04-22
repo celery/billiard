@@ -49,11 +49,7 @@ from .compat import bytes
 try:
     from _weakrefset import WeakSet
 except ImportError:
-    WeakSet = None
-
-#
-#
-#
+    WeakSet = None  # noqa
 
 try:
     ORIGINAL_DIR = os.path.abspath(os.getcwd())
@@ -64,11 +60,13 @@ except OSError:
 # Public functions
 #
 
+
 def current_process():
     '''
     Return process object representing the current process
     '''
     return _current_process
+
 
 def active_children():
     '''
@@ -77,9 +75,6 @@ def active_children():
     _cleanup()
     return list(_current_process._children)
 
-#
-#
-#
 
 def _cleanup():
     # check for processes which have finished
@@ -87,9 +82,6 @@ def _cleanup():
         if p._popen.poll() is not None:
             _current_process._children.discard(p)
 
-#
-# The `Process` class
-#
 
 class Process(object):
     '''
@@ -292,11 +284,12 @@ class Process(object):
                 exitcode = 1
         except:
             exitcode = 1
-            import traceback
-            sys.stderr.write('Process %s:\n' % self.name)
-            traceback.print_exc()
+            if not util.error('Process %s', self.name, exc_info=True):
+                import traceback
+                sys.stderr.write('Process %s:\n' % self.name)
+                traceback.print_exc()
         finally:
-            util.info('process exiting with exitcode %d' % exitcode)
+            util.info('process exiting with exitcode %d', exitcode)
             sys.stdout.flush()
             sys.stderr.flush()
         return exitcode
@@ -305,19 +298,22 @@ class Process(object):
 # We subclass bytes to avoid accidental transmission of auth keys over network
 #
 
+
 class AuthenticationString(bytes):
+
     def __reduce__(self):
         from .forking import Popen
+
         if not Popen.thread_is_spawning():
             raise TypeError(
                 'Pickling an AuthenticationString object is '
-                'disallowed for security reasons'
-                )
+                'disallowed for security reasons')
         return AuthenticationString, (bytes(self),)
 
 #
 # Create object representing the main process
 #
+
 
 class _MainProcess(Process):
 
@@ -331,7 +327,8 @@ class _MainProcess(Process):
         self._children = set()
         self._authkey = AuthenticationString(os.urandom(32))
         self._tempdir = None
-        self._semprefix = 'mp-'+binascii.hexlify(os.urandom(4)).decode('ascii')
+        self._semprefix = 'mp-' + binascii.hexlify(
+                                os.urandom(4)).decode('ascii')
         self._unlinkfd = None
 
 _current_process = _MainProcess()
@@ -344,7 +341,7 @@ del _MainProcess
 _exitcode_to_name = {}
 
 for name, signum in signal.__dict__.items():
-    if name[:3]=='SIG' and '_' not in name:
+    if name[:3] == 'SIG' and '_' not in name:
         _exitcode_to_name[-signum] = name
 
 _dangling = WeakSet() if WeakSet is not None else None

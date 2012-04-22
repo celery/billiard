@@ -40,7 +40,6 @@ import os
 import threading
 import collections
 import time
-import atexit
 import weakref
 import errno
 
@@ -48,15 +47,14 @@ from Queue import Empty, Full
 import _billiard
 from . import Pipe
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
-from .util import debug, info, Finalize, register_after_fork
+from .util import debug, error, info, Finalize, register_after_fork
 from .forking import assert_spawning
 
-#
-# Queue type using a pipe, buffer and thread
-#
 
 class Queue(object):
-
+    '''
+    Queue type using a pipe, buffer and thread
+    '''
     def __init__(self, maxsize=0):
         if maxsize <= 0:
             maxsize = _billiard.SemLock.SEM_VALUE_MAX
@@ -143,7 +141,8 @@ class Queue(object):
                 self._rlock.release()
 
     def qsize(self):
-        # Raises NotImplementedError on Mac OSX because of broken sem_getvalue()
+        # Raises NotImplementedError on Mac OSX because
+        # of broken sem_getvalue()
         return self._maxsize - self._sem._semlock._get_value()
 
     def empty(self):
@@ -287,24 +286,26 @@ class Queue(object):
             # started to cleanup.
             try:
                 if is_exiting():
-                    info('error in queue thread: %s', e)
+                    info('error in queue thread: %r', e, exc_info=True)
                 else:
-                    import traceback
-                    traceback.print_exc()
+                    if not error('error in queue thread: %r', e,
+                                 exc_info=True):
+                        import traceback
+                        traceback.print_exc()
             except Exception:
                 pass
 
 _sentinel = object()
 
-#
-# A queue type which also supports join() and task_done() methods
-#
-# Note that if you do not call task_done() for each finished task then
-# eventually the counter's semaphore may overflow causing Bad Things
-# to happen.
-#
 
 class JoinableQueue(Queue):
+    '''
+    A queue type which also supports join() and task_done() methods
+
+    Note that if you do not call task_done() for each finished task then
+    eventually the counter's semaphore may overflow causing Bad Things
+    to happen.
+    '''
 
     def __init__(self, maxsize=0):
         Queue.__init__(self, maxsize)
@@ -353,11 +354,11 @@ class JoinableQueue(Queue):
         finally:
             self._cond.release()
 
-#
-# Simplified Queue type -- really just a locked pipe
-#
 
 class SimpleQueue(object):
+    '''
+    Simplified Queue type -- really just a locked pipe
+    '''
 
     def __init__(self):
         self._reader, self._writer = Pipe(duplex=False)
@@ -383,6 +384,7 @@ class SimpleQueue(object):
     def _make_methods(self):
         recv = self._reader.recv
         racquire, rrelease = self._rlock.acquire, self._rlock.release
+
         def get():
             racquire()
             try:
@@ -397,6 +399,7 @@ class SimpleQueue(object):
         else:
             send = self._writer.send
             wacquire, wrelease = self._wlock.acquire, self._wlock.release
+
             def put(obj):
                 wacquire()
                 try:

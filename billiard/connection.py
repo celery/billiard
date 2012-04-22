@@ -34,7 +34,7 @@
 from __future__ import absolute_import
 from __future__ import with_statement
 
-__all__ = [ 'Client', 'Listener', 'Pipe' ]
+__all__ = ['Client', 'Listener', 'Pipe']
 
 import os
 import sys
@@ -45,10 +45,19 @@ import tempfile
 import itertools
 
 import _billiard
-from . import current_process, AuthenticationError
+from . import AuthenticationError
 from .util import get_temp_dir, Finalize, sub_debug, debug
 from .forking import duplicate, close
 from .compat import bytes
+
+try:
+    WindowsError = WindowsError  # noqa
+except NameError:
+    WindowsError = None  # noqa
+
+
+# global set later
+xmlrpclib = None
 
 
 #
@@ -76,12 +85,14 @@ if sys.platform == 'win32':
 def _init_timeout(timeout=CONNECTION_TIMEOUT):
     return time.time() + timeout
 
+
 def _check_timeout(t):
     return time.time() > t
 
 #
 #
 #
+
 
 def arbitrary_address(family):
     '''
@@ -96,6 +107,7 @@ def arbitrary_address(family):
                                (os.getpid(), _mmap_counter.next()))
     else:
         raise ValueError('unrecognized family')
+
 
 def _validate_family(family):
     '''
@@ -128,6 +140,7 @@ def address_type(address):
 #
 # Public functions
 #
+
 
 class Listener(object):
     '''
@@ -218,7 +231,7 @@ else:
 
     from _billiard import win32
 
-    def Pipe(duplex=True):
+    def Pipe(duplex=True):  # noqa
         '''
         Returns pair of connection objects at either end of a pipe
         '''
@@ -259,6 +272,7 @@ else:
 #
 # Definitions for connections based on sockets
 #
+
 
 class SocketListener(object):
     '''
@@ -385,11 +399,12 @@ if sys.platform == 'win32':
                 win32.WaitNamedPipe(address, 1000)
                 h = win32.CreateFile(
                     address, win32.GENERIC_READ | win32.GENERIC_WRITE,
-                    0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL
+                    0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL,
                     )
             except WindowsError, e:
-                if e.args[0] not in (win32.ERROR_SEM_TIMEOUT,
-                                     win32.ERROR_PIPE_BUSY) or _check_timeout(t):
+                if e.args[0] not in (
+                        win32.ERROR_SEM_TIMEOUT,
+                        win32.ERROR_PIPE_BUSY) or _check_timeout(t):
                     raise
             else:
                 break
@@ -411,6 +426,7 @@ CHALLENGE = bytes('#CHALLENGE#')
 WELCOME = bytes('#WELCOME#')
 FAILURE = bytes('#FAILURE#')
 
+
 def deliver_challenge(connection, authkey):
     import hmac
     assert isinstance(authkey, bytes)
@@ -423,6 +439,7 @@ def deliver_challenge(connection, authkey):
     else:
         connection.send_bytes(FAILURE)
         raise AuthenticationError('digest received was wrong')
+
 
 def answer_challenge(connection, authkey):
     import hmac
@@ -440,6 +457,7 @@ def answer_challenge(connection, authkey):
 # Support for using xmlrpclib for serialization
 #
 
+
 class ConnectionWrapper(object):
     def __init__(self, conn, dumps, loads):
         self._conn = conn
@@ -448,28 +466,34 @@ class ConnectionWrapper(object):
         for attr in ('fileno', 'close', 'poll', 'recv_bytes', 'send_bytes'):
             obj = getattr(conn, attr)
             setattr(self, attr, obj)
+
     def send(self, obj):
         s = self._dumps(obj)
         self._conn.send_bytes(s)
+
     def recv(self):
         s = self._conn.recv_bytes()
         return self._loads(s)
 
+
 def _xml_dumps(obj):
-    return xmlrpclib.dumps((obj,), None, None, None, 1).encode('utf8')
+    return xmlrpclib.dumps((obj,), None, None, None, 1).encode('utf-8')
+
 
 def _xml_loads(s):
-    (obj,), method = xmlrpclib.loads(s.decode('utf8'))
+    (obj,), method = xmlrpclib.loads(s.decode('utf-8'))
     return obj
+
 
 class XmlListener(Listener):
     def accept(self):
         global xmlrpclib
-        import xmlrpclib
+        xmlrpclib = __import__("xmlrpclib")
         obj = Listener.accept(self)
         return ConnectionWrapper(obj, _xml_dumps, _xml_loads)
 
+
 def XmlClient(*args, **kwds):
     global xmlrpclib
-    import xmlrpclib
+    xmlrpclib = __import__("xmlrpclib")
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)

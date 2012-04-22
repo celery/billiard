@@ -38,10 +38,16 @@ import os
 import sys
 import signal
 
-from pickle import dump, load, HIGHEST_PROTOCOL
+from pickle import load, HIGHEST_PROTOCOL
 from billiard import util, process
 
-__all__ = ['Popen', 'assert_spawning', 'exit', 'duplicate', 'close', 'ForkingPickler']
+__all__ = ['Popen', 'assert_spawning', 'exit',
+           'duplicate', 'close', 'ForkingPickler']
+
+try:
+    WindowsError = WindowsError  # noqa
+except NameError:
+    class WindowsError(Exception): pass  # noqa
 
 #
 # Choose whether to do a fork or spawn (fork+exec) on Unix.
@@ -49,11 +55,11 @@ __all__ = ['Popen', 'assert_spawning', 'exit', 'duplicate', 'close', 'ForkingPic
 #
 
 _forking_is_enabled = sys.platform != 'win32'
-#_forking_is_enabled = False
 
 #
 # Check that the current thread is spawning a child process
 #
+
 
 def assert_spawning(self):
     if not Popen.thread_is_spawning():
@@ -105,33 +111,32 @@ else:
                 self.save_reduce(obj=obj, *rv)
             cls.dispatch[type] = dispatcher
 
-    def _reduce_method(m):
+    def _reduce_method(m):  # noqa
         if m.im_self is None:
             return getattr, (m.im_class, m.im_func.func_name)
         else:
             return getattr, (m.im_self, m.im_func.func_name)
     ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
 
+
 def _reduce_method_descriptor(m):
     return getattr, (m.__objclass__, m.__name__)
 ForkingPickler.register(type(list.append), _reduce_method_descriptor)
 ForkingPickler.register(type(int.__add__), _reduce_method_descriptor)
-
-#def _reduce_builtin_function_or_method(m):
-#    return getattr, (m.__self__, m.__name__)
-#ForkingPickler.register(type(list().append), _reduce_builtin_function_or_method)
-#ForkingPickler.register(type(int().__add__), _reduce_builtin_function_or_method)
 
 try:
     from functools import partial
 except ImportError:
     pass
 else:
+
     def _reduce_partial(p):
         return _rebuild_partial, (p.func, p.args, p.keywords or {})
+
     def _rebuild_partial(func, args, keywords):
         return partial(func, *args, **keywords)
     ForkingPickler.register(partial, _reduce_partial)
+
 
 def dump(obj, file, protocol=None):
     ForkingPickler(file, protocol).dump(obj)
@@ -141,6 +146,7 @@ def dump(obj, file, protocol=None):
 #
 
 from _billiard import Connection
+
 
 def reduce_connection(conn):
     # XXX check not necessary since only registered with ForkingPickler
@@ -168,7 +174,6 @@ else:
 
 if sys.platform != 'win32':
     import thread
-    import time
     import select
 
     WINEXE = False
@@ -284,7 +289,6 @@ else:
     import thread
     import msvcrt
     import _subprocess
-    import time
 
     from _billiard import win32, Connection, PipeConnection
 
@@ -400,6 +404,7 @@ if WINSERVICE:
 else:
     _python_exe = sys.executable
 
+
 def set_executable(exe):
     global _python_exe
     _python_exe = exe
@@ -429,7 +434,7 @@ def get_command_line():
     '''
     Returns prefix of command line used for spawning a child process
     '''
-    if process.current_process()._identity==() and is_forking(sys.argv):
+    if process.current_process()._identity == () and is_forking(sys.argv):
         raise RuntimeError('''
         Attempt to start a new process before the current process
         has finished its bootstrapping phase.
@@ -551,6 +556,7 @@ def get_preparation_data(name):
 #
 
 old_main_modules = []
+
 
 def prepare(data):
     '''

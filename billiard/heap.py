@@ -35,7 +35,6 @@ from __future__ import absolute_import
 
 import bisect
 import mmap
-import tempfile
 import os
 import sys
 import threading
@@ -111,6 +110,7 @@ else:
 #
 # Class allowing allocation of chunks of memory from arenas
 #
+
 
 class Heap(object):
 
@@ -221,7 +221,8 @@ class Heap(object):
         # immediately, the block is added to a list of blocks to be freed
         # synchronously sometimes later from malloc() or free(), by calling
         # _free_pending_blocks() (appending and retrieving from a list is not
-        # strictly thread-safe but under cPython it's atomic thanks to the GIL).
+        # strictly thread-safe but under cPython it's atomic thanks
+        # to the GIL).
         assert os.getpid() == self._lastpid
         if not self._lock.acquire(False):
             # can't aquire the lock right now, add the block to the list of
@@ -244,7 +245,7 @@ class Heap(object):
         self._lock.acquire()
         self._free_pending_blocks()
         try:
-            size = self._roundup(max(size,1), self._alignment)
+            size = self._roundup(max(size, 1), self._alignment)
             (arena, start, stop) = self._malloc(size)
             new_stop = start + size
             if new_stop < stop:
@@ -258,6 +259,7 @@ class Heap(object):
 #
 # Class representing a chunk of an mmap -- can be inherited
 #
+
 
 class BufferWrapper(object):
 

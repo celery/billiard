@@ -72,35 +72,28 @@ __all__ = [
 import os
 import sys
 
+from .exceptions import (  # noqa
+    ProcessError,
+    BufferTooShort,
+    TimeoutError,
+    AuthenticationError,
+    TimeLimitExceeded,
+    SoftTimeLimitExceeded,
+    WorkerLostError,
+)
 from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
-
-
-#
-# Exceptions
-#
-
-class ProcessError(Exception):
-    pass
-
-class BufferTooShort(ProcessError):
-    pass
-
-class TimeoutError(ProcessError):
-    pass
-
-class AuthenticationError(ProcessError):
-    pass
 
 is_jython = sys.platform.startswith("java")
 is_pypy = hasattr(sys, "pypy_version_info")
 if not (is_jython or is_pypy):
     # This is down here because _billiard uses BufferTooShort
-    import _billiard
+    import _billiard  # noqa
 
 #
 # Definitions not depending on native semaphores
 #
+
 
 def Manager():
     '''
@@ -114,12 +107,14 @@ def Manager():
     m.start()
     return m
 
+
 def Pipe(duplex=True):
     '''
     Returns two connection object connected by a pipe
     '''
     from .connection import Pipe
     return Pipe(duplex)
+
 
 def cpu_count():
     '''
@@ -150,6 +145,7 @@ def cpu_count():
     else:
         raise NotImplementedError('cannot determine number of cpus')
 
+
 def freeze_support():
     '''
     Check whether this is a fake forked process in a frozen executable.
@@ -159,12 +155,14 @@ def freeze_support():
         from .forking import freeze_support
         freeze_support()
 
+
 def get_logger():
     '''
     Return package logger -- if it does not already exist then it is created
     '''
     from .util import get_logger
     return get_logger()
+
 
 def log_to_stderr(level=None):
     '''
@@ -173,15 +171,17 @@ def log_to_stderr(level=None):
     from .util import log_to_stderr
     return log_to_stderr(level)
 
+
 def allow_connection_pickling():
     '''
     Install support for sending connections and sockets between processes
     '''
-    from . import reduction
+    from . import reduction  # noqa
 
 #
 # Definitions depending on native semaphores
 #
+
 
 def Lock():
     '''
@@ -190,12 +190,14 @@ def Lock():
     from .synchronize import Lock
     return Lock()
 
+
 def RLock():
     '''
     Returns a recursive lock object
     '''
     from .synchronize import RLock
     return RLock()
+
 
 def Condition(lock=None):
     '''
@@ -204,12 +206,14 @@ def Condition(lock=None):
     from .synchronize import Condition
     return Condition(lock)
 
+
 def Semaphore(value=1):
     '''
     Returns a semaphore object
     '''
     from .synchronize import Semaphore
     return Semaphore(value)
+
 
 def BoundedSemaphore(value=1):
     '''
@@ -218,12 +222,14 @@ def BoundedSemaphore(value=1):
     from .synchronize import BoundedSemaphore
     return BoundedSemaphore(value)
 
+
 def Event():
     '''
     Returns an event object
     '''
     from .synchronize import Event
     return Event()
+
 
 def Queue(maxsize=0):
     '''
@@ -232,12 +238,14 @@ def Queue(maxsize=0):
     from .queues import Queue
     return Queue(maxsize)
 
+
 def JoinableQueue(maxsize=0):
     '''
     Returns a queue object
     '''
     from .queues import JoinableQueue
     return JoinableQueue(maxsize)
+
 
 def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None):
     '''
@@ -246,12 +254,14 @@ def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None):
     from .pool import Pool
     return Pool(processes, initializer, initargs, maxtasksperchild)
 
+
 def RawValue(typecode_or_type, *args):
     '''
     Returns a shared object
     '''
     from .sharedctypes import RawValue
     return RawValue(typecode_or_type, *args)
+
 
 def RawArray(typecode_or_type, size_or_initializer):
     '''
@@ -260,12 +270,14 @@ def RawArray(typecode_or_type, size_or_initializer):
     from .sharedctypes import RawArray
     return RawArray(typecode_or_type, size_or_initializer)
 
+
 def Value(typecode_or_type, *args, **kwds):
     '''
     Returns a synchronized shared object
     '''
     from .sharedctypes import Value
     return Value(typecode_or_type, *args, **kwds)
+
 
 def Array(typecode_or_type, size_or_initializer, **kwds):
     '''
@@ -278,6 +290,7 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
 #
 #
 
+
 def set_executable(executable):
     '''
     Sets the path to a python.exe or pythonw.exe binary used to run
@@ -286,6 +299,7 @@ def set_executable(executable):
     '''
     from .forking import set_executable
     set_executable(executable)
+
 
 def forking_is_enabled():
     '''
@@ -298,6 +312,7 @@ def forking_is_enabled():
     '''
     from . import forking
     return forking._forking_is_enabled
+
 
 def forking_enable(value):
     '''

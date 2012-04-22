@@ -34,10 +34,9 @@
 from __future__ import absolute_import
 
 __all__ = [
-    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event'
-    ]
+    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
+]
 
-import errno
 import itertools
 import os
 import signal
@@ -45,7 +44,7 @@ import sys
 import threading
 
 
-from time import time as _time, sleep as _sleep
+from time import time as _time
 
 import _billiard
 from .process import current_process
@@ -57,8 +56,8 @@ from .compat import bytes, closerange
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
 try:
-    from _billiard import SemLock
-except (ImportError):
+    from _billiard import SemLock as _SemLock  # noqa
+except ImportError:
     raise ImportError("This platform lacks a functioning sem_open" +
                       " implementation, therefore, the required" +
                       " synchronization primitives needed will not" +
@@ -72,13 +71,13 @@ RECURSIVE_MUTEX, SEMAPHORE = range(2)
 SEM_VALUE_MAX = _billiard.SemLock.SEM_VALUE_MAX
 
 sem_unlink = _billiard.SemLock.sem_unlink
- 
+
 #
 # Base class for semaphores and mutexes; wraps `_billiard.SemLock`
 #
 
-class SemLock(object):
 
+class SemLock(object):
     _counter = itertools.count()
 
     def __init__(self, kind, value, maxvalue):
@@ -87,7 +86,7 @@ class SemLock(object):
         sl = self._semlock = _billiard.SemLock(
             kind, value, maxvalue, self._make_name(), unlink_immediately)
 
-        debug('created semlock with handle %s' % sl.handle)
+        debug('created semlock with handle %s', sl.handle)
         self._make_methods()
 
         if sys.platform != 'win32':
@@ -121,7 +120,7 @@ class SemLock(object):
 
     def __setstate__(self, state):
         self._semlock = _billiard.SemLock._rebuild(*state)
-        debug('recreated blocker with handle %r' % state[0])
+        debug('recreated blocker with handle %r', state[0])
         self._make_methods()
 
     @staticmethod
@@ -129,9 +128,6 @@ class SemLock(object):
         return '/%s-%s-%s' % (current_process()._semprefix,
                               os.getpid(), SemLock._counter.next())
 
-#
-# Semaphore
-#
 
 class Semaphore(SemLock):
 
@@ -148,9 +144,6 @@ class Semaphore(SemLock):
             value = 'unknown'
         return '<Semaphore(value=%s)>' % value
 
-#
-# Bounded semaphore
-#
 
 class BoundedSemaphore(Semaphore):
 
@@ -165,11 +158,11 @@ class BoundedSemaphore(Semaphore):
         return '<BoundedSemaphore(value=%s, maxvalue=%s)>' % \
                (value, self._semlock.maxvalue)
 
-#
-# Non-recursive lock
-#
 
 class Lock(SemLock):
+    '''
+    Non-recursive lock.
+    '''
 
     def __init__(self):
         SemLock.__init__(self, SEMAPHORE, 1, 1)
@@ -190,11 +183,11 @@ class Lock(SemLock):
             name = 'unknown'
         return '<Lock(owner=%s)>' % name
 
-#
-# Recursive lock
-#
 
 class RLock(SemLock):
+    '''
+    Recursive lock
+    '''
 
     def __init__(self):
         SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1)
@@ -216,11 +209,11 @@ class RLock(SemLock):
             name, count = 'unknown', 'unknown'
         return '<RLock(%s, %s)>' % (name, count)
 
-#
-# Condition variable
-#
 
 class Condition(object):
+    '''
+    Condition variable
+    '''
 
     def __init__(self, lock=None):
         self._lock = lock or RLock()
@@ -291,9 +284,9 @@ class Condition(object):
             res = self._sleeping_count.acquire(False)
             assert res
 
-        if self._sleeping_count.acquire(False): # try grabbing a sleeper
-            self._wait_semaphore.release()      # wake up one sleeper
-            self._woken_count.acquire()         # wait for the sleeper to wake
+        if self._sleeping_count.acquire(False):  # try grabbing a sleeper
+            self._wait_semaphore.release()       # wake up one sleeper
+            self._woken_count.acquire()          # wait for sleeper to wake
 
             # rezero _wait_semaphore in case a timeout just happened
             self._wait_semaphore.acquire(False)
@@ -339,9 +332,6 @@ class Condition(object):
             result = predicate()
         return result
 
-#
-# Event
-#
 
 class Event(object):
 
@@ -435,11 +425,11 @@ if sys.platform != 'win32':
         except:
             MAXFD = 256
         closerange(0, r)
-        closerange(r+1, MAXFD)
+        closerange(r + 1, MAXFD)
 
         # collect data written to pipe
         data = []
-        while True:
+        while 1:
             try:
                 s = os.read(r, 512)
             except:

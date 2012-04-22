@@ -1,9 +1,35 @@
 #
-# Support for the API of the billiard package using threads
+# Support for the API of the multiprocessing package using threads
 #
-# billiard/dummy/__init__.py
+# multiprocessing/dummy/__init__.py
 #
-# Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
+# Copyright (c) 2006-2008, R Oudkerk
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+# 3. Neither the name of author nor the names of any contributors may be
+#    used to endorse or promote products derived from this software
+#    without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
 #
 from __future__ import absolute_import
 
@@ -21,17 +47,13 @@ import threading
 import sys
 import weakref
 import array
-import itertools
 
-from billiard import TimeoutError, cpu_count
 from threading import Lock, RLock, Semaphore, BoundedSemaphore
 from threading import Event
 from Queue import Queue
 
 from .connection import Pipe
-#
-#
-#
+
 
 class DummyProcess(threading.Thread):
 
@@ -55,20 +77,15 @@ class DummyProcess(threading.Thread):
         else:
             return None
 
-#
-#
-#
 
 class Condition(threading._Condition):
     notify_all = threading._Condition.notify_all.im_func
 
-#
-#
-#
 
 Process = DummyProcess
 current_process = threading.current_thread
 current_process()._children = weakref.WeakKeyDictionary()
+
 
 def active_children():
     children = current_process()._children
@@ -77,16 +94,16 @@ def active_children():
             children.pop(p, None)
     return list(children)
 
+
 def freeze_support():
     pass
 
-#
-#
-#
 
 class Namespace(object):
+
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
+
     def __repr__(self):
         items = self.__dict__.items()
         temp = []
@@ -96,29 +113,40 @@ class Namespace(object):
         temp.sort()
         return 'Namespace(%s)' % str.join(', ', temp)
 
+
 dict = dict
 list = list
+
 
 def Array(typecode, sequence, lock=True):
     return array.array(typecode, sequence)
 
+
 class Value(object):
+
     def __init__(self, typecode, value, lock=True):
         self._typecode = typecode
         self._value = value
+
     def _get(self):
         return self._value
+
     def _set(self, value):
         self._value = value
     value = property(_get, _set)
+
     def __repr__(self):
-        return '<%r(%r, %r)>'%(type(self).__name__,self._typecode,self._value)
+        return '<%r(%r, %r)>' % (type(self).__name__,
+                                 self._typecode, self._value)
+
 
 def Manager():
     return sys.modules[__name__]
 
+
 def shutdown():
     pass
+
 
 def Pool(processes=None, initializer=None, initargs=()):
     from billiard.pool import ThreadPool
