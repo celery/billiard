@@ -319,7 +319,8 @@ def SocketClient(address):
     Return a connection object connected to the socket given by `address`
     '''
     family = address_type(address)
-    with socket.socket(getattr(socket, family)) as s:
+    s = socket.socket(getattr(socket, family))
+    try:
         t = _init_timeout()
 
         while 1:
@@ -336,6 +337,8 @@ def SocketClient(address):
             raise
         fd = duplicate(s.fileno())
         return _billiard.Connection(fd)
+    finally:
+        s.close()
 
 #
 # Definitions for connections based on named pipes

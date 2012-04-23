@@ -33,6 +33,7 @@
 # SUCH DAMAGE.
 #
 from __future__ import absolute_import
+from __future__ import with_statement
 
 #
 # Imports
@@ -120,7 +121,7 @@ class LaxBoundedSemaphore(threading._Semaphore):
         _Semaphore.__init__(self, value, verbose)
         self._initial_value = value
 
-    if sys.version_info >= (3, 0):
+    if sys.version_info[0] == 3:
 
         def release(self):
             if self._value < self._initial_value:
@@ -272,7 +273,7 @@ class PoolThread(threading.Thread):
         try:
             return self.body()
         except Exception, exc:
-            error("Thread %r crashed: %r" % (self.__class__.__name__, exc, ),
+            error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
             os._exit(1)
 
@@ -715,13 +716,10 @@ class Pool(object):
             self._processes += 1
             if self._putlock:
                 cond = self._putlock._Semaphore__cond
-                cond.acquire()
-                try:
+                with cond:
                     self._putlock._initial_value += 1
                     self._putlock._Semaphore__value += 1
                     cond.notify()
-                finally:
-                    cond.release()
 
     def _iterinactive(self):
         for worker in self._pool:
@@ -767,15 +765,12 @@ class Pool(object):
     def _start_timeout_handler(self):
         # ensure more than one thread does not start the timeout handler
         # thread at once.
-        self._timeout_handler_mutex.acquire()
-        try:
+        with _timeout_handler_mutex:
             if self._timeout_handler is None:
                 self._timeout_handler = self.TimeoutHandler(
                         self._pool, self._cache,
                         self.soft_timeout, self.timeout)
                 self._timeout_handler.start()
-        finally:
-            self._timeout_handler_mutex.release()
 
     def apply(self, func, args=(), kwds={}):
         '''
@@ -1071,12 +1066,9 @@ class ApplyResult(object):
         return filter(None, [self._worker_pid])
 
     def wait(self, timeout=None):
-        self._cond.acquire()
-        try:
+        with _cond:
             if not self._ready:
                 self._cond.wait(timeout)
-        finally:
-            self._cond.release()
 
     def get(self, timeout=None):
         self.wait(timeout)
@@ -1088,15 +1080,11 @@ class ApplyResult(object):
             raise self._value
 
     def _set(self, i, obj):
-        self._mutex.acquire()
-        try:
+        with self._mutex:
             self._success, self._value = obj
-            self._cond.acquire()
-            try:
+            with self._cond:
                 self._ready = True
                 self._cond.notify()
-            finally:
-                self._cond.release()
             if self._accepted:
                 self._cache.pop(self._job, None)
 
@@ -1107,12 +1095,9 @@ class ApplyResult(object):
             if self._error_callback and not self._success:
                 safe_apply_callback(
                     self._error_callback, self._value)
-        finally:
-            self._mutex.release()
 
     def _ack(self, i, time_accepted, pid):
-        self._mutex.acquire()
-        try:
+        with self._mutex:
             self._accepted = True
             self._time_accepted = time_accepted
             self._worker_pid = pid
@@ -1121,8 +1106,6 @@ class ApplyResult(object):
             if self._accept_callback:
                 safe_apply_callback(
                     self._accept_callback, pid, time_accepted)
-        finally:
-            self._mutex.release()
 
 #
 # Class whose instances are returned by `Pool.map_async()`
@@ -1157,12 +1140,9 @@ class MapResult(ApplyResult):
                     self._callback(self._value)
                 if self._accepted:
                     self._cache.pop(self._job, None)
-                self._cond.acquire()
-                try:
+                with self._cond:
                     self._ready = True
                     self._cond.notify()
-                finally:
-                    self._cond.release()
         else:
             self._success = False
             self._value = result
@@ -1170,12 +1150,9 @@ class MapResult(ApplyResult):
                 self._error_callback(self._value)
             if self._accepted:
                 self._cache.pop(self._job, None)
-            self._cond.acquire()
-            try:
+            with self._cond:
                 self._ready = True
                 self._cond.notify()
-            finally:
-                self._cond.release()
 
     def _ack(self, i, time_accepted, pid):
         start = i * self._chunksize
@@ -1218,8 +1195,7 @@ class IMapIterator(object):
         return self
 
     def next(self, timeout=None):
-        self._cond.acquire()
-        try:
+        with self._cond:
             try:
                 item = self._items.popleft()
             except IndexError:
@@ -1234,8 +1210,6 @@ class IMapIterator(object):
                         self._ready = True
                         raise StopIteration
                     raise TimeoutError
-        finally:
-            self._cond.release()
 
         success, value = item
         if success:
@@ -1245,8 +1219,7 @@ class IMapIterator(object):
     __next__ = next                    # XXX
 
     def _set(self, i, obj):
-        self._cond.acquire()
-        try:
+        with self._cond:
             if self._index == i:
                 self._items.append(obj)
                 self._index += 1
@@ -1261,19 +1234,14 @@ class IMapIterator(object):
             if self._index == self._length:
                 self._ready = True
                 del self._cache[self._job]
-        finally:
-            self._cond.release()
 
     def _set_length(self, length):
-        self._cond.acquire()
-        try:
+        with self._cond:
             self._length = length
             if self._index == self._length:
                 self._ready = True
                 self._cond.notify()
                 del self._cache[self._job]
-        finally:
-            self._cond.release()
 
     def _ack(self, i, time_accepted, pid):
         self._worker_pids.append(pid)
@@ -1292,16 +1260,13 @@ class IMapIterator(object):
 class IMapUnorderedIterator(IMapIterator):
 
     def _set(self, i, obj):
-        self._cond.acquire()
-        try:
+        with self._cond:
             self._items.append(obj)
             self._index += 1
             self._cond.notify()
             if self._index == self._length:
                 self._ready = True
                 del self._cache[self._job]
-        finally:
-            self._cond.release()
 
 #
 #
@@ -1332,10 +1297,7 @@ class ThreadPool(Pool):
     @staticmethod
     def _help_stuff_finish(inqueue, task_handler, size):
         # put sentinels at head of inqueue to make workers finish
-        inqueue.not_empty.acquire()
-        try:
+        with inqueue.not_empty:
             inqueue.queue.clear()
             inqueue.queue.extend([None] * size)
             inqueue.not_empty.notify_all()
-        finally:
-            inqueue.not_empty.release()

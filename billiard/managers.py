@@ -33,6 +33,7 @@
 # SUCH DAMAGE.
 #
 from __future__ import absolute_import
+from __future__ import with_statement
 
 __all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
@@ -336,8 +337,7 @@ class Server(object):
         '''
         Return some info --- useful to spot problems with refcounting
         '''
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             result = []
             keys = self.id_to_obj.keys()
             keys.sort()
@@ -347,8 +347,6 @@ class Server(object):
                                   (ident, self.id_to_refcount[ident],
                                    str(self.id_to_obj[ident][0])[:75]))
             return '\n'.join(result)
-        finally:
-            self.mutex.release()
 
     def number_of_objects(self, c):
         '''
@@ -393,8 +391,7 @@ class Server(object):
         '''
         Create a new shared object and return its id
         '''
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             callable, exposed, method_to_typeid, proxytype = \
                       self.registry[typeid]
 
@@ -424,8 +421,6 @@ class Server(object):
             # has been created.
             self.incref(c, ident)
             return ident, tuple(exposed)
-        finally:
-            self.mutex.release()
 
     def get_methods(self, c, token):
         '''
@@ -442,22 +437,16 @@ class Server(object):
         self.serve_client(c)
 
     def incref(self, c, ident):
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             self.id_to_refcount[ident] += 1
-        finally:
-            self.mutex.release()
 
     def decref(self, c, ident):
-        self.mutex.acquire()
-        try:
+        with self.mutex:
             assert self.id_to_refcount[ident] >= 1
             self.id_to_refcount[ident] -= 1
             if self.id_to_refcount[ident] == 0:
                 del self.id_to_obj[ident], self.id_to_refcount[ident]
                 util.debug('disposing of obj with id %r', ident)
-        finally:
-            self.mutex.release()
 
 #
 # Class to represent state of a manager

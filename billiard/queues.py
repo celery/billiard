@@ -32,6 +32,7 @@
 # SUCH DAMAGE.
 #
 from __future__ import absolute_import
+from __future__ import with_statement
 
 __all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
@@ -103,24 +104,18 @@ class Queue(object):
         if not self._sem.acquire(block, timeout):
             raise Full
 
-        self._notempty.acquire()
-        try:
+        with self._notempty:
             if self._thread is None:
                 self._start_thread()
             self._buffer.append(obj)
             self._notempty.notify()
-        finally:
-            self._notempty.release()
 
     def get(self, block=True, timeout=None):
         if block and timeout is None:
-            self._rlock.acquire()
-            try:
+            with self._rlock:
                 res = self._recv()
                 self._sem.release()
                 return res
-            finally:
-                self._rlock.release()
 
         else:
             if block:
@@ -228,37 +223,29 @@ class Queue(object):
     @staticmethod
     def _finalize_close(buffer, notempty):
         debug('telling queue thread to quit')
-        notempty.acquire()
-        try:
+        with notempty:
             buffer.append(_sentinel)
             notempty.notify()
-        finally:
-            notempty.release()
 
     @staticmethod
     def _feed(buffer, notempty, send, writelock, close, ignore_epipe):
         debug('starting thread to feed data to pipe')
         from .util import is_exiting
 
-        nacquire = notempty.acquire
-        nrelease = notempty.release
+        ncond = notempty
         nwait = notempty.wait
         bpopleft = buffer.popleft
         sentinel = _sentinel
         if sys.platform != 'win32':
-            wacquire = writelock.acquire
-            wrelease = writelock.release
+            wlock = writelock
         else:
-            wacquire = None
+            wlock = None
 
         try:
             while 1:
-                nacquire()
-                try:
+                with ncond:
                     if not buffer:
                         nwait()
-                finally:
-                    nrelease()
                 try:
                     while 1:
                         obj = bpopleft()
@@ -267,14 +254,11 @@ class Queue(object):
                             close()
                             return
 
-                        if wacquire is None:
+                        if wlock is None:
                             send(obj)
                         else:
-                            wacquire()
-                            try:
+                            with wlock:
                                 send(obj)
-                            finally:
-                                wrelease()
                 except IndexError:
                     pass
         except Exception, e:
@@ -324,35 +308,25 @@ class JoinableQueue(Queue):
         if not self._sem.acquire(block, timeout):
             raise Full
 
-        self._notempty.acquire()
-        self._cond.acquire()
-        try:
-            if self._thread is None:
-                self._start_thread()
-            self._buffer.append(obj)
-            self._unfinished_tasks.release()
-            self._notempty.notify()
-        finally:
-            self._cond.release()
-            self._notempty.release()
+        with self._notempty:
+            with self._cond:
+                if self._thread is None:
+                    self._start_thread()
+                self._buffer.append(obj)
+                self._unfinished_tasks.release()
+                self._notempty.notify()
 
     def task_done(self):
-        self._cond.acquire()
-        try:
+        with self._cond:
             if not self._unfinished_tasks.acquire(False):
                 raise ValueError('task_done() called too many times')
             if self._unfinished_tasks._semlock._is_zero():
                 self._cond.notify_all()
-        finally:
-            self._cond.release()
 
     def join(self):
-        self._cond.acquire()
-        try:
+        with self._cond:
             if not self._unfinished_tasks._semlock._is_zero():
                 self._cond.wait()
-        finally:
-            self._cond.release()
 
 
 class SimpleQueue(object):
@@ -383,14 +357,11 @@ class SimpleQueue(object):
 
     def _make_methods(self):
         recv = self._reader.recv
-        racquire, rrelease = self._rlock.acquire, self._rlock.release
+        rlock = self._rlock
 
         def get():
-            racquire()
-            try:
+            with rlock:
                 return recv()
-            finally:
-                rrelease()
         self.get = get
 
         if self._wlock is None:
@@ -398,12 +369,9 @@ class SimpleQueue(object):
             self.put = self._writer.send
         else:
             send = self._writer.send
-            wacquire, wrelease = self._wlock.acquire, self._wlock.release
+            wlock = self._wlock
 
             def put(obj):
-                wacquire()
-                try:
+                with wlock:
                     return send(obj)
-                finally:
-                    wrelease()
             self.put = put
