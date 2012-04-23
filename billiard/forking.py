@@ -146,8 +146,6 @@ def dump(obj, file, protocol=None):
 # Make (Pipe)Connection picklable
 #
 
-from ._ext import Connection
-
 
 def reduce_connection(conn):
     # XXX check not necessary since only registered with ForkingPickler
