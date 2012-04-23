@@ -170,16 +170,19 @@ setup(
     maintainer=meta["maintainer"],
     maintainer_email=meta["contact"],
     url=meta["homepage"],
-    license='BSD Licence',
-    #classifiers=[
-    #    'Development Status :: 5 - Production/Stable',
-    #    'Intended Audience :: Developers',
-    #    'Programming Language :: Python',
-    #    'Programming Language :: C',
-    #    'Operating System :: Microsoft :: Windows',
-    #    'Operating System :: POSIX',
-    #    'License :: OSI Approved :: BSD License',
-    #    'Topic :: Software Development :: Libraries :: Python Modules',
-    #    ]
-    )
+    zip_safe=False,
+    license='BSD',
+    tests_require = ["nose", "nose-cover3"],
+    test_suite="nose.collector",
+    classifiers=[
+        'Development Status :: 5 - Production/Stable',
+        'Intended Audience :: Developers',
+        'Programming Language :: Python',
+        'Programming Language :: C',
+        'Operating System :: Microsoft :: Windows',
+        'Operating System :: POSIX',
+        'License :: OSI Approved :: BSD License',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+    ],
+)
 
