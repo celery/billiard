@@ -38,6 +38,7 @@ import os
 import sys
 import signal
 
+from ._ext import Connection, PipeConnection, win32
 from pickle import load, HIGHEST_PROTOCOL
 from billiard import util, process
 
@@ -145,7 +146,7 @@ def dump(obj, file, protocol=None):
 # Make (Pipe)Connection picklable
 #
 
-from _billiard import Connection
+from ._ext import Connection
 
 
 def reduce_connection(conn):
@@ -159,12 +160,7 @@ def reduce_connection(conn):
                         conn.readable, conn.writable)
 
 ForkingPickler.register(Connection, reduce_connection)
-
-try:
-    from _billiard import PipeConnection
-except ImportError:
-    pass
-else:
+if PipeConnection:
     ForkingPickler.register(PipeConnection, reduce_connection)
 
 
@@ -289,8 +285,6 @@ else:
     import thread
     import msvcrt
     import _subprocess
-
-    from _billiard import win32, Connection, PipeConnection
 
     #
     #

@@ -84,11 +84,8 @@ from .exceptions import (  # noqa
 from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
 
-is_jython = sys.platform.startswith("java")
-is_pypy = hasattr(sys, "pypy_version_info")
-if not (is_jython or is_pypy):
-    # This is down here because _billiard uses BufferTooShort
-    import _billiard  # noqa
+# This is down here because _billiard uses BufferTooShort
+from ._ext import supports_exec
 
 #
 # Definitions not depending on native semaphores
@@ -323,7 +320,8 @@ def forking_enable(value):
     On systems with `os.fork()` forking is enabled by default, and on
     other systems it is always disabled.
     '''
-    from . import forking
-    if value and not hasattr(os, 'fork'):
-        raise ValueError('os.fork() not found')
-    forking._forking_is_enabled = bool(value)
+    if not value and supports_exec:
+        from . import forking
+        if value and not hasattr(os, 'fork'):
+            raise ValueError('os.fork() not found')
+        forking._forking_is_enabled = bool(value)

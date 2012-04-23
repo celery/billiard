@@ -19,7 +19,7 @@ from nose import SkipTest
 from test import test_support
 from StringIO import StringIO
 try:
-    import _billiard
+    from billiard._ext import _billiard
 except ImportError:
     raise SkipTest(exc)
 # import threading after _billiard to raise a more revelant error

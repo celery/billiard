@@ -45,8 +45,9 @@ import weakref
 import errno
 
 from Queue import Empty, Full
-import _billiard
+
 from . import Pipe
+from ._ext import _billiard
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 from .util import debug, error, info, Finalize, register_after_fork
 from .forking import assert_spawning

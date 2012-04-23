@@ -42,8 +42,8 @@ import sys
 import socket
 import threading
 
-import _billiard
 from . import current_process
+from ._ext import _billiard, win32
 from .forking import Popen, duplicate, close, ForkingPickler
 from .util import register_after_fork, debug, sub_debug
 from .connection import Client, Listener
@@ -64,7 +64,6 @@ _cache = set()
 if sys.platform == 'win32':
     # XXX Should this subprocess import be here?
     import _subprocess  # noqa
-    from _billiard import win32
 
     def send_handle(conn, handle, destination_pid):
         process_handle = win32.OpenProcess(

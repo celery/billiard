@@ -765,7 +765,7 @@ class Pool(object):
     def _start_timeout_handler(self):
         # ensure more than one thread does not start the timeout handler
         # thread at once.
-        with _timeout_handler_mutex:
+        with self._timeout_handler_mutex:
             if self._timeout_handler is None:
                 self._timeout_handler = self.TimeoutHandler(
                         self._pool, self._cache,
@@ -1066,7 +1066,7 @@ class ApplyResult(object):
         return filter(None, [self._worker_pid])
 
     def wait(self, timeout=None):
-        with _cond:
+        with self._cond:
             if not self._ready:
                 self._cond.wait(timeout)
 

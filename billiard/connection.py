@@ -44,8 +44,8 @@ import time
 import tempfile
 import itertools
 
-import _billiard
 from . import AuthenticationError
+from ._ext import _billiard, win32
 from .util import get_temp_dir, Finalize, sub_debug, debug
 from .forking import duplicate, close
 from .compat import bytes
@@ -228,8 +228,6 @@ if sys.platform != 'win32':
         return c1, c2
 
 else:
-
-    from _billiard import win32
 
     def Pipe(duplex=True):  # noqa
         '''

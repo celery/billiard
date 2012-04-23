@@ -40,7 +40,7 @@ import sys
 import threading
 import itertools
 
-import _billiard
+from ._ext import _billiard, win32
 from .util import Finalize, info, get_temp_dir
 from .forking import assert_spawning, ForkingPickler
 
@@ -56,8 +56,6 @@ except AttributeError:
 #
 
 if sys.platform == 'win32':
-
-    from _billiard import win32
 
     class Arena(object):
 

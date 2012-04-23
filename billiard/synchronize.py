@@ -46,7 +46,7 @@ import threading
 
 from time import time as _time
 
-import _billiard
+from ._ext import _billiard, ensure_SemLock
 from .process import current_process
 from .util import Finalize, register_after_fork, debug
 from .forking import assert_spawning, Popen
@@ -55,13 +55,7 @@ from .compat import bytes, closerange
 # Try to import the mp.synchronize module cleanly, if it fails
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
-try:
-    from _billiard import SemLock as _SemLock  # noqa
-except ImportError:
-    raise ImportError("This platform lacks a functioning sem_open" +
-                      " implementation, therefore, the required" +
-                      " synchronization primitives needed will not" +
-                      " function, see issue 3770.")
+ensure_SemLock()
 
 #
 # Constants
@@ -70,7 +64,10 @@ except ImportError:
 RECURSIVE_MUTEX, SEMAPHORE = range(2)
 SEM_VALUE_MAX = _billiard.SemLock.SEM_VALUE_MAX
 
-sem_unlink = _billiard.SemLock.sem_unlink
+try:
+    sem_unlink = _billiard.SemLock.sem_unlink
+except AttributeError:
+    sem_unlink = None
 
 #
 # Base class for semaphores and mutexes; wraps `_billiard.SemLock`
@@ -83,24 +80,30 @@ class SemLock(object):
     def __init__(self, kind, value, maxvalue):
         from .forking import _forking_is_enabled
         unlink_immediately = _forking_is_enabled or sys.platform == 'win32'
-        sl = self._semlock = _billiard.SemLock(
-            kind, value, maxvalue, self._make_name(), unlink_immediately)
+        if sem_unlink:
+            sl = self._semlock = _billiard.SemLock(
+                kind, value, maxvalue, self._make_name(), unlink_immediately)
+        else:
+            sl = self._semlock = _billiard.SemLock(kind, value, maxvalue)
 
         debug('created semlock with handle %s', sl.handle)
         self._make_methods()
 
-        if sys.platform != 'win32':
-            def _after_fork(obj):
-                obj._semlock._after_fork()
-            register_after_fork(self, _after_fork)
+        if sem_unlink:
 
-        if self._semlock.name is not None:
-            # We only get here if we are on Unix with forking
-            # disabled.  When the object is garbage collected or the
-            # process shuts down we unlink the semaphore name
-            Finalize(self, sem_unlink, (self._semlock.name,), exitpriority=0)
-            # In case of abnormal termination unlink semaphore name
-            _cleanup_semaphore_if_leaked(self._semlock.name)
+            if sys.platform != 'win32':
+                def _after_fork(obj):
+                    obj._semlock._after_fork()
+                register_after_fork(self, _after_fork)
+
+            if self._semlock.name is not None:
+                # We only get here if we are on Unix with forking
+                # disabled.  When the object is garbage collected or the
+                # process shuts down we unlink the semaphore name
+                Finalize(self, sem_unlink, (self._semlock.name,),
+                         exitpriority=0)
+                # In case of abnormal termination unlink semaphore name
+                _cleanup_semaphore_if_leaked(self._semlock.name)
 
     def _make_methods(self):
         self.acquire = self._semlock.acquire
