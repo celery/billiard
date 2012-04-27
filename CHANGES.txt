@@ -1,4 +1,14 @@
+2.7.3.4 - 2012-04-27
+--------------------
+
+- Added `billiard.ensure_multiprocessing()`
+
+    Raises NotImplementedError if the platform does not support
+    multiprocessing (e.g. Jython).
+
+
 2.7.3.3 - 2012-04-23
+--------------------
 
 - PyPy now falls back to using its internal _multiprocessing module,
   so everything works except for forking_enable(False) (which
