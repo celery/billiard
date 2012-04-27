@@ -18,6 +18,11 @@ else:
     win32 = getattr(_billiard, "win32", None)
 
 
+def ensure_multiprocessing():
+    if _billiard is None:
+        raise NotImplementedError("multiprocessing not supported")
+
+
 def ensure_SemLock():
     try:
         from _billiard import SemLock                   # noqa

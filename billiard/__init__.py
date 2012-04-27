@@ -86,7 +86,7 @@ from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
 
 # This is down here because _billiard uses BufferTooShort
-from ._ext import supports_exec
+from ._ext import supports_exec, ensure_multiprocessing  # noqa
 
 #
 # Definitions not depending on native semaphores
