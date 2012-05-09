@@ -326,3 +326,7 @@ def forking_enable(value):
         if value and not hasattr(os, 'fork'):
             raise ValueError('os.fork() not found')
         forking._forking_is_enabled = bool(value)
+        if not value:
+            os.environ["MULTIPROCESSING_FORKING_DISABLE"] = "1"
+if os.environ.get("MULTIPROCESSING_FORKING_ENABLE", False):
+    forking_enable(False)
