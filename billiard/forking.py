@@ -408,6 +408,7 @@ def is_forking(argv):
     '''
     if len(argv) >= 2 and argv[1] == '--billiard-fork':
         assert len(argv) == 3
+        os.environ["FORKED_BY_MULTIPROCESSING"] = "1"
         return True
     else:
         return False
