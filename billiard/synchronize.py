@@ -406,6 +406,12 @@ if sys.platform != 'win32':
             r, w = os.pipe()
             pid = os.fork()
             if pid == 0:
+                try:
+                    from setproctitle import setproctitle
+                    setproctitle("[sem_cleanup for %r]" % cp.pid)
+                except:
+                    pass
+
                 # Fork a process which will survive until all other processes
                 # which have a copy of the write end of the pipe have exited.
                 # The forked process just collects names of semaphores until
