@@ -328,5 +328,5 @@ def forking_enable(value):
         forking._forking_is_enabled = bool(value)
         if not value:
             os.environ["MULTIPROCESSING_FORKING_DISABLE"] = "1"
-if os.environ.get("MULTIPROCESSING_FORKING_ENABLE", False):
+if os.environ.get("MULTIPROCESSING_FORKING_DISABLE"):
     forking_enable(False)
