@@ -245,14 +245,17 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
         try:
             result = (True, func(*args, **kwds))
         except Exception:
-            result = (False, ExceptionInfo(sys.exc_info()))
+            result = (False, ExceptionInfo())
         try:
             put((READY, (job, i, result)))
         except Exception, exc:
             _, _, tb = sys.exc_info()
-            wrapped = MaybeEncodingError(exc, result[1])
-            einfo = ExceptionInfo((MaybeEncodingError, wrapped, tb))
-            put((READY, (job, i, (False, einfo))))
+            try:
+                wrapped = MaybeEncodingError(exc, result[1])
+                einfo = ExceptionInfo((MaybeEncodingError, wrapped, tb))
+                put((READY, (job, i, (False, einfo))))
+            finally:
+                del(tb)
 
         completed += 1
     debug('worker exiting after %d tasks', completed)
@@ -403,12 +406,12 @@ class TimeoutHandler(PoolThread):
                 return
             debug('hard time limit exceeded for %i', i)
             # Remove from cache and set return value to an exception
-            exc_info = None
             try:
                 raise TimeLimitExceeded(hard_timeout)
             except TimeLimitExceeded:
-                exc_info = sys.exc_info()
-            job._set(i, (False, ExceptionInfo(exc_info)))
+                job._set(i, (False, ExceptionInfo()))
+            else:  # pragma: no cover
+                pass
 
             # Remove from _pool
             process, _index = _process_by_pid(job._worker_pid)
@@ -666,12 +669,13 @@ class Pool(object):
                 if not job.ready() and job._worker_lost]:
             now = now or time.time()
             if now - job._worker_lost > job._lost_worker_timeout:
-                exc_info = None
                 try:
                     raise WorkerLostError("Worker exited prematurely.")
                 except WorkerLostError:
-                    exc_info = ExceptionInfo(sys.exc_info())
-                job._set(None, (False, exc_info))
+                    exc_info = ExceptionInfo()
+                    job._set(None, (False, exc_info))
+                else:  # pragma: no cover
+                    pass
 
         if shutdown and not len(self._pool):
             raise WorkersJoined()

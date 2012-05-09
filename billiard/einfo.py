@@ -90,11 +90,15 @@ class ExceptionInfo(object):
     #: Set to true if this is an internal error.
     internal = False
 
-    def __init__(self, exc_info, internal=False):
-        self.type, self.exception, tb = exc_info
-        self.tb = Traceback(tb)
-        self.traceback = ''.join(traceback.format_exception(*exc_info))
-        self.internal = internal
+    def __init__(self, exc_info=None, internal=False):
+        self.type, self.exception, tb = exc_info or sys.exc_info()
+        try:
+            self.tb = Traceback(tb)
+            self.traceback = ''.join(traceback.format_exception(
+                                        self.type, self.exception, tb))
+            self.internal = internal
+        finally:
+            del(tb)
 
     def __str__(self):
         return self.traceback
