@@ -1,22 +1,22 @@
 2.7.3.5 - 2012-05-09
 --------------------
 
-- Now always cleans up after :func:`sys.exc_info` to avoid
+- Now always cleans up after ``sys.exc_info()`` to avoid
   cyclic references.
 
-- ExceptionInfo without arguments now defaults to :func:`sys.exc_info`.
+- ExceptionInfo without arguments now defaults to ``sys.exc_info``.
 
 - Forking can now be disabled using the
-  :envvar:`MULTIPROCESSING_FORKING_DISABLE` environment variable.
+  ``MULTIPROCESSING_FORKING_DISABLE`` environment variable.
 
     Also this envvar is set so that the behavior is inherited
     after execv.
 
 - The semaphore cleanup process started when execv is used
-  now sets a useful process name if the :mod:`setproctitle`
+  now sets a useful process name if the ``setproctitle``
   module is installed.
 
-- Sets the :envvar:`FORKED_BY_MULTIPROCESSING`
+- Sets the ``FORKED_BY_MULTIPROCESSING``
   environment variable if forking is disabled.
 
 
