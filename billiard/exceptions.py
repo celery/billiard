@@ -25,3 +25,7 @@ class SoftTimeLimitExceeded(Exception):
 
 class WorkerLostError(Exception):
     """The worker processing a job has exited prematurely."""
+
+
+class RestartFreqExceeded(Exception):
+    """Restarts too fast."""

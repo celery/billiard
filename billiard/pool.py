@@ -53,10 +53,12 @@ import warnings
 
 from . import Event, Process, cpu_count
 from . import util
+from .common import restart_state
 from .einfo import ExceptionInfo
 from .exceptions import (
     SoftTimeLimitExceeded,
     TimeLimitExceeded,
+    RestartFreqExceeded,
     TimeoutError,
     WorkerLostError,
 )
@@ -111,6 +113,11 @@ def safe_apply_callback(fun, *args):
         except BaseException, exc:
             error("Pool callback raised exception: %r", exc,
                   exc_info=True)
+
+
+def join_if_not_current(thread):
+    if thread is not threading.current_thread():
+        thread.join()
 
 
 class LaxBoundedSemaphore(threading._Semaphore):
@@ -182,6 +189,7 @@ def soft_timeout_sighandler(signum, frame):
 
 def worker(inqueue, outqueue, initializer=None, initargs=(),
            maxtasks=None, sentinel=None):
+
     # Re-init logging system.
     # Workaround for http://bugs.python.org/issue6721#msg140215
     # Python logging module uses RLock() objects which are broken after
@@ -275,6 +283,11 @@ class PoolThread(threading.Thread):
     def run(self):
         try:
             return self.body()
+        except RestartFreqExceeded, exc:
+            error("Thread %r crashed: %r", type(self).__name__, exc,
+                  exc_info=True)
+            os.kill(os.getpid(), signal.SIGTERM)
+            sys.exit()
         except Exception, exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
@@ -299,7 +312,12 @@ class Supervisor(PoolThread):
         # Keep maintaing workers until the cache gets drained, unless the pool
         # is termianted
         while self._state == RUN and self.pool._state == RUN:
-            self.pool._maintain_pool()
+            try:
+                self.pool._maintain_pool()
+            except RestartFreqExceeded:
+                self.pool.close()
+                self.pool.join()
+                raise
             time.sleep(0.8)
         debug('worker handler exiting')
 
@@ -574,7 +592,8 @@ class Pool(object):
 
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
-            lost_worker_timeout=LOST_WORKER_TIMEOUT):
+            lost_worker_timeout=LOST_WORKER_TIMEOUT,
+            max_restarts=3, max_restart_freq=60):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -585,6 +604,7 @@ class Pool(object):
         self._initializer = initializer
         self._initargs = initargs
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
+        self.restart_state = restart_state(max_restarts, max_restart_freq)
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -744,6 +764,7 @@ class Pool(object):
         for i in range(self._processes - len(self._pool)):
             if self._state != RUN:
                 return
+            self.restart_state.step()
             self._create_worker_process()
             debug('added worker')
 
@@ -942,7 +963,7 @@ class Pool(object):
             self._state = CLOSE
             self._worker_handler.close()
             self._taskqueue.put(None)
-            self._worker_handler.join()
+            join_if_not_current(self._worker_handler)
             if self._putlock:
                 self._putlock.clear()
 
@@ -955,7 +976,7 @@ class Pool(object):
     def join(self):
         assert self._state in (CLOSE, TERMINATE)
         debug('joining worker handler')
-        self._worker_handler.join()
+        join_if_not_current(self._worker_handler)
         debug('joining task handler')
         self._task_handler.join()
         debug('joining result handler')
