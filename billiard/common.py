@@ -14,9 +14,13 @@ class restart_state(object):
 
     def step(self):
         now = time()
+        R = self.R
         if self.T and now - self.T >= self.maxT:
             self.R = 0
-        elif self.R >= self.maxR:
-            raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
+        elif R >= self.maxR:
+            # verify that R has a value as it may have been reset
+            # by another thread, and we want to avoid locking.
+            if self.R:
+                raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
         self.R += 1
         self.T = now

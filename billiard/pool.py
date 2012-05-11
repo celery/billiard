@@ -189,7 +189,6 @@ def soft_timeout_sighandler(signum, frame):
 
 def worker(inqueue, outqueue, initializer=None, initargs=(),
            maxtasks=None, sentinel=None):
-
     # Re-init logging system.
     # Workaround for http://bugs.python.org/issue6721#msg140215
     # Python logging module uses RLock() objects which are broken after
@@ -309,16 +308,28 @@ class Supervisor(PoolThread):
     def body(self):
         debug('worker handler starting')
 
-        # Keep maintaing workers until the cache gets drained, unless the pool
-        # is termianted
-        while self._state == RUN and self.pool._state == RUN:
-            try:
-                self.pool._maintain_pool()
-            except RestartFreqExceeded:
-                self.pool.close()
-                self.pool.join()
-                raise
-            time.sleep(0.8)
+        time.sleep(0.8)
+
+        pool = self.pool
+
+        try:
+            prev_state = pool.restart_state
+            pool.restart_state = restart_state(10 * pool._processes, 1)
+            for _ in xrange(10):
+                if self._state == RUN and pool._state == RUN:
+                    pool._maintain_pool()
+                    time.sleep(0.1)
+
+            # Keep maintaing workers until the cache gets drained, unless
+            # the pool is termianted
+            pool.restart_state = prev_state
+            while self._state == RUN and pool._state == RUN:
+                pool._maintain_pool()
+                time.sleep(0.8)
+        except RestartFreqExceeded:
+            pool.close()
+            pool.join()
+            raise
         debug('worker handler exiting')
 
 
@@ -468,13 +479,14 @@ class TimeoutHandler(PoolThread):
 class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
-            join_exited_workers, putlock):
+            join_exited_workers, putlock, restart_state):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
         self.poll = poll
         self.join_exited_workers = join_exited_workers
         self.putlock = putlock
+        self.restart_state = restart_state
         super(ResultHandler, self).__init__()
 
     def body(self):
@@ -484,6 +496,7 @@ class ResultHandler(PoolThread):
         poll = self.poll
         join_exited_workers = self.join_exited_workers
         putlock = self.putlock
+        restart_state = self.restart_state
 
         def on_ack(job, i, time_accepted, pid):
             try:
@@ -493,6 +506,7 @@ class ResultHandler(PoolThread):
                 pass
 
         def on_ready(job, i, obj):
+            restart_state.R = 0
             try:
                 item = cache[job]
             except KeyError:
@@ -593,7 +607,7 @@ class Pool(object):
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=3, max_restart_freq=60):
+            max_restarts=None, max_restart_freq=1):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -604,6 +618,7 @@ class Pool(object):
         self._initializer = initializer
         self._initargs = initargs
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
+        self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq)
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
@@ -647,7 +662,8 @@ class Pool(object):
                                         self._quick_get, self._cache,
                                         self._poll_result,
                                         self._join_exited_workers,
-                                        self._putlock)
+                                        self._putlock,
+                                        self.restart_state)
         self._result_handler.start()
 
         self._terminate = Finalize(
