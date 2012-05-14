@@ -731,7 +731,7 @@ class Pool(object):
                 worker.join()
                 debug('Supervisor: worked %d joined', i)
                 cleaned.append(worker.pid)
-                exitcodes[worker.pid] = worker
+                exitcodes[worker.pid] = worker.exitcode
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
