@@ -21,6 +21,7 @@ class restart_state(object):
             # verify that R has a value as it may have been reset
             # by another thread, and we want to avoid locking.
             if self.R:
-                raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
+                raise self.RestartFreqExceeded("%r in %rs" % (
+                        self.R, self.maxT))
         self.R += 1
         self.T = now
