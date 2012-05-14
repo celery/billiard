@@ -313,6 +313,9 @@ class Supervisor(PoolThread):
         pool = self.pool
 
         try:
+            # do a burst at startup to verify that we can start
+            # our pool processes, and in that time we lower
+            # the max restart frequency.
             prev_state = pool.restart_state
             pool.restart_state = restart_state(10 * pool._processes, 1)
             for _ in xrange(10):
@@ -704,9 +707,12 @@ class Pool(object):
         for job in [job for job in self._cache.values()
                 if not job.ready() and job._worker_lost]:
             now = now or time.time()
-            if now - job._worker_lost > job._lost_worker_timeout:
+            lost_time, lost_ret = job._worker_lost
+            if now - lost_time > job._lost_worker_timeout:
                 try:
-                    raise WorkerLostError("Worker exited prematurely.")
+                    raise WorkerLostError(
+                        "Worker exited prematurely (exitcode: %r)." % (
+                            lost_ret, ))
                 except WorkerLostError:
                     exc_info = ExceptionInfo()
                     job._set(None, (False, exc_info))
@@ -716,7 +722,7 @@ class Pool(object):
         if shutdown and not len(self._pool):
             raise WorkersJoined()
 
-        cleaned = []
+        cleaned, exitcodes = [], {}
         for i in reversed(range(len(self._pool))):
             worker = self._pool[i]
             if worker.exitcode is not None:
@@ -725,13 +731,14 @@ class Pool(object):
                 worker.join()
                 debug('Supervisor: worked %d joined', i)
                 cleaned.append(worker.pid)
+                exitcodes[worker.pid] = worker
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in self._cache.values():
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
-                        job._worker_lost = time.time()
+                        job._worker_lost = (time.time(), exitcodes[worker_pid])
                         continue
             if self._putlock is not None:
                 for worker in cleaned:
