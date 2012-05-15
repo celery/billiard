@@ -56,6 +56,7 @@ from . import util
 from .common import restart_state
 from .einfo import ExceptionInfo
 from .exceptions import (
+    CoroStop,
     SoftTimeLimitExceeded,
     TimeLimitExceeded,
     RestartFreqExceeded,
@@ -110,7 +111,7 @@ def safe_apply_callback(fun, *args):
     if fun:
         try:
             fun(*args)
-        except BaseException, exc:
+        except Exception, exc:
             error("Pool callback raised exception: %r", exc,
                   exc_info=True)
 
@@ -131,11 +132,18 @@ class LaxBoundedSemaphore(threading._Semaphore):
     if sys.version_info[0] == 3:
 
         def release(self):
-            if self._value < self._initial_value:
-                _Semaphore.release(self)
-            if __debug__:
-                self._note("%s.release: success, value=%s (unchanged)" % (
-                    self, self._value))
+            cond = self._Semaphore__cond
+            with cond:
+                if self._value < self._initial_value:
+                    self._value += 1
+                    cond.notify_all()
+                    if __debug__:
+                        self._note("%s.release: success, value=%s",
+                            self, self._value)
+                else:
+                    if __debug__:
+                        self._note("%s.release: success, value=%s (unchanged)" % (
+                            self, self._value))
 
         def clear(self):
             while self._value < self._initial_value:
@@ -143,11 +151,18 @@ class LaxBoundedSemaphore(threading._Semaphore):
     else:
 
         def release(self):  # noqa
-            if self._Semaphore__value < self._initial_value:
-                _Semaphore.release(self)
-            if __debug__:
-                self._note("%s.release: success, value=%s (unchanged)" % (
-                    self, self._Semaphore__value))
+            cond = self._Semaphore__cond
+            with cond:
+                if self._Semaphore__value < self._initial_value:
+                    self._Semaphore__value += 1
+                    cond.notifyAll()
+                    if __debug__:
+                        self._note("%s.release: success, value=%s",
+                            self, self._Semaphore__value)
+                else:
+                    if __debug__:
+                        self._note("%s.release: success, value=%s (unchanged)" % (
+                            self, self._Semaphore__value))
 
         def clear(self):  # noqa
             while self._Semaphore__value < self._initial_value:
@@ -490,9 +505,22 @@ class ResultHandler(PoolThread):
         self.join_exited_workers = join_exited_workers
         self.putlock = putlock
         self.restart_state = restart_state
+        self._it = None
+        self._shutdown_complete = False
+        self._was_started = False
         super(ResultHandler, self).__init__()
 
-    def body(self):
+    def stop(self):
+        if self._was_started:
+            self.join()
+            return
+        return self.finish_at_shutdown()
+
+    def start(self, *args, **kwargs):
+        self._was_started = True
+        super(ResultHandler, self).start(*args, **kwargs)
+
+    def _process_result(self):
         get = self.get
         outqueue = self.outqueue
         cache = self.cache
@@ -531,25 +559,83 @@ class ResultHandler(PoolThread):
             except KeyError:
                 debug("Unknown job state: %s (args=%s)", state, args)
 
-        debug('result handler starting')
-        while 1:
+        try:
+            ready, task = poll(1.0)
+        except (IOError, EOFError), exc:
+            debug('result handler got %r -- exiting', exc)
+            raise CoroStop()
+
+        if self._state:
+            assert self._state == TERMINATE
+            debug('result handler found thread._state=TERMINATE')
+            raise CoroStop()
+
+        if ready:
+            if task is None:
+                debug('result handler got sentinel')
+                raise CoroStop()
+
+            yield on_state_change(task)
+
+    def on_readable(self):
+        if self._state == RUN:
+            if self._it is None:
+                self._it = self._process_result()
             try:
-                ready, task = poll(1.0)
-            except (IOError, EOFError), exc:
-                debug('result handler got %r -- exiting', exc)
+                self._it.next()
+            except StopIteration:
+                self._it = None
+
+    def body(self):
+        debug('result handler starting')
+        try:
+            while 1:
+                for _ in self._process_result():
+                    pass
+        except CoroStop:
+            return
+        finally:
+            self.finish_at_shutdown()
+
+    def finish_at_shutdown(self):
+        self._shutdown_complete = True
+        get = self.get
+        outqueue = self.outqueue
+        cache = self.cache
+        poll = self.poll
+        join_exited_workers = self.join_exited_workers
+        putlock = self.putlock
+        restart_state = self.restart_state
+
+        def on_ack(job, i, time_accepted, pid):
+            try:
+                cache[job]._ack(i, time_accepted, pid)
+            except (KeyError, AttributeError):
+                # Object gone or doesn't support _ack (e.g. IMAPIterator).
+                pass
+
+        def on_ready(job, i, obj):
+            restart_state.R = 0
+            try:
+                item = cache[job]
+            except KeyError:
                 return
+            if not item.ready():
+                if putlock is not None:
+                    putlock.release()
+            try:
+                item._set(i, obj)
+            except KeyError:
+                pass
 
-            if self._state:
-                assert self._state == TERMINATE
-                debug('result handler found thread._state=TERMINATE')
-                break
+        state_handlers = {ACK: on_ack, READY: on_ready}
 
-            if ready:
-                if task is None:
-                    debug('result handler got sentinel')
-                    break
-
-                on_state_change(task)
+        def on_state_change(task):
+            state, args = task
+            try:
+                state_handlers[state](*args)
+            except KeyError:
+                debug("Unknown job state: %s (args=%s)", state, args)
 
         time_terminate = None
         while cache and self._state != TERMINATE:
@@ -610,7 +696,7 @@ class Pool(object):
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=None, max_restart_freq=1):
+            max_restarts=None, max_restart_freq=1, start_result_thread=True):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -623,6 +709,7 @@ class Pool(object):
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq)
+        self.eventmap = {}
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -667,7 +754,11 @@ class Pool(object):
                                         self._join_exited_workers,
                                         self._putlock,
                                         self.restart_state)
-        self._result_handler.start()
+        if start_result_thread:
+            self._result_handler.start()
+        else:
+            self.eventmap[self._outqueue._reader] = \
+                    self._result_handler.on_readable
 
         self._terminate = Finalize(
             self, self._terminate_pool,
@@ -824,8 +915,8 @@ class Pool(object):
         '''
         Equivalent of `func(*args, **kwargs)`.
         '''
-        assert self._state == RUN
-        return self.apply_async(func, args, kwds).get()
+        if self._state == RUN:
+            return self.apply_async(func, args, kwds).get()
 
     def starmap(self, func, iterable, chunksize=None):
         '''
@@ -833,31 +924,33 @@ class Pool(object):
         be iterables as well and will be unpacked as arguments. Hence
         `func` and (a, b) becomes func(a, b).
         '''
-        assert self._state == RUN
-        return self._map_async(func, iterable, starmapstar, chunksize).get()
+        if self._state == RUN:
+            return self._map_async(func, iterable,
+                                   starmapstar, chunksize).get()
 
     def starmap_async(self, func, iterable, chunksize=None, callback=None,
             error_callback=None):
         '''
         Asynchronous version of `starmap()` method.
         '''
-        assert self._state == RUN
-        return self._map_async(func, iterable, starmapstar, chunksize,
-                               callback, error_callback)
+        if self._state == RUN:
+            return self._map_async(func, iterable, starmapstar, chunksize,
+                                   callback, error_callback)
 
     def map(self, func, iterable, chunksize=None):
         '''
         Apply `func` to each element in `iterable`, collecting the results
         in a list that is returned.
         '''
-        assert self._state == RUN
-        return self.map_async(func, iterable, chunksize).get()
+        if self._state == RUN:
+            return self.map_async(func, iterable, chunksize).get()
 
     def imap(self, func, iterable, chunksize=1, lost_worker_timeout=None):
         '''
         Equivalent of `map()` -- can be MUCH slower than `Pool.map()`.
         '''
-        assert self._state == RUN
+        if self._state != RUN:
+            return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
         if chunksize == 1:
             result = IMapIterator(self._cache,
@@ -879,7 +972,8 @@ class Pool(object):
         '''
         Like `imap()` method but ordering of results is arbitrary.
         '''
-        assert self._state == RUN
+        if self._state != RUN:
+            return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
         if chunksize == 1:
             result = IMapUnorderedIterator(self._cache,
@@ -915,7 +1009,8 @@ class Pool(object):
             ...     callback(retval)
 
         '''
-        assert self._state == RUN
+        if self._state != RUN:
+            return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -948,7 +1043,8 @@ class Pool(object):
         '''
         Helper function to implement map, starmap and their async counterparts.
         '''
-        assert self._state == RUN
+        if self._state != RUN:
+            return
         if not hasattr(iterable, '__len__'):
             iterable = list(iterable)
 
@@ -984,11 +1080,11 @@ class Pool(object):
         debug('closing pool')
         if self._state == RUN:
             self._state = CLOSE
+            if self._putlock:
+                self._putlock.clear()
             self._worker_handler.close()
             self._taskqueue.put(None)
             join_if_not_current(self._worker_handler)
-            if self._putlock:
-                self._putlock.clear()
 
     def terminate(self):
         debug('terminating pool')
@@ -1003,7 +1099,7 @@ class Pool(object):
         debug('joining task handler')
         self._task_handler.join()
         debug('joining result handler')
-        self._result_handler.join()
+        self._result_handler.stop()
         debug('result handler joined')
         for i, p in enumerate(self._pool):
             debug('joining worker %s/%s (%r)', i, len(self._pool), p)
@@ -1055,7 +1151,7 @@ class Pool(object):
         task_handler.join()
 
         debug('joining result handler')
-        result_handler.join()
+        result_handler.stop()
 
         if timeout_handler is not None:
             debug('joining timeout handler')
