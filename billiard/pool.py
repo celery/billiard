@@ -577,7 +577,7 @@ class ResultHandler(PoolThread):
 
             yield on_state_change(task)
 
-    def on_readable(self):
+    def handle_event(self, fileno, event):
         if self._state == RUN:
             if self._it is None:
                 self._it = self._process_result()
@@ -758,7 +758,7 @@ class Pool(object):
             self._result_handler.start()
         else:
             self.eventmap[self._outqueue._reader] = \
-                    self._result_handler.on_readable
+                    self._result_handler.handle_event
 
         self._terminate = Finalize(
             self, self._terminate_pool,
