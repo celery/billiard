@@ -129,6 +129,17 @@ class LaxBoundedSemaphore(threading._Semaphore):
         _Semaphore.__init__(self, value, verbose)
         self._initial_value = value
 
+    def grow(self):
+        cond = self._Semaphore__cond
+        with cond:
+            self._initial_value += 1
+            self._Semaphore__value += 1
+            cond.notify()
+
+    def shrink(self, callback):
+        self._initial_value -= 1
+        self.acquire()
+
     if sys.version_info[0] == 3:
 
         def release(self):
@@ -696,7 +707,8 @@ class Pool(object):
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=None, max_restart_freq=1, start_result_thread=True):
+            max_restarts=None, max_restart_freq=1, start_result_thread=True,
+            semaphore=None):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -728,7 +740,7 @@ class Pool(object):
 
         self._pool = []
         self._poolctrl = {}
-        self._putlock = LaxBoundedSemaphore(self._processes)
+        self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(processes):
             self._create_worker_process()
 
@@ -841,8 +853,7 @@ class Pool(object):
         for i, worker in enumerate(self._iterinactive()):
             self._processes -= 1
             if self._putlock:
-                self._putlock._initial_value -= 1
-                self._putlock.acquire()
+                self._putlock.shrink()
             worker.terminate()
             if i == n - 1:
                 return
@@ -853,11 +864,7 @@ class Pool(object):
             #assert len(self._pool) == self._processes
             self._processes += 1
             if self._putlock:
-                cond = self._putlock._Semaphore__cond
-                with cond:
-                    self._putlock._initial_value += 1
-                    self._putlock._Semaphore__value += 1
-                    cond.notify()
+                self.putlock.grow()
 
     def _iterinactive(self):
         for worker in self._pool:
