@@ -696,7 +696,7 @@ class Pool(object):
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=None, max_restart_freq=1, start_result_thread=True):
+            max_restarts=None, max_restart_freq=1, with_result_thread=True):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -754,7 +754,7 @@ class Pool(object):
                                         self._join_exited_workers,
                                         self._putlock,
                                         self.restart_state)
-        if start_result_thread:
+        if with_result_thread:
             self._result_handler.start()
         else:
             self.eventmap[self._outqueue._reader] = \
