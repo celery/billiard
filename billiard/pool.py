@@ -116,9 +116,9 @@ def safe_apply_callback(fun, *args):
                   exc_info=True)
 
 
-def join_if_not_current(thread):
+def stop_if_not_current(thread, timeout=None):
     if thread is not threading.current_thread():
-        thread.join()
+        thread.stop(timeout)
 
 
 class LaxBoundedSemaphore(threading._Semaphore):
@@ -303,6 +303,7 @@ class PoolThread(threading.Thread):
     def __init__(self, *args, **kwargs):
         threading.Thread.__init__(self)
         self._state = RUN
+        self._was_started = False
         self.daemon = True
 
     def run(self):
@@ -317,6 +318,19 @@ class PoolThread(threading.Thread):
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
             os._exit(1)
+
+    def start(self, *args, **kwargs):
+        self._was_started = True
+        super(PoolThread, self).start(*args, **kwargs)
+
+    def on_stop_not_started(self):
+        pass
+
+    def stop(self, timeout=None):
+        if self._was_started:
+            self.join(timeout)
+            return
+        self.on_stop_not_started()
 
     def terminate(self):
         self._state = TERMINATE
@@ -397,6 +411,13 @@ class TaskHandler(PoolThread):
         else:
             debug('task handler got sentinel')
 
+        self.tell_others()
+
+    def tell_others(self):
+        outqueue = self.outqueue
+        put = self.put
+        pool = self.pool
+
         try:
             # tell result handler to finish when cache is empty
             debug('task handler sending sentinel to result handler')
@@ -410,6 +431,9 @@ class TaskHandler(PoolThread):
             debug('task handler got IOError when sending sentinels')
 
         debug('task handler exiting')
+
+    def on_stop_not_started(self):
+        self.tell_others()
 
 
 class TimeoutHandler(PoolThread):
@@ -518,18 +542,11 @@ class ResultHandler(PoolThread):
         self.restart_state = restart_state
         self._it = None
         self._shutdown_complete = False
-        self._was_started = False
         super(ResultHandler, self).__init__()
 
-    def stop(self):
-        if self._was_started:
-            self.join()
-            return
-        return self.finish_at_shutdown()
-
-    def start(self, *args, **kwargs):
-        self._was_started = True
-        super(ResultHandler, self).start(*args, **kwargs)
+    def on_stop_not_started(self):
+        # used when pool started without result handler thread.
+        self.finish_at_shutdown()
 
     def _process_result(self):
         get = self.get
@@ -707,7 +724,12 @@ class Pool(object):
     def __init__(self, processes=None, initializer=None, initargs=(),
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=None, max_restart_freq=1, start_result_thread=True,
+            max_restarts=None, max_restart_freq=1,
+            on_process_started=None,
+            on_process_down=None,
+            with_task_thread=True,
+            with_result_thread=True,
+            with_supervisor_thread=True,
             semaphore=None):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
@@ -721,7 +743,13 @@ class Pool(object):
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq)
+        self.on_process_started = on_process_started
+        self.on_process_down = on_process_down
+        self.with_task_thread = with_task_thread
+        self.with_result_thread = with_result_thread
+        self.with_supervisor_thread = with_supervisor_thread
         self.eventmap = {}
+        self.timers = {}
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -745,13 +773,20 @@ class Pool(object):
             self._create_worker_process()
 
         self._worker_handler = self.Supervisor(self)
-        self._worker_handler.start()
+        if with_supervisor_thread:
+            self._worker_handler.start()
+        else:
+            self.eventmap.update(
+                dict((w._popen.sentinel, self.maintain_pool)
+                        for w in self._pool))
+            self.timers[self.maintain_pool] = 10.0
 
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
                                               self._outqueue,
                                               self._pool)
-        self._task_handler.start()
+        if with_task_thread:
+            self._task_handler.start()
 
         # Thread killing timedout jobs.
         self._timeout_handler = None
@@ -766,7 +801,7 @@ class Pool(object):
                                         self._join_exited_workers,
                                         self._putlock,
                                         self.restart_state)
-        if start_result_thread:
+        if with_result_thread:
             self._result_handler.start()
         else:
             self.eventmap[self._outqueue._reader] = \
@@ -794,6 +829,8 @@ class Pool(object):
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.start()
+        if self.on_process_started:
+            self.on_process_started(w)
         self._poolctrl[w.pid] = sentinel
         return w
 
@@ -837,6 +874,8 @@ class Pool(object):
                 exitcodes[worker.pid] = worker.exitcode
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
+                if self.on_process_down:
+                    self.on_process_down(worker)
         if cleaned:
             for job in self._cache.values():
                 for worker_pid in job.worker_pids():
@@ -894,6 +933,15 @@ class Pool(object):
         """
         self._join_exited_workers()
         self._repopulate_pool()
+
+    def maintain_pool(self, *args, **kwargs):
+        if self._worker_handler._state == RUN and self._state == RUN:
+            try:
+                self._maintain_pool()
+            except RestartFreqExceeded:
+                self.close()
+                self.join()
+                raise
 
     def _setup_queues(self):
         from billiard.queues import SimpleQueue
@@ -1033,8 +1081,11 @@ class Pool(object):
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
                 self._start_timeout_handler()
-            self._taskqueue.put(([(result._job, None,
-                                   func, args, kwds)], None))
+            if self.with_task_thread:
+                self._taskqueue.put(([(result._job, None,
+                                       func, args, kwds)], None))
+            else:
+                self._quick_put((result._job, None, func, args, kwds))
             return result
 
     def map_async(self, func, iterable, chunksize=None, callback=None,
@@ -1091,7 +1142,7 @@ class Pool(object):
                 self._putlock.clear()
             self._worker_handler.close()
             self._taskqueue.put(None)
-            join_if_not_current(self._worker_handler)
+            stop_if_not_current(self._worker_handler)
 
     def terminate(self):
         debug('terminating pool')
@@ -1102,9 +1153,9 @@ class Pool(object):
     def join(self):
         assert self._state in (CLOSE, TERMINATE)
         debug('joining worker handler')
-        join_if_not_current(self._worker_handler)
+        stop_if_not_current(self._worker_handler)
         debug('joining task handler')
-        self._task_handler.join()
+        self._task_handler.stop()
         debug('joining result handler')
         self._result_handler.stop()
         debug('result handler joined')
@@ -1155,14 +1206,14 @@ class Pool(object):
                     p.terminate()
 
         debug('joining task handler')
-        task_handler.join()
+        task_handler.stop()
 
         debug('joining result handler')
         result_handler.stop()
 
         if timeout_handler is not None:
             debug('joining timeout handler')
-            timeout_handler.join(1e100)
+            timeout_handler.stop(1e100)
 
         if pool and hasattr(pool[0], 'terminate'):
             debug('joining pool workers')
