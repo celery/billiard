@@ -549,7 +549,7 @@ class ResultHandler(PoolThread):
         # used when pool started without result handler thread.
         self.finish_at_shutdown()
 
-    def _process_result(self):
+    def _process_result(self, timeout=1.0):
         get = self.get
         outqueue = self.outqueue
         cache = self.cache
@@ -588,28 +588,34 @@ class ResultHandler(PoolThread):
             except KeyError:
                 debug("Unknown job state: %s (args=%s)", state, args)
 
-        try:
-            ready, task = poll(1.0)
-        except (IOError, EOFError), exc:
-            debug('result handler got %r -- exiting', exc)
-            raise CoroStop()
-
-        if self._state:
-            assert self._state == TERMINATE
-            debug('result handler found thread._state=TERMINATE')
-            raise CoroStop()
-
-        if ready:
-            if task is None:
-                debug('result handler got sentinel')
+        while 1:
+            try:
+                ready, task = poll(timeout)
+            except (IOError, EOFError), exc:
+                debug('result handler got %r -- exiting', exc)
                 raise CoroStop()
 
-            yield on_state_change(task)
+            if self._state:
+                assert self._state == TERMINATE
+                debug('result handler found thread._state=TERMINATE')
+                raise CoroStop()
+
+            if ready:
+                if task is None:
+                    debug('result handler got sentinel')
+                    raise CoroStop()
+                on_state_change(task)
+                if timeout != 0:  # blocking
+                    break
+            else:
+                break
+
+        yield
 
     def handle_event(self, fileno, event):
         if self._state == RUN:
             if self._it is None:
-                self._it = self._process_result()
+                self._it = self._process_result(0)  # non-blocking
             try:
                 self._it.next()
             except StopIteration:
@@ -619,7 +625,7 @@ class ResultHandler(PoolThread):
         debug('result handler starting')
         try:
             while 1:
-                for _ in self._process_result():
+                for _ in self._process_result(1.0):  # blocking
                     pass
         except CoroStop:
             return
