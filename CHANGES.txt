@@ -1,3 +1,87 @@
+2.7.3.6 - 2012-05-21
+--------------------
+
+- Pool: Can now be used in an event loop, without starting the supporting
+  threads (TimeoutHandler still not supported)
+
+    To facilitate this the pool has gained the following keyword arguments:
+
+        - ``with_task_thread``
+        - ``with_result_thread``
+        - ``with_supervisor_thread``
+        - ``on_process_up``
+
+            Callback called with Process instance as argument
+            whenever a new worker process is added.
+
+            Used to add new process fds to the eventloop::
+
+                def on_process_up(proc):
+                    hub.add_reader(proc.sentinel, pool.maintain_pool)
+
+        - ``on_process_down``
+
+            Callback called with Process instance as argument
+            whenever a new worker process is found dead.
+
+            Used to remove process fds from the eventloop::
+
+                def on_process_down(proc):
+                    hub.remove(proc.sentinel)
+
+        - ``semaphore``
+
+            Sets the semaphore used to protect from adding new items to the
+            pool when no processes available.  The default is a threaded
+            one, so this can be used to change to an async semaphore.
+
+    And the following attributes::
+
+        - ``readers``
+
+            A map of ``fd`` -> ``callback``, to be registered in an eventloop.
+            Currently this is only the result outqueue with a callback
+            that processes all currently incoming results.
+
+    And the following methods::
+
+        - ``did_start_ok``
+
+            To be called after starting the pool, and after setting up the
+            eventloop with the pool fds, to ensure that the worker processes
+            didn't immediately exit caused by an error (internal/memory).
+
+        - ``maintain_pool``
+
+            Public version of ``_maintain_pool`` that handles max restarts.
+
+- Pool: Process too frequent restart protection now only counts if the process
+  had a non-successful exitcode.
+
+    This to take into account the maxtasksperchild option, and allowing
+    processes to exit cleanly on their own.
+
+- Pool: New options max_restart + max_restart_freq
+
+    This means that the supervisor can't restart processes
+    faster than max_restart' times per max_restart_freq seconds
+    (like the Erlang supervisor maxR & maxT settings).
+
+    The pool is closed and joined if the max restart
+    frequency is exceeded, where previously it would keep restarting
+    at an unlimited rate, possibly crashing the system.
+
+    The current default value is to stop if it exceeds
+    100 * process_count restarts in 1 seconds.  This may change later.
+
+    It will only count processes with an unsuccessful exit code,
+    this is to take into account the ``maxtasksperchild`` setting
+    and code that voluntarily exits.
+
+- Pool: The ``WorkerLostError`` message now includes the exitcode of the
+  process that disappeared.
+
+
 2.7.3.5 - 2012-05-09
 --------------------
 
