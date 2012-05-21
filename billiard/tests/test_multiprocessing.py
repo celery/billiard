@@ -43,6 +43,7 @@ import billiard.heap
 import billiard.pool
 
 from billiard import util
+from billiard.compat import bytes
 
 #
 #
@@ -1890,12 +1891,12 @@ class OtherTest(unittest.TestCase):
     def test_deliver_challenge_auth_failure(self):
         class _FakeConnection(object):
             def recv_bytes(self, size):
-                return b'something bogus'
+                return bytes('something bogus')
             def send_bytes(self, data):
                 pass
         self.assertRaises(billiard.AuthenticationError,
                           billiard.connection.deliver_challenge,
-                          _FakeConnection(), b'abc')
+                          _FakeConnection(), bytes('abc'))
 
     def test_answer_challenge_auth_failure(self):
         class _FakeConnection(object):
@@ -1906,13 +1907,13 @@ class OtherTest(unittest.TestCase):
                 if self.count == 1:
                     return billiard.connection.CHALLENGE
                 elif self.count == 2:
-                    return b'something bogus'
-                return b''
+                    return bytes('something bogus')
+                return bytes('')
             def send_bytes(self, data):
                 pass
         self.assertRaises(billiard.AuthenticationError,
                           billiard.connection.answer_challenge,
-                          _FakeConnection(), b'abc')
+                          _FakeConnection(), bytes('abc'))
 
 #
 # Test Manager.start()/Pool.__init__() initializer feature - see issue 5585

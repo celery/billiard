@@ -237,7 +237,7 @@ PyTypeObject Win32Type = {
 PyObject *
 create_win32_namespace(void)
 {
-    Win32Type.tp_name = "_multiprocessing.win32";
+    Win32Type.tp_name = "_billiard.win32";
     Win32Type.tp_methods = win32_methods;
     if (PyType_Ready(&Win32Type) < 0)
         return NULL;

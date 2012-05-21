@@ -473,7 +473,7 @@ def main():
     logfile = os.environ.get("_MP_FORK_LOGFILE_") or None
     format = os.environ.get("_MP_FORK_LOGFORMAT_")
     if loglevel:
-        from multiprocessing import util
+        from billiard import util
         import logging
         logger = util.get_logger()
         logger.setLevel(int(loglevel))

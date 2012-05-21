@@ -238,7 +238,7 @@ init_billiard(void)
     Py_XDECREF(temp);
 
     /* Get copy of BufferTooShort */
-    temp = PyImport_ImportModule("multiprocessing");
+    temp = PyImport_ImportModule("billiard");
     if (!temp)
         return;
     BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
