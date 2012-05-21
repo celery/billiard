@@ -729,7 +729,7 @@ class Pool(object):
             maxtasksperchild=None, timeout=None, soft_timeout=None,
             lost_worker_timeout=LOST_WORKER_TIMEOUT,
             max_restarts=None, max_restart_freq=1,
-            on_process_started=None,
+            on_process_up=None,
             on_process_down=None,
             with_task_thread=True,
             with_result_thread=True,
@@ -747,7 +747,7 @@ class Pool(object):
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
-        self.on_process_started = on_process_started
+        self.on_process_up = on_process_up
         self.on_process_down = on_process_down
         self.with_task_thread = with_task_thread
         self.with_result_thread = with_result_thread
@@ -831,8 +831,8 @@ class Pool(object):
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.start()
-        if self.on_process_started:
-            self.on_process_started(w)
+        if self.on_process_up:
+            self.on_process_up(w)
         self._poolctrl[w.pid] = sentinel
         return w
 
