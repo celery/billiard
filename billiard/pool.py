@@ -90,6 +90,7 @@ SIG_SOFT_TIMEOUT = getattr(signal, "SIGUSR1", None)
 #
 
 LOST_WORKER_TIMEOUT = 10.0
+EX_OK = getattr(os, "EX_OK", 0)
 
 job_counter = itertools.count()
 
@@ -742,7 +743,7 @@ class Pool(object):
         self._initargs = initargs
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.max_restarts = max_restarts or round(processes * 100)
-        self.restart_state = restart_state(max_restarts, max_restart_freq)
+        self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
         self.on_process_started = on_process_started
         self.on_process_down = on_process_down
         self.with_task_thread = with_task_thread
@@ -885,7 +886,7 @@ class Pool(object):
             if self._putlock is not None:
                 for worker in cleaned:
                     self._putlock.release()
-            return True
+            return exitcodes.values()
         return False
 
     def shrink(self, n=1):
@@ -917,22 +918,25 @@ class Pool(object):
                 return True
         return False
 
-    def _repopulate_pool(self):
+    def _repopulate_pool(self, exitcodes):
         """Bring the number of pool processes up to the specified number,
         for use after reaping workers which have exited.
         """
         for i in range(self._processes - len(self._pool)):
             if self._state != RUN:
                 return
-            self.restart_state.step()
+            try:
+                if exitcodes[i] != EX_OK:
+                    self.restart_state.step()
+            except IndexError:
+                self.restart_state.step()
             self._create_worker_process()
             debug('added worker')
 
     def _maintain_pool(self):
         """"Clean up any exited workers and start replacements for them.
         """
-        self._join_exited_workers()
-        self._repopulate_pool()
+        self._repopulate_pool(self._join_exited_workers())
 
     def maintain_pool(self, *args, **kwargs):
         if self._worker_handler._state == RUN and self._state == RUN:
