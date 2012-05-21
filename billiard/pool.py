@@ -749,8 +749,7 @@ class Pool(object):
         self.with_task_thread = with_task_thread
         self.with_result_thread = with_result_thread
         self.with_supervisor_thread = with_supervisor_thread
-        self.eventmap = {}
-        self.timers = {}
+        self.readers = {}
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -777,10 +776,9 @@ class Pool(object):
         if with_supervisor_thread:
             self._worker_handler.start()
         else:
-            self.eventmap.update(
+            self.readers.update(
                 dict((w._popen.sentinel, self.maintain_pool)
                         for w in self._pool))
-            self.timers[self.maintain_pool] = 10.0
 
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
@@ -805,7 +803,7 @@ class Pool(object):
         if with_result_thread:
             self._result_handler.start()
         else:
-            self.eventmap[self._outqueue._reader] = \
+            self.readers[self._outqueue._reader] = \
                     self._result_handler.handle_event
 
         self._terminate = Finalize(
