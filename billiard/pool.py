@@ -933,6 +933,9 @@ class Pool(object):
             self._create_worker_process()
             debug('added worker')
 
+    def did_start_ok(self):
+        return not self_join_exited_workers()
+
     def _maintain_pool(self):
         """"Clean up any exited workers and start replacements for them.
         """
