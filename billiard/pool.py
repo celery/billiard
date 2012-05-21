@@ -154,8 +154,9 @@ class LaxBoundedSemaphore(threading._Semaphore):
                             self, self._value)
                 else:
                     if __debug__:
-                        self._note("%s.release: success, value=%s (unchanged)" % (
-                            self, self._value))
+                        self._note(
+                            "%s.release: success, value=%s (unchanged)" % (
+                                self, self._value))
 
         def clear(self):
             while self._value < self._initial_value:
@@ -173,8 +174,9 @@ class LaxBoundedSemaphore(threading._Semaphore):
                             self, self._Semaphore__value)
                 else:
                     if __debug__:
-                        self._note("%s.release: success, value=%s (unchanged)" % (
-                            self, self._Semaphore__value))
+                        self._note(
+                            "%s.release: success, value=%s (unchanged)" % (
+                                self, self._Semaphore__value))
 
         def clear(self):  # noqa
             while self._Semaphore__value < self._initial_value:
@@ -388,9 +390,7 @@ class TaskHandler(PoolThread):
 
     def body(self):
         taskqueue = self.taskqueue
-        outqueue = self.outqueue
         put = self.put
-        pool = self.pool
 
         for taskseq, set_length in iter(taskqueue.get, None):
             i = -1
@@ -550,11 +550,8 @@ class ResultHandler(PoolThread):
         self.finish_at_shutdown()
 
     def _process_result(self, timeout=1.0):
-        get = self.get
-        outqueue = self.outqueue
         cache = self.cache
         poll = self.poll
-        join_exited_workers = self.join_exited_workers
         putlock = self.putlock
         restart_state = self.restart_state
 
@@ -938,7 +935,7 @@ class Pool(object):
             debug('added worker')
 
     def did_start_ok(self):
-        return not self_join_exited_workers()
+        return not self._join_exited_workers()
 
     def _maintain_pool(self):
         """"Clean up any exited workers and start replacements for them.
