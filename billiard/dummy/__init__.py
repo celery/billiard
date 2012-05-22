@@ -79,11 +79,11 @@ class DummyProcess(threading.Thread):
 
 
 class Condition(threading._Condition):
-    notify_all = threading._Condition.notify_all.im_func
+    notify_all = threading._Condition.notifyAll.im_func
 
 
 Process = DummyProcess
-current_process = threading.current_thread
+current_process = threading.currentThread
 current_process()._children = weakref.WeakKeyDictionary()
 
 

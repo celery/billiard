@@ -246,7 +246,7 @@ class Server(object):
         Handle requests from the proxies in a particular process/thread
         '''
         util.debug('starting server thread to service %r',
-                   threading.current_thread().name)
+                   threading.currentThread().name)
 
         recv = conn.recv
         send = conn.send
@@ -296,7 +296,7 @@ class Server(object):
 
             except EOFError:
                 util.debug('got EOF -- exiting thread serving %r',
-                           threading.current_thread().name)
+                           threading.currentThread().name)
                 sys.exit(0)
 
             except Exception:
@@ -309,7 +309,7 @@ class Server(object):
                     send(('#UNSERIALIZABLE', repr(msg)))
             except Exception, e:
                 info('exception in thread serving %r',
-                        threading.current_thread().name)
+                        threading.currentThread().name)
                 info(' ... message was %r', msg)
                 info(' ... exception was %r', e)
                 conn.close()
@@ -432,7 +432,7 @@ class Server(object):
         '''
         Spawn a new thread to serve this connection
         '''
-        threading.current_thread().name = name
+        threading.currentThread().name = name
         c.send(('#RETURN', None))
         self.serve_client(c)
 
@@ -752,8 +752,8 @@ class BaseProxy(object):
     def _connect(self):
         util.debug('making connection to manager')
         name = current_process().name
-        if threading.current_thread().name != 'MainThread':
-            name += '|' + threading.current_thread().name
+        if threading.currentThread().name != 'MainThread':
+            name += '|' + threading.currentThread().name
         conn = self._Client(self._token.address, authkey=self._authkey)
         dispatch(conn, None, 'accept_connection', (name,))
         self._tls.connection = conn
@@ -766,7 +766,7 @@ class BaseProxy(object):
             conn = self._tls.connection
         except AttributeError:
             util.debug('thread %r does not own a connection',
-                       threading.current_thread().name)
+                       threading.currentThread().name)
             self._connect()
             conn = self._tls.connection
 
@@ -830,7 +830,7 @@ class BaseProxy(object):
         # the process owns no more references to objects for this manager
         if not idset and hasattr(tls, 'connection'):
             util.debug('thread %r has no more proxies so closing conn',
-                       threading.current_thread().name)
+                       threading.currentThread().name)
             tls.connection.close()
             del tls.connection
 

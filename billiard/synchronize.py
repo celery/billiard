@@ -174,8 +174,8 @@ class Lock(SemLock):
         try:
             if self._semlock._is_mine():
                 name = current_process().name
-                if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                if threading.currentThread().name != 'MainThread':
+                    name += '|' + threading.currentThread().name
             elif self._semlock._get_value() == 1:
                 name = 'None'
             elif self._semlock._count() > 0:
@@ -199,8 +199,8 @@ class RLock(SemLock):
         try:
             if self._semlock._is_mine():
                 name = current_process().name
-                if threading.current_thread().name != 'MainThread':
-                    name += '|' + threading.current_thread().name
+                if threading.currentThread().name != 'MainThread':
+                    name += '|' + threading.currentThread().name
                 count = self._semlock._count()
             elif self._semlock._get_value() == 1:
                 name, count = 'None', 0
