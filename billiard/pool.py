@@ -1277,10 +1277,9 @@ class ApplyResult(object):
             timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
             on_timeout_set=None, on_timeout_cancel=None):
         self._mutex = threading.Lock()
-        self._cond = threading.Condition(threading.Lock())
+        self._event = threading.Event()
         self._job = job_counter.next()
         self._cache = cache
-        self._ready = False
         self._callback = callback
         self._accept_callback = accept_callback
         self._error_callback = error_callback
@@ -1297,26 +1296,24 @@ class ApplyResult(object):
         cache[self._job] = self
 
     def ready(self):
-        return self._ready
+        return self._event.isSet()
 
     def accepted(self):
         return self._accepted
 
     def successful(self):
-        assert self._ready
+        assert self.ready()
         return self._success
 
     def worker_pids(self):
         return filter(None, [self._worker_pid])
 
     def wait(self, timeout=None):
-        with self._cond:
-            if not self._ready:
-                self._cond.wait(timeout)
+        self._event.wait(timeout)
 
     def get(self, timeout=None):
         self.wait(timeout)
-        if not self._ready:
+        if not self.ready():
             raise TimeoutError
         if self._success:
             return self._value
@@ -1328,9 +1325,7 @@ class ApplyResult(object):
             if self._on_timeout_cancel:
                 self._on_timeout_cancel(self)
             self._success, self._value = obj
-            with self._cond:
-                self._ready = True
-                self._cond.notify()
+            self._event.set()
             if self._accepted:
                 self._cache.pop(self._job, None)
 
@@ -1347,7 +1342,7 @@ class ApplyResult(object):
             self._accepted = True
             self._time_accepted = time_accepted
             self._worker_pid = pid
-            if self._ready:
+            if self.ready():
                 self._cache.pop(self._job, None)
             if self._on_timeout_set:
                 self._on_timeout_set(self, self._soft_timeout, self._timeout)
@@ -1374,7 +1369,7 @@ class MapResult(ApplyResult):
         self._chunksize = chunksize
         if chunksize <= 0:
             self._number_left = 0
-            self._ready = True
+            self._event.set()
         else:
             self._number_left = length // chunksize + bool(length % chunksize)
 
@@ -1388,9 +1383,7 @@ class MapResult(ApplyResult):
                     self._callback(self._value)
                 if self._accepted:
                     self._cache.pop(self._job, None)
-                with self._cond:
-                    self._ready = True
-                    self._cond.notify()
+                self._event.set()
         else:
             self._success = False
             self._value = result
@@ -1398,9 +1391,7 @@ class MapResult(ApplyResult):
                 self._error_callback(self._value)
             if self._accepted:
                 self._cache.pop(self._job, None)
-            with self._cond:
-                self._ready = True
-                self._cond.notify()
+            self._event.set()
 
     def _ack(self, i, time_accepted, pid):
         start = i * self._chunksize
@@ -1409,7 +1400,7 @@ class MapResult(ApplyResult):
             self._accepted[j] = True
             self._worker_pid[j] = pid
             self._time_accepted[j] = time_accepted
-        if self._ready:
+        if self.ready():
             self._cache.pop(self._job, None)
 
     def accepted(self):
