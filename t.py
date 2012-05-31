@@ -1,9 +1,13 @@
-import billiard
+import billiard as mp
+from setproctitle import setproctitle
+import time
 
+def initfun():
+    setproctitle("Pool: %s" % mp.current_process()._name)
 
 def f(x):
-    print("PROCESS %r" % (x, ))
-    return x ** x
+    print("TASK")
+    return True
 
 
 def cb(res):
@@ -12,14 +16,21 @@ def cb(res):
 
 
 def main():
-    billiard.forking_enable(False)
-    x = billiard.Pool(2)
-    x.apply_async(f, (8, ), callback=cb)
+    mp.forking_enable(False)
+    initfun()
+    x = mp.Pool(1, initializer=initfun)
+    time.sleep(10)
+    x.apply_async(f, ("x" * 1024**2, ), callback=cb)
+    time.sleep(3)
+    x.apply_async(f, ("x" * (1024**2), ), callback=cb)
+    time.sleep(3)
+    x.apply_async(f, ("x" * (1024**2), ), callback=cb)
+
+    time.sleep(30)
 
     x.close()
     x.join()
 
 
 if __name__ == "__main__":
-    billiard.freeze_support()
     main()

@@ -9,6 +9,12 @@ except ImportError:
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# -*- py3k -*-
+is_py3k = sys.version_info[0] == 3
+extras = {}
+if is_py3k:
+    extras["use_2to3"] = True
+
 # -*- Distribution Meta -*-
 
 import re
@@ -124,18 +130,10 @@ else:
         multiprocessing_srcs.append('Modules/_billiard/semaphore.c')
 
 
-if 0:
-    print 'Macros:'
-    for name, value in sorted(macros.iteritems()):
-        print '\t%s = %r' % (name, value)
-    print '\nLibraries:\n\t%r\n' % ', '.join(libraries)
-    print '\Sources:\n\t%r\n' % ', '.join(multiprocessing_srcs)
-
-
 is_jython = sys.platform.startswith("java")
 is_pypy = hasattr(sys, "pypy_version_info")
 extensions = []
-if not (is_jython or is_pypy):
+if not (is_jython or is_pypy or is_py3k):
     extensions = [
         Extension('_billiard',
                 sources=multiprocessing_srcs,
@@ -184,5 +182,6 @@ setup(
         'License :: OSI Approved :: BSD License',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
+    **extras
 )
 
