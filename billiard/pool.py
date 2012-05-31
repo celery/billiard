@@ -751,7 +751,8 @@ class Pool(object):
             on_timeout_set=None,
             on_timeout_cancel=None,
             threads=True,
-            semaphore=None):
+            semaphore=None,
+            putlocks=False):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -788,6 +789,7 @@ class Pool(object):
 
         self._pool = []
         self._poolctrl = {}
+        self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(processes):
             self._create_worker_process()
@@ -1082,7 +1084,7 @@ class Pool(object):
 
     def apply_async(self, func, args=(), kwds={},
             callback=None, error_callback=None, accept_callback=None,
-            timeout_callback=None, waitforslot=False,
+            timeout_callback=None, waitforslot=None,
             soft_timeout=None, timeout=None, lost_worker_timeout=None):
         '''
         Asynchronous equivalent of `apply()` method.
@@ -1108,6 +1110,8 @@ class Pool(object):
             warnings.warn(UserWarning("Soft timeouts are not supported: "
                     "on this platform: It does not have the SIGUSR1 signal."))
             soft_timeout = None
+        if waitforslot is None:
+            waitforslot = self.putlocks
         if waitforslot and self._putlock is not None and self._state == RUN:
             self._putlock.acquire()
         if self._state == RUN:
