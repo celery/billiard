@@ -1,3 +1,27 @@
+2.7.3.8 - 2012-06-01
+--------------------
+
+- Can now be installed on Py 3.2
+
+- Issue #12091: simplify ApplyResult and MapResult with threading.Event
+
+  Patch by Charles-François Natali
+
+- Pool: Support running without TimeoutHandler thread.
+
+    - The with_*_thread arguments has also been replaced with
+      a single `threads=True` argument.
+
+    - Two new pool callbacks:
+
+        - ``on_timeout_set(job, soft, hard)``
+
+            Applied when a task is executed with a timeout.
+
+        - ``on_timeout_cancel(job)``
+
+            Applied when a timeout is cancelled (the job completed)
+
 2.7.3.7 - 2012-05-21
 --------------------
 
