@@ -1,3 +1,11 @@
+2.7.3.9 - 2012-06-03
+--------------------
+
+- Environment variable ``MP_MAIN_FILE`` envvar is now set to
+  the path of the ``__main__`` module when execv is enabled.
+
+- Pool: Errors occuring in the TaskHandler are now reported.
+
 2.7.3.8 - 2012-06-01
 --------------------
 
