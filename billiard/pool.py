@@ -393,22 +393,26 @@ class TaskHandler(PoolThread):
         put = self.put
 
         for taskseq, set_length in iter(taskqueue.get, None):
-            i = -1
-            for i, task in enumerate(taskseq):
-                if self._state:
-                    debug('task handler found thread._state != RUN')
-                    break
-                try:
-                    put(task)
-                except IOError:
-                    debug('could not put task on queue')
-                    break
-            else:
-                if set_length:
-                    debug('doing set_length()')
-                    set_length(i + 1)
-                continue
-            break
+            try:
+                i = -1
+                for i, task in enumerate(taskseq):
+                    if self._state:
+                        debug('task handler found thread._state != RUN')
+                        break
+                    try:
+                        put(task)
+                    except IOError:
+                        debug('could not put task on queue')
+                        break
+                else:
+                    if set_length:
+                        debug('doing set_length()')
+                        set_length(i + 1)
+                    continue
+                break
+            except Exception, exc:
+                print("Task Handler ERROR: %r" % (exc, ))
+                break
         else:
             debug('task handler got sentinel')
 
@@ -1116,17 +1120,17 @@ class Pool(object):
             self._putlock.acquire()
         if self._state == RUN:
             result = ApplyResult(self._cache, callback,
-                                 accept_callback, timeout_callback,
-                                 error_callback, soft_timeout, timeout,
-                                 lost_worker_timeout,
-                                 on_timeout_set=self.on_timeout_set,
-                                 on_timeout_cancel=self.on_timeout_cancel)
+                                accept_callback, timeout_callback,
+                                error_callback, soft_timeout, timeout,
+                                lost_worker_timeout,
+                                on_timeout_set=self.on_timeout_set,
+                                on_timeout_cancel=self.on_timeout_cancel)
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
                 self._start_timeout_handler()
             if self.threads:
                 self._taskqueue.put(([(result._job, None,
-                                       func, args, kwds)], None))
+                                    func, args, kwds)], None))
             else:
                 self._quick_put((result._job, None, func, args, kwds))
             return result
