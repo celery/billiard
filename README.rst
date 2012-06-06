@@ -29,4 +29,4 @@ Bug reporting
 
 Please report bugs related to multiprocessing at the
 `Python bug tracker <http://bugs.python.org/>`_. Issues related to billiard
-should be reported at http://github.com/ask/billiard/issues.
+should be reported at http://github.com/celery/billiard/issues.

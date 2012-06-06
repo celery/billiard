@@ -51,7 +51,7 @@ __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
 __maintainer__ = 'Ask Solem',
 __contact__ = "ask@celeryproject.org"
-__homepage__ = "http://github.com/ask/billiard"
+__homepage__ = "http://github.com/celery/billiard"
 __docformat__ = "restructuredtext"
 
 # -eof meta-
