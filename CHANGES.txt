@@ -13,7 +13,7 @@
 
 - Issue #12091: simplify ApplyResult and MapResult with threading.Event
 
-  Patch by Charles-François Natali
+  Patch by Charles-Francois Natali
 
 - Pool: Support running without TimeoutHandler thread.
 
