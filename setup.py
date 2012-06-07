@@ -54,19 +54,6 @@ finally:
     meta_fh.close()
 
 
-# check __version__ in release mode
-if len(sys.argv) > 1 and "dist" in sys.argv[1]:
-    mp = os.path.join(HERE, "Lib", "billiard", "__init__.py")
-    for line in open(mp):
-        if line.startswith("__version__"):
-            expected = "__version__ = '%s'" % VERSION
-            if line.strip() != expected:
-                raise ValueError("Version line in %s is wrong: %s\n"
-                                 "expected: %s" % 
-                                 (mp, line.strip(), expected))
-            break
-
-
 if sys.version_info < (2, 4):
     raise ValueError("Versions of Python before 2.4 are not supported")
 
