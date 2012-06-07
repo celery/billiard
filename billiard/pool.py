@@ -137,7 +137,7 @@ class LaxBoundedSemaphore(threading._Semaphore):
             self._Semaphore__value += 1
             cond.notify()
 
-    def shrink(self, callback):
+    def shrink(self):
         self._initial_value -= 1
         self.acquire()
 
