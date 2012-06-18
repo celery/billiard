@@ -17,10 +17,16 @@ except ImportError:
 class TimeLimitExceeded(Exception):
     """The time limit has been exceeded and the job has been terminated."""
 
+    def __str__(self):
+        return "TimeLimitExceeded%s" % (self.args, )
+
 
 class SoftTimeLimitExceeded(Exception):
     """The soft time limit has been exceeded. This exception is raised
     to give the task a chance to clean up."""
+
+    def __str__(self):
+        return "TimeLimitExceeded%s" % (self.args, )
 
 
 class WorkerLostError(Exception):

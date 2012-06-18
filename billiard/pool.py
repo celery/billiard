@@ -627,13 +627,13 @@ class ResultHandler(PoolThread):
 
         yield
 
-    def handle_event(self, fileno, event):
+    def handle_event(self, *args):
         if self._state == RUN:
             if self._it is None:
                 self._it = self._process_result(0)  # non-blocking
             try:
                 self._it.next()
-            except StopIteration:
+            except (StopIteration, CoroStop):
                 self._it = None
 
     def body(self):
