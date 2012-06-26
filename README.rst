@@ -17,7 +17,7 @@ and will draw it's fixes/improvements from python-trunk.
 
 - Also it is a fork of the multiprocessin backport package by Christian Heims.
 
-- It includes the no-execv patch contributed by sbt.
+- It includes the no-execv patch contributed by R. Oudkerk.
 
 - And the Pool improvements previously located in `Celery`_.
 

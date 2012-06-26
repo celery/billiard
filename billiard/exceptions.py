@@ -26,7 +26,7 @@ class SoftTimeLimitExceeded(Exception):
     to give the task a chance to clean up."""
 
     def __str__(self):
-        return "TimeLimitExceeded%s" % (self.args, )
+        return "SoftTimeLimitExceeded%s" % (self.args, )
 
 
 class WorkerLostError(Exception):

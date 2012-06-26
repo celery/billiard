@@ -1,3 +1,17 @@
+2.7.3.10 - 2012-06-26
+---------------------
+
+- The ``TimeLimitExceeded`` exception string representation
+  only showed the seconds as a number, it now gives a more human
+  friendly description.
+
+- Fixed typo in ``LaxBoundedSemaphore.shrink``.
+
+- Pool: ``ResultHandler.handle_event`` no longer requires
+  any arguments.
+
+- setup.py bdist now works
+
 2.7.3.9 - 2012-06-03
 --------------------
 
