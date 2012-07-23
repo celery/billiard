@@ -276,7 +276,6 @@ def is_exiting():
     return _exiting or _exiting is None
 
 
-@atexit.register
 def _exit_function():
     '''
     Clean up on exit
@@ -299,6 +298,7 @@ def _exit_function():
 
     debug('running the remaining "atexit" finalizers')
     _run_finalizers()
+atexit.register(_exit_function)
 
 
 class ForkAwareThreadLock(object):
