@@ -423,9 +423,9 @@ if sys.platform == 'win32':
 
 MESSAGE_LENGTH = 20
 
-CHALLENGE = bytes('#CHALLENGE#')
-WELCOME = bytes('#WELCOME#')
-FAILURE = bytes('#FAILURE#')
+CHALLENGE = bytes('#CHALLENGE#', 'ascii')
+WELCOME = bytes('#WELCOME#', 'ascii')
+FAILURE = bytes('#FAILURE#', 'ascii')
 
 
 def deliver_challenge(connection, authkey):

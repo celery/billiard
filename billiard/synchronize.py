@@ -391,7 +391,7 @@ if sys.platform != 'win32':
     #
 
     def _cleanup_semaphore_if_leaked(name):
-        name = name.encode('ascii') + bytes('\0')
+        name = name.encode('ascii') + bytes('\0', 'ascii')
         if len(name) > 512:
             # posix guarantees that writes to a pipe of less than PIPE_BUF
             # bytes are atomic, and that PIPE_BUF >= 512
@@ -451,7 +451,7 @@ if sys.platform != 'win32':
                 data.append(s)
 
         # attempt to unlink each collected name
-        for name in bytes('').join(data).split(bytes('\0')):
+        for name in bytes('', 'ascii').join(data).split(bytes('\0', 'ascii')):
             try:
                 sem_unlink(name.decode('ascii'))
             except:

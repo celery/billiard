@@ -174,7 +174,7 @@ class _TestProcess(BaseTestCase):
         q.put(kwds)
         q.put(current.name)
         if self.TYPE != 'threads':
-            q.put(bytes(current.authkey))
+            q.put(bytes(current.authkey, 'ascii'))
             q.put(current.pid)
 
     def test_process(self):

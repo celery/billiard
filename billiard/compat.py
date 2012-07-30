@@ -6,7 +6,8 @@ import os
 try:
     bytes = bytes
 except NameError:
-    bytes = str  # noqa
+    def bytes(s, encoding='ascii'):  # noqa
+        return str(s).encode(encoding)
 
 
 try:
