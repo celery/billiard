@@ -2,13 +2,20 @@ from __future__ import absolute_import
 
 import errno
 import os
+import sys
+import __builtin__
 
-try:
+if sys.version_info[0] == 3:
     bytes = bytes
-except NameError:
-    def bytes(s, encoding='ascii'):  # noqa
-        return str(s).encode(encoding)
+else:
+    _bytes = __builtin__.bytes
 
+    class bytes(_bytes):  # noqa
+
+        def __new__(cls, *args):
+            if len(args) > 1:
+                return _bytes(args[0]).encode(*args[1:])
+            return _bytes(*args)
 
 try:
     closerange = os.closerange
