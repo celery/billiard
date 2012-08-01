@@ -82,6 +82,13 @@ TERMINATE = 2
 ACK = 0
 READY = 1
 
+#
+# Exit code constants
+#
+EX_OK = 0
+EX_RECYCLE = 0x9B
+
+
 # Signal used for soft time limits.
 SIG_SOFT_TIMEOUT = getattr(signal, "SIGUSR1", None)
 
@@ -258,10 +265,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
 
+    exitcode = None
     completed = 0
     while maxtasks is None or (maxtasks and completed < maxtasks):
         if sentinel is not None and sentinel.is_set():
             debug('worker got sentinel -- exiting')
+            exitcode = EX_OK
             break
 
         try:
@@ -270,10 +279,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
                 continue
         except (EOFError, IOError):
             debug('worker got EOFError or IOError -- exiting')
+            exitcode = EX_FAILURE
             break
 
         if task is None:
             debug('worker got sentinel -- exiting')
+            exitcode = EX_OK
             break
 
         job, i, func, args, kwds = task
@@ -295,6 +306,9 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
         completed += 1
     debug('worker exiting after %d tasks', completed)
+    if exitcode is None and maxtasks:
+        exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
+    sys.exit(exitcode or EX_OK)
 
 #
 # Class representing a process pool
@@ -898,7 +912,7 @@ class Pool(object):
         if shutdown and not len(self._pool):
             raise WorkersJoined()
 
-        cleaned, exitcodes = [], {}
+        cleaned, exitcodes = {}, {}
         for i in reversed(range(len(self._pool))):
             worker = self._pool[i]
             if worker.exitcode is not None:
@@ -906,8 +920,11 @@ class Pool(object):
                 debug('Supervisor: cleaning up worker %d', i)
                 worker.join()
                 debug('Supervisor: worked %d joined', i)
-                cleaned.append(worker.pid)
+                cleaned[worker.pid] = worker
                 exitcodes[worker.pid] = worker.exitcode
+                if worker.exitcode not in (EX_OK, EX_RECYCLE):
+                    error('Process %r pid:%r exited with exitcode %r' % (
+                        worker.name, worker.pid, worker.exitcode))
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
                 if self.on_process_down:
@@ -918,9 +935,11 @@ class Pool(object):
                     if worker_pid in cleaned and not job.ready():
                         job._worker_lost = (time.time(), exitcodes[worker_pid])
                         continue
-            if self._putlock is not None:
-                for worker in cleaned:
+            for worker in cleaned.itervalues():
+                if self._putlock is not None:
                     self._putlock.release()
+                if self.on_process_down:
+                    self.on_process_down(worker)
             return exitcodes.values()
         return []
 
