@@ -5,6 +5,12 @@
 
     Fix contributed by koobs.
 
+- Pool: New argument ``allow_restart`` is now required to enable
+  the pool process sentinel that is required to restart the pool.
+
+    It's disabled by default, which reduces the number of file
+    descriptors/semaphores required to run the pool.
+
 - Pool: Now emits a warning if a worker process exited with errorcode.
 
     But not if the error code is 155, which is now returned if the worker
