@@ -1,3 +1,19 @@
+2.7.3.11 - 2012-08-01
+---------------------
+
+- Adds support for FreeBSD 7+
+
+    Fix contributed by koobs.
+
+- Pool: Now emits a warning if a worker process exited with errorcode.
+
+    But not if the error code is 155, which is now returned if the worker
+    process was recycled (maxtasksperchild).
+
+- Python 3 compatibility fixes.
+
+- Python 2.5 compatibility fixes.
+
 2.7.3.10 - 2012-06-26
 ---------------------
 

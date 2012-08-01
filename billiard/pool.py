@@ -771,7 +771,8 @@ class Pool(object):
             on_timeout_cancel=None,
             threads=True,
             semaphore=None,
-            putlocks=False):
+            putlocks=False,
+            allow_restart=False):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -790,6 +791,7 @@ class Pool(object):
         self.on_timeout_cancel = on_timeout_cancel
         self.threads = threads
         self.readers = {}
+        self.allow_restart = allow_restart
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -868,7 +870,7 @@ class Pool(object):
             )
 
     def _create_worker_process(self):
-        sentinel = Event()
+        sentinel = Event() if self.allow_restart else None
         w = self.Process(
             target=worker,
             args=(self._inqueue, self._outqueue,
