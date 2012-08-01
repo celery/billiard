@@ -86,6 +86,7 @@ READY = 1
 # Exit code constants
 #
 EX_OK = 0
+EX_FAILURE = 1
 EX_RECYCLE = 0x9B
 
 
@@ -927,8 +928,6 @@ class Pool(object):
                         worker.name, worker.pid, worker.exitcode))
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
-                if self.on_process_down:
-                    self.on_process_down(worker)
         if cleaned:
             for job in self._cache.values():
                 for worker_pid in job.worker_pids():

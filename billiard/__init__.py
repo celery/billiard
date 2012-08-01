@@ -72,6 +72,7 @@ __all__ = [
 
 import os
 import sys
+import warnings
 
 from .exceptions import (  # noqa
     ProcessError,
@@ -87,6 +88,12 @@ from .util import SUBDEBUG, SUBWARNING
 
 # This is down here because _billiard uses BufferTooShort
 from ._ext import supports_exec, ensure_multiprocessing  # noqa
+
+
+W_NO_EXECV = """\
+force_execv is not supported as the billiard C extension \
+is not installed\
+"""
 
 #
 # Definitions not depending on native semaphores
@@ -321,12 +328,15 @@ def forking_enable(value):
     On systems with `os.fork()` forking is enabled by default, and on
     other systems it is always disabled.
     '''
-    if not value and supports_exec:
-        from . import forking
-        if value and not hasattr(os, 'fork'):
-            raise ValueError('os.fork() not found')
-        forking._forking_is_enabled = bool(value)
-        if not value:
-            os.environ["MULTIPROCESSING_FORKING_DISABLE"] = "1"
+    if not value:
+        if supports_exec:
+            from . import forking
+            if value and not hasattr(os, 'fork'):
+                raise ValueError('os.fork() not found')
+            forking._forking_is_enabled = bool(value)
+            if not value:
+                os.environ["MULTIPROCESSING_FORKING_DISABLE"] = "1"
+        else:
+            warnings.warn(RuntimeWarning(W_NO_EXECV))
 if os.environ.get("MULTIPROCESSING_FORKING_DISABLE"):
     forking_enable(False)
