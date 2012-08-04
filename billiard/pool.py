@@ -44,6 +44,7 @@ import errno
 import itertools
 import logging
 import os
+import platform
 import signal
 import sys
 import threading
@@ -64,6 +65,15 @@ from .exceptions import (
     WorkerLostError,
 )
 from .util import Finalize, debug
+
+if platform.system() == 'Windows':  # pragma: no cover
+    # On Windows os.kill calls TerminateProcess which cannot be
+    # handled by # any process, so this is needed to terminate the task
+    # *and its children* (if any).
+    from ._win import kill_processtree as _kill  # noqa
+else:
+    from os import kill as _kill                 # noqa
+
 
 _Semaphore = threading._Semaphore
 
@@ -792,6 +802,9 @@ class Pool(object):
         self.threads = threads
         self.readers = {}
         self.allow_restart = allow_restart
+        # Contains processes that we have terminated,
+        # and that the supervisor should not raise an error for.
+        self.signalled = set()
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning("Soft timeouts are not supported: "
@@ -934,8 +947,12 @@ class Pool(object):
             for job in self._cache.values():
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
-                        job._worker_lost = (time.time(), exitcodes[worker_pid])
-                        continue
+                        if worker_pid in self.signalled:
+                            job._set(None, (False, None))
+                        else:
+                            job._worker_lost = (time.time(),
+                                                exitcodes[worker_pid])
+                        break
             for worker in cleaned.itervalues():
                 if self._putlock is not None:
                     self._putlock.release()
@@ -1155,6 +1172,10 @@ class Pool(object):
                 self._quick_put((result._job, None, func, args, kwds))
             return result
 
+    def terminate_job(self, pid, sig=None):
+        self.signalled.add(pid)
+        _kill(pid, sig or signal.SIGTERM)
+
     def map_async(self, func, iterable, chunksize=None, callback=None,
             error_callback=None):
         '''
@@ -1361,7 +1382,8 @@ class ApplyResult(object):
             if self._callback and self._success:
                 safe_apply_callback(
                     self._callback, self._value)
-            if self._error_callback and not self._success:
+            if (self._value is not None and
+                    self._error_callback and not self._success):
                 safe_apply_callback(
                     self._error_callback, self._value)
 
