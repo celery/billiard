@@ -8,7 +8,10 @@ import __builtin__
 if sys.version_info[0] == 3:
     bytes = bytes
 else:
-    _bytes = __builtin__.bytes
+    try:
+        _bytes = __builtin__.bytes
+    except AttributeError:
+        _bytes = str
 
     class bytes(_bytes):  # noqa
 
