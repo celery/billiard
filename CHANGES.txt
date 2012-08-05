@@ -1,3 +1,10 @@
+2.7.3.12 - 2012-08-05
+---------------------
+
+- Fixed Python 2.5 compatibility issue.
+
+- New Pool.terminate_job(pid) to terminate a job without raising WorkerLostError
+
 2.7.3.11 - 2012-08-01
 ---------------------
 
@@ -11,7 +18,7 @@
     It's disabled by default, which reduces the number of file
     descriptors/semaphores required to run the pool.
 
-- Pool: Now emits a warning if a worker process exited with errorcode.
+- Pool: Now emits a warning if a worker process exited with error-code.
 
     But not if the error code is 155, which is now returned if the worker
     process was recycled (maxtasksperchild).
@@ -24,7 +31,7 @@
 ---------------------
 
 - The ``TimeLimitExceeded`` exception string representation
-  only showed the seconds as a number, it now gives a more human
+  only included the seconds as a number, it now gives a more human
   friendly description.
 
 - Fixed typo in ``LaxBoundedSemaphore.shrink``.
@@ -40,7 +47,7 @@
 - Environment variable ``MP_MAIN_FILE`` envvar is now set to
   the path of the ``__main__`` module when execv is enabled.
 
-- Pool: Errors occuring in the TaskHandler are now reported.
+- Pool: Errors occurring in the TaskHandler are now reported.
 
 2.7.3.8 - 2012-06-01
 --------------------
@@ -129,7 +136,7 @@
             Public version of ``_maintain_pool`` that handles max restarts.
 
 - Pool: Process too frequent restart protection now only counts if the process
-  had a non-successful exitcode.
+  had a non-successful exit-code.
 
     This to take into account the maxtasksperchild option, and allowing
     processes to exit cleanly on their own.
@@ -151,7 +158,7 @@
     this is to take into account the ``maxtasksperchild`` setting
     and code that voluntarily exits.
 
-- Pool: The ``WorkerLostError`` message now includes the exitcode of the
+- Pool: The ``WorkerLostError`` message now includes the exit-code of the
   process that disappeared.
 
 
@@ -193,7 +200,7 @@
   so everything works except for forking_enable(False) (which
   silently degrades).
 
-- Fixed Python 2.5 compat issues.
+- Fixed Python 2.5 compat. issues.
 
 - Uses more with statements
 
@@ -217,6 +224,6 @@
 - Python 2.4 support removed, now only supports 2.5, 2.6 and 2.7.
   (may consider py3k support at some point).
 
-- Pool improvments from Celery.
+- Pool improvements from Celery.
 
 - no-execv patch added (http://bugs.python.org/issue8713)
