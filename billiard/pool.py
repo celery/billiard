@@ -75,6 +75,18 @@ else:
     from os import kill as _kill                 # noqa
 
 
+try:
+    next = next
+except NameError:
+    def next(it, *args):  # noqa
+        try:
+            return it.__next__()
+        except StopIteration:
+            if not args:
+                raise
+            return args[0]
+
+
 _Semaphore = threading._Semaphore
 
 #
@@ -826,7 +838,7 @@ class Pool(object):
         self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(processes):
-            self._create_worker_process()
+            self._create_worker_process(i)
 
         self._worker_handler = self.Supervisor(self)
         if threads:
@@ -882,7 +894,7 @@ class Pool(object):
             exitpriority=15,
             )
 
-    def _create_worker_process(self):
+    def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
         w = self.Process(
             target=worker,
@@ -894,6 +906,7 @@ class Pool(object):
         self._pool.append(w)
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
+        w.index = i
         w.start()
         if self.on_process_up:
             self.on_process_up(w)
@@ -1002,8 +1015,13 @@ class Pool(object):
                     self.restart_state.step()
             except IndexError:
                 self.restart_state.step()
-            self._create_worker_process()
+            self._create_worker_process(self._avail_index())
             debug('added worker')
+
+    def _avail_index(self):
+        assert len(self._pool) < self._processes
+        indices = set(p.index for p in self._pool)
+        return next(i for i in range(self._processes) if i not in indices)
 
     def did_start_ok(self):
         return not self._join_exited_workers()
