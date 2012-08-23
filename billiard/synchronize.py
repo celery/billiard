@@ -15,7 +15,7 @@
 # 2. Redistributions in binary form must reproduce the above copyright
 #    notice, this list of conditions and the following disclaimer in the
 #    documentation and/or other materials provided with the distribution.
-# 3. Neither the name of author nor the names of any contributors may be
+# 3. Neither theself. name of author nor the names of any contributors may be
 #    used to endorse or promote products derived from this software
 #    without specific prior written permission.
 #
@@ -74,6 +74,13 @@ except AttributeError:
 #
 
 
+def _semname(sl):
+    try:
+        return sl.name
+    except AttributeError:
+        pass
+
+
 class SemLock(object):
     _counter = itertools.count()
 
@@ -96,7 +103,7 @@ class SemLock(object):
                     obj._semlock._after_fork()
                 register_after_fork(self, _after_fork)
 
-            if self._semlock.name is not None:
+            if semname(self._semlock) is not None:
                 # We only get here if we are on Unix with forking
                 # disabled.  When the object is garbage collected or the
                 # process shuts down we unlink the semaphore name
@@ -119,7 +126,7 @@ class SemLock(object):
         assert_spawning(self)
         sl = self._semlock
         return (Popen.duplicate_for_child(sl.handle), sl.kind, sl.maxvalue,
-                sl.name)
+                semname(sl))
 
     def __setstate__(self, state):
         self._semlock = _billiard.SemLock._rebuild(*state)
