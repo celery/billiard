@@ -103,7 +103,7 @@ class SemLock(object):
                     obj._semlock._after_fork()
                 register_after_fork(self, _after_fork)
 
-            if semname(self._semlock) is not None:
+            if _semname(self._semlock) is not None:
                 # We only get here if we are on Unix with forking
                 # disabled.  When the object is garbage collected or the
                 # process shuts down we unlink the semaphore name
@@ -126,7 +126,7 @@ class SemLock(object):
         assert_spawning(self)
         sl = self._semlock
         return (Popen.duplicate_for_child(sl.handle), sl.kind, sl.maxvalue,
-                semname(sl))
+                _semname(sl))
 
     def __setstate__(self, state):
         self._semlock = _billiard.SemLock._rebuild(*state)
