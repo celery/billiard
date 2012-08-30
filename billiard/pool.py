@@ -87,6 +87,12 @@ except NameError:
             return args[0]
 
 
+try:
+    TIMEOUT_MAX = threading.TIMEOUT_MAX
+except AttributeError:
+    TIMEOUT_MAX = 1e10
+
+
 _Semaphore = threading._Semaphore
 
 #
@@ -1319,7 +1325,7 @@ class Pool(object):
 
         if timeout_handler is not None:
             debug('joining timeout handler')
-            timeout_handler.stop(1e100)
+            timeout_handler.stop(TIMEOUT_MAX)
 
         if pool and hasattr(pool[0], 'terminate'):
             debug('joining pool workers')
