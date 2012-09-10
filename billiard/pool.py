@@ -535,7 +535,22 @@ class TimeoutHandler(PoolThread):
         if job._timeout_callback is not None:
             job._timeout_callback(soft=False, timeout=job._timeout)
         if process:
-            process.terminate()
+            self._trywaitkill(process)
+
+    def _trywaitkill(self, worker):
+        debug('timeout: sending TERM to %s', worker._name)
+        try:
+            worker.terminate()
+        except OSError:
+            pass
+        else:
+            if worker._popen.wait(timeout=0.1):
+                return
+        debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
+        try:
+            signal.signal(worker.pid, signal.SIGKILL)
+        except OSError:
+            pass
 
     def handle_timeouts(self):
         cache = self.cache
