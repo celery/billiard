@@ -5,15 +5,68 @@ import glob
 try:
     from setuptools import setup, Extension, find_packages
 except ImportError:
-    from distutils.core import setup, Extension, find_packages
-
+    from distutils.core import setup, Extension, find_packages  # noqa
+from distutils.command.build_ext import build_ext
+from distutils.errors import (
+    CCompilerError,
+    DistutilsExecError,
+    DistutilsPlatformError
+)
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# -*- py3k -*-
+ext_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError)
+if sys.platform == 'win32' and sys.version_info >= (2, 6):
+    # distutils.msvc9compiler can raise IOError if the compiler is missing
+    ext_errors += (IOError, )
+
+is_jython = sys.platform.startswith('java')
+is_pypy = hasattr(sys, 'pypy_version_info')
 is_py3k = sys.version_info[0] == 3
+
+BUILD_WARNING = """
+
+-----------------------------------------------------------------------
+WARNING: The C extensions could not be compiled
+-----------------------------------------------------------------------
+
+Maybe you do not have a C compiler installed on this system?
+The reason was:
+%s
+
+This is just a warning as most of the functionality will work even
+without the updated C extension.  It will simply fallback to the
+built-in _multiprocessing module.  Most notably you will not be able to use
+FORCE_EXECV on POSIX systems.  If this is a problem for you then please
+install a C compiler or fix the error(s) above.
+-----------------------------------------------------------------------
+
+"""
+
+
+class BuildFailed(Exception):
+    pass
+
+
+class ve_build_ext(build_ext):
+    """Version of build_ext that allows building to fail."""
+
+    def run(self):
+        try:
+            build_ext.run(self)
+        except DistutilsPlatformError:
+            raise BuildFailed, BuildFailed(), sys.exc_info()[2]
+
+    def build_extension(self, ext):
+        try:
+            build_ext.build_extension(self, ext)
+        except ext_errors:
+            raise BuildFailed, BuildFailed(), sys.exc_info()[2]
+
+
+# -*- py3k -*-
 extras = {}
 if is_py3k:
-    extras["use_2to3"] = True
+    extras['use_2to3'] = True
 
 # -*- Distribution Meta -*-
 
@@ -23,24 +76,25 @@ re_vers = re.compile(r'VERSION\s*=\s*\((.*?)\)')
 re_doc = re.compile(r'^"""(.+?)"""')
 rq = lambda s: s.strip("\"'")
 
+
 def add_default(m):
     attr_name, attr_value = m.groups()
     return ((attr_name, rq(attr_value)), )
 
 
 def add_version(m):
-    v = list(map(rq, m.groups()[0].split(", ")))
-    return (("VERSION", ".".join(v[0:4]) + "".join(v[4:])), )
+    v = list(map(rq, m.groups()[0].split(', ')))
+    return (('VERSION', '.'.join(v[0:4]) + ''.join(v[4:])), )
 
 
 def add_doc(m):
-    return (("doc", m.groups()[0]), )
+    return (('doc', m.groups()[0]), )
 
 pats = {re_meta: add_default,
         re_vers: add_version,
         re_doc: add_doc}
 here = os.path.abspath(os.path.dirname(__file__))
-meta_fh = open(os.path.join(here, "billiard/__init__.py"))
+meta_fh = open(os.path.join(here, 'billiard/__init__.py'))
 try:
     meta = {}
     for line in meta_fh:
@@ -54,13 +108,13 @@ finally:
     meta_fh.close()
 
 
-if sys.version_info < (2, 4):
-    raise ValueError("Versions of Python before 2.4 are not supported")
+if sys.version_info < (2, 5):
+    raise ValueError('Versions of Python before 2.5 are not supported')
 
-if sys.platform == 'win32': # Windows
+if sys.platform == 'win32':  # Windows
     macros = dict()
     libraries = ['ws2_32']
-elif sys.platform.startswith('darwin'): # Mac OSX
+elif sys.platform.startswith('darwin'):  # Mac OSX
     macros = dict(
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=0,
@@ -68,7 +122,7 @@ elif sys.platform.startswith('darwin'): # Mac OSX
         HAVE_BROKEN_SEM_GETVALUE=1
         )
     libraries = []
-elif sys.platform.startswith('cygwin'): # Cygwin
+elif sys.platform.startswith('cygwin'):  # Cygwin
     macros = dict(
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=1,
@@ -123,22 +177,6 @@ else:
     if macros.get('HAVE_SEM_OPEN', False):
         multiprocessing_srcs.append('Modules/_billiard/semaphore.c')
 
-
-is_jython = sys.platform.startswith("java")
-is_pypy = hasattr(sys, "pypy_version_info")
-extensions = []
-if not (is_jython or is_pypy or is_py3k):
-    extensions = [
-        Extension('_billiard',
-                sources=multiprocessing_srcs,
-                define_macros=macros.items(),
-                libraries=libraries,
-                include_dirs=["Modules/_billiard"],
-                depends=(glob.glob('Modules/_billiard/*.h') +
-                        ['setup.py'])
-                ),
-        ]
-
 long_description = open(os.path.join(HERE, 'README.rst')).read()
 long_description += """
 
@@ -150,32 +188,50 @@ Changes
 long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
 
 
-setup(
-    name='billiard',
-    version=meta["VERSION"],
-    description=meta["doc"],
-    long_description=long_description,
-    packages=find_packages(exclude=['ez_setup', 'tests', 'tests.*']),
-    ext_modules=extensions,
-    author=meta["author"],
-    author_email=meta["author_email"],
-    maintainer=meta["maintainer"],
-    maintainer_email=meta["contact"],
-    url=meta["homepage"],
-    zip_safe=False,
-    license='BSD',
-    tests_require = ["nose", "nose-cover3"],
-    test_suite="nose.collector",
-    classifiers=[
-        'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Developers',
-        'Programming Language :: Python',
-        'Programming Language :: C',
-        'Operating System :: Microsoft :: Windows',
-        'Operating System :: POSIX',
-        'License :: OSI Approved :: BSD License',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-    ],
-    **extras
-)
+def run_setup(with_extensions=True):
+    extensions = []
+    if with_extensions:
+        extensions = [
+        Extension('_billiard',
+                sources=multiprocessing_srcs,
+                define_macros=macros.items(),
+                libraries=libraries,
+                include_dirs=['Modules/_billiard'],
+                depends=(glob.glob('Modules/_billiard/*.h') +
+                        ['setup.py'])
+                ),
+        ]
+    setup(
+        name='billiard',
+        version=meta['VERSION'],
+        description=meta['doc'],
+        long_description=long_description,
+        packages=find_packages(exclude=['ez_setup', 'tests', 'tests.*']),
+        ext_modules=extensions,
+        author=meta['author'],
+        author_email=meta['author_email'],
+        maintainer=meta['maintainer'],
+        maintainer_email=meta['contact'],
+        url=meta['homepage'],
+        zip_safe=False,
+        license='BSD',
+        tests_require=['nose', 'nose-cover3'],
+        test_suite='nose.collector',
+        classifiers=[
+            'Development Status :: 5 - Production/Stable',
+            'Intended Audience :: Developers',
+            'Programming Language :: Python',
+            'Programming Language :: C',
+            'Operating System :: Microsoft :: Windows',
+            'Operating System :: POSIX',
+            'License :: OSI Approved :: BSD License',
+            'Topic :: Software Development :: Libraries :: Python Modules',
+        ],
+        **extras
+    )
 
+try:
+    run_setup(not (is_jython or is_pypy or is_py3k))
+except BuildFailed, exc:
+    sys.stderr.write(BUILD_WARNING % (exc, ))
+    run_setup(False)
