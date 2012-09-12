@@ -80,7 +80,7 @@ try:
 except NameError:
     def next(it, *args):  # noqa
         try:
-            return it.__next__()
+            return it.next()
         except StopIteration:
             if not args:
                 raise
