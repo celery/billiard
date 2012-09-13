@@ -37,6 +37,7 @@ from __future__ import absolute_import
 import os
 import sys
 import signal
+import warnings
 
 from ._ext import Connection, PipeConnection, win32
 from pickle import load, HIGHEST_PROTOCOL
@@ -49,6 +50,13 @@ try:
     WindowsError = WindowsError  # noqa
 except NameError:
     class WindowsError(Exception): pass  # noqa
+
+W_OLD_DJANGO_LAYOUT = """\
+Will add directory %r to path! This is necessary to accommodate \
+pre-Django 1.4 layouts using setup_environ.
+You can skip this warning by adding a DJANGO_SETTINGS_MODULE=settings \
+environment variable.
+"""
 
 #
 # Choose whether to do a fork or spawn (fork+exec) on Unix.
@@ -188,6 +196,7 @@ if sys.platform != 'win32':
         _tls = thread._local()
 
         def __init__(self, process_obj):
+            _Django_old_layout_hack__save()
             sys.stdout.flush()
             sys.stderr.flush()
             self.returncode = None
@@ -449,11 +458,55 @@ def get_command_line():
         return [_python_exe, '-c', prog, '--billiard-fork']
 
 
+def _Django_old_layout_hack__save():
+    if 'DJANGO_PROJECT_DIR' not in os.environ:
+        try:
+            settings_name = os.environ['DJANGO_SETTINGS_MODULE']
+        except KeyError:
+            return  # not using Django.
+
+        try:
+            project_name, _ = settings_name.split('.', 1)
+        except ValueError:  # not modified by setup_environ
+            return
+
+        project = __import__(project_name)
+        try:
+            project_dir = os.path.normpath(_module_parent_dir(project))
+        except AttributeError:
+            return  # dynamically generated module (no __file__)
+        warnings.warn(UserWarning(
+            W_OLD_DJANGO_LAYOUT % os.path.realpath(project_dir)
+        ))
+        os.environ['DJANGO_PROJECT_DIR'] = project_dir
+
+
+def _Django_old_layout_hack__load():
+    try:
+        sys.path.append(os.environ['DJANGO_PROJECT_DIR'])
+    except KeyError:
+        pass
+
+
+def _module_parent_dir(mod):
+    dir, filename = os.path.split(_module_dir(mod))
+    if dir == os.curdir or not dir:
+        dir = os.getcwd()
+    return dir
+
+
+def _module_dir(mod):
+    if '__init__.py' in mod.__file__:
+        return os.path.dirname(mod.__file__)
+    return mod.__file__
+
+
 def main():
     '''
     Run code specifed by data received over pipe
     '''
     global _forking_is_enabled
+    _Django_old_layout_hack__load()
 
     assert is_forking(sys.argv)
     _forking_is_enabled = False
