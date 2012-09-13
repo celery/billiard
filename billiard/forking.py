@@ -467,8 +467,8 @@ def _Django_old_layout_hack__save():
 
         try:
             project_name, _ = settings_name.split('.', 1)
-        except ValueError:  # not modified by setup_environ
-            return
+        except ValueError:
+            return  # not modified by setup_environ
 
         project = __import__(project_name)
         try:
