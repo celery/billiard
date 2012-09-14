@@ -328,6 +328,7 @@ else:
         _tls = thread._local()
 
         def __init__(self, process_obj):
+            _Django_old_layout_hack__save()
             # create pipe for communication with child
             rfd, wfd = os.pipe()
 
