@@ -54,6 +54,12 @@ class Listener(object):
 
     address = property(lambda self: self._backlog_queue)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.close()
+
 
 def Client(address):
     _in, _out = Queue(), Queue()

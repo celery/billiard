@@ -4,33 +4,9 @@
 # multiprocessing/connection.py
 #
 # Copyright (c) 2006-2008, R Oudkerk
-# All rights reserved.
+# Licensed to PSF under a Contributor Agreement.
 #
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#
-# 1. Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-# 2. Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-# 3. Neither the name of author nor the names of any contributors may be
-#    used to endorse or promote products derived from this software
-#    without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
-# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
-# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
-# SUCH DAMAGE.
-#
+
 from __future__ import absolute_import
 from __future__ import with_statement
 
@@ -109,19 +85,6 @@ def arbitrary_address(family):
         raise ValueError('unrecognized family')
 
 
-def _validate_family(family):
-    '''
-    Checks if the family is valid for the current environment.
-    '''
-    if sys.platform != 'win32' and family == 'AF_PIPE':
-        raise ValueError('Family %s is not recognized' % family)
-
-    if sys.platform == 'win32' and family == 'AF_UNIX':
-        # double check
-        if not hasattr(socket, family):
-            raise ValueError('Family %s is not recognized' % family)
-
-
 def address_type(address):
     '''
     Return the types of the address
@@ -154,7 +117,6 @@ class Listener(object):
                  or default_family
         address = address or arbitrary_address(family)
 
-        _validate_family(family)
         if family == 'AF_PIPE':
             self._listener = PipeListener(address, backlog)
         else:
@@ -171,6 +133,8 @@ class Listener(object):
 
         Returns a `Connection` object.
         '''
+        if self._listener is None:
+            raise IOError('listener is closed')
         c = self._listener.accept()
         if self._authkey:
             deliver_challenge(c, self._authkey)
@@ -181,10 +145,18 @@ class Listener(object):
         '''
         Close the bound socket or named pipe of `self`.
         '''
-        return self._listener.close()
+        if self._listener is not None:
+            self._listener.close()
+            self._listener = None
 
     address = property(lambda self: self._listener._address)
     last_accepted = property(lambda self: self._listener._last_accepted)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_args):
+        self.close()
 
 
 def Client(address, family=None, authkey=None):
@@ -192,7 +164,6 @@ def Client(address, family=None, authkey=None):
     Returns a connection to the address of a `Listener`
     '''
     family = family or address_type(address)
-    _validate_family(family)
     if family == 'AF_PIPE':
         c = PipeClient(address)
     else:
@@ -318,25 +289,25 @@ def SocketClient(address):
     '''
     family = address_type(address)
     s = socket.socket(getattr(socket, family))
-    try:
-        t = _init_timeout()
+    t = _init_timeout()
 
-        while 1:
-            try:
-                s.connect(address)
-            except socket.error, e:
-                if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
-                    debug('failed to connect to address %s', address)
-                    raise
-                time.sleep(0.01)
-            else:
-                break
+    while 1:
+        try:
+            s.connect(address)
+        except socket.error, e:
+            if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
+                debug('failed to connect to address %s', address)
+                raise
+            time.sleep(0.01)
         else:
-            raise
-        fd = duplicate(s.fileno())
-        return _billiard.Connection(fd)
-    finally:
-        s.close()
+            break
+    else:
+        raise
+
+    fd = duplicate(s.fileno())
+    conn = _billiard.Connection(fd)
+    s.close()
+    return conn
 
 #
 # Definitions for connections based on named pipes
@@ -478,23 +449,23 @@ class ConnectionWrapper(object):
 
 
 def _xml_dumps(obj):
-    return xmlrpclib.dumps((obj,), None, None, None, 1).encode('utf-8')
+    return xmlrpclib.dumps((obj,), None, None, None, 1).encode('utf8')
 
 
 def _xml_loads(s):
-    (obj,), method = xmlrpclib.loads(s.decode('utf-8'))
+    (obj,), method = xmlrpclib.loads(s.decode('utf8'))
     return obj
 
 
 class XmlListener(Listener):
     def accept(self):
         global xmlrpclib
-        xmlrpclib = __import__("xmlrpclib")
+        import xmlrpclib
         obj = Listener.accept(self)
         return ConnectionWrapper(obj, _xml_dumps, _xml_loads)
 
 
 def XmlClient(*args, **kwds):
     global xmlrpclib
-    xmlrpclib = __import__("xmlrpclib")
+    import xmlrpclib
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)
