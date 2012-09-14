@@ -1,6 +1,9 @@
 2.7.3.13 - 2012-09-14
 ---------------------
 
+- Merged with Python trunk (many authors, many fixes: see Python changelog in
+  trunk).
+
 - Using execv now also works with older Django projects using setup_environ
   (Issue #10).
 
