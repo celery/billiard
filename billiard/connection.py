@@ -460,12 +460,12 @@ def _xml_loads(s):
 class XmlListener(Listener):
     def accept(self):
         global xmlrpclib
-        import xmlrpclib
+        import xmlrpclib  # noqa
         obj = Listener.accept(self)
         return ConnectionWrapper(obj, _xml_dumps, _xml_loads)
 
 
 def XmlClient(*args, **kwds):
     global xmlrpclib
-    import xmlrpclib
+    import xmlrpclib  # noqa
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)
