@@ -6,7 +6,6 @@ try:
     from setuptools import setup, Extension, find_packages
 except ImportError:
     from distutils.core import setup, Extension, find_packages  # noqa
-from distutils.command.build_ext import build_ext
 from distutils.errors import (
     CCompilerError,
     DistutilsExecError,
@@ -41,27 +40,6 @@ install a C compiler or fix the error(s) above.
 -----------------------------------------------------------------------
 
 """
-
-
-class BuildFailed(Exception):
-    pass
-
-
-class ve_build_ext(build_ext):
-    """Version of build_ext that allows building to fail."""
-
-    def run(self):
-        try:
-            build_ext.run(self)
-        except DistutilsPlatformError:
-            raise BuildFailed, BuildFailed(), sys.exc_info()[2]
-
-    def build_extension(self, ext):
-        try:
-            build_ext.build_extension(self, ext)
-        except ext_errors:
-            raise BuildFailed, BuildFailed(), sys.exc_info()[2]
-
 
 # -*- py3k -*-
 extras = {}
@@ -232,6 +210,7 @@ def run_setup(with_extensions=True):
 
 try:
     run_setup(not (is_jython or is_pypy or is_py3k))
-except BuildFailed, exc:
-    sys.stderr.write(BUILD_WARNING % (exc, ))
+except ext_errors:
+    import traceback
+    sys.stderr.write(BUILD_WARNING % '\n'.join(traceback.format_stack(), ))
     run_setup(False)
