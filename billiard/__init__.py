@@ -61,8 +61,10 @@ from .exceptions import (  # noqa
 from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
 
-# This is down here because _billiard uses BufferTooShort
-from ._ext import supports_exec, ensure_multiprocessing  # noqa
+
+def ensure_multiprocessing():
+    from ._ext import ensure_multiprocessing
+    return ensure_multiprocessing()
 
 
 W_NO_EXECV = """\
@@ -304,6 +306,7 @@ def forking_enable(value):
     other systems it is always disabled.
     '''
     if not value:
+        from ._ext import supports_exec
         if supports_exec:
             from . import forking
             if value and not hasattr(os, 'fork'):

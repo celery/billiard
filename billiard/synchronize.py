@@ -100,8 +100,11 @@ class SemLock(object):
     def __getstate__(self):
         assert_spawning(self)
         sl = self._semlock
-        return (Popen.duplicate_for_child(sl.handle), sl.kind, sl.maxvalue,
-                _semname(sl))
+        state = (Popen.duplicate_for_child(sl.handle), sl.kind, sl.maxvalue)
+        sname = _semname(sl)
+        if sname is not None:
+            state += (sname, )
+        return state
 
     def __setstate__(self, state):
         self._semlock = _billiard.SemLock._rebuild(*state)
