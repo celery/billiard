@@ -104,6 +104,8 @@ class SemLock(object):
         sname = _semname(sl)
         if sname is not None:
             state += (sname, )
+        else:
+            state += ("", )
         return state
 
     def __setstate__(self, state):
