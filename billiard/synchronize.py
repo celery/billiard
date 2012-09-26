@@ -101,9 +101,10 @@ class SemLock(object):
         assert_spawning(self)
         sl = self._semlock
         state = (Popen.duplicate_for_child(sl.handle), sl.kind, sl.maxvalue)
-        sname = _semname(sl)
-        if sname is not None:
-            state += (sname, )
+        try:
+            state += (sl.name, )
+        except AttributeError:
+            pass
         return state
 
     def __setstate__(self, state):
