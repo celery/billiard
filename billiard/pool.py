@@ -959,7 +959,7 @@ class Pool(object):
                     if worker_pid in cleaned and not job.ready():
                         if worker_pid in self.signalled:
                             try:
-                                raise Terminated(-exitcodes[worker.pid])
+                                raise Terminated(-exitcodes[worker_pid])
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
