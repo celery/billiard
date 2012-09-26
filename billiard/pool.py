@@ -33,9 +33,10 @@ from .common import restart_state
 from .einfo import ExceptionInfo
 from .exceptions import (
     CoroStop,
-    SoftTimeLimitExceeded,
-    TimeLimitExceeded,
     RestartFreqExceeded,
+    SoftTimeLimitExceeded,
+    Terminated,
+    TimeLimitExceeded,
     TimeoutError,
     WorkerLostError,
 )
@@ -957,7 +958,10 @@ class Pool(object):
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
                         if worker_pid in self.signalled:
-                            job._set(None, (False, None))
+                            try:
+                                raise Terminated(-exitcodes[worker.pid])
+                            except Terminated:
+                                job._set(None, (False, ExceptionInfo()))
                         else:
                             job._worker_lost = (time.time(),
                                                 exitcodes[worker_pid])

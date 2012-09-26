@@ -33,6 +33,10 @@ class WorkerLostError(Exception):
     """The worker processing a job has exited prematurely."""
 
 
+class Terminated(Exception):
+    """The worker processing a job has been terminated by user request."""
+
+
 class RestartFreqExceeded(Exception):
     """Restarts too fast."""
 
