@@ -1,3 +1,11 @@
+2.7.3.16 - 2012-09-26
+---------------------
+
+- Windows: Fixes for SemLock._rebuild (Issue #24).
+
+- Pool: Job terminated with terminate_job now raises
+  billiard.exceptions.Terminated.
+
 2.7.3.15 - 2012-09-21
 ---------------------
 
