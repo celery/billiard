@@ -725,7 +725,8 @@ class ResultHandler(PoolThread):
 
         time_terminate = None
         while cache and self._state != TERMINATE:
-            check_timeouts()
+            if check_timeouts is not None:
+                check_timeouts()
             try:
                 ready, task = poll(1.0)
             except (IOError, EOFError), exc:
