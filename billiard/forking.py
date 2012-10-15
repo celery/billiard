@@ -441,6 +441,8 @@ def _Django_old_layout_hack__save():
         except KeyError:
             return  # not using Django.
 
+        conf_settings = sys.modules.get('django.conf.settings')
+        configured = conf_settings and conf_settings.configured
         try:
             project_name, _ = settings_name.split('.', 1)
         except ValueError:
@@ -451,9 +453,10 @@ def _Django_old_layout_hack__save():
             project_dir = os.path.normpath(_module_parent_dir(project))
         except AttributeError:
             return  # dynamically generated module (no __file__)
-        warnings.warn(UserWarning(
-            W_OLD_DJANGO_LAYOUT % os.path.realpath(project_dir)
-        ))
+        if configured:
+            warnings.warn(UserWarning(
+                W_OLD_DJANGO_LAYOUT % os.path.realpath(project_dir)
+            ))
         os.environ['DJANGO_PROJECT_DIR'] = project_dir
 
 
