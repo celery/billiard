@@ -18,7 +18,7 @@ class _Frame(object):
         self.f_globals = {
             "__file__": frame.f_globals.get("__file__", "__main__"),
             "__name__": frame.f_globals.get("__name__"),
-            "__loader__": frame.f_globals.get("__loader__"),
+            "__loader__": None,
         }
         self.f_locals = fl = {}
         try:
