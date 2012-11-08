@@ -69,7 +69,10 @@ except AttributeError:
     TIMEOUT_MAX = 1e10
 
 
-_Semaphore = threading._Semaphore
+try:
+    _Semaphore = threading._Semaphore
+except AttributeError:  # Py3
+    _Semaphore = threading.Semaphore  # noqa
 
 #
 # Constants representing the state of a pool
@@ -134,7 +137,7 @@ def stop_if_not_current(thread, timeout=None):
         thread.stop(timeout)
 
 
-class LaxBoundedSemaphore(threading._Semaphore):
+class LaxBoundedSemaphore(_Semaphore):
     """Semaphore that checks that # release is <= # acquires,
     but ignores if # releases >= value."""
 

@@ -78,11 +78,17 @@ class DummyProcess(threading.Thread):
             return None
 
 
-class Condition(threading._Condition):
+try:
+    _Condition = threading._Condition
+except AttributeError:  # Py3
+    _Condition = threading.Condition  # noqa
+
+
+class Condition(_Condition):
     if sys.version_info[0] == 3:
-        notify_all = threading._Condition.notifyAll
+        notify_all = _Condition.notifyAll
     else:
-        notify_all = threading._Condition.notifyAll.im_func
+        notify_all = _Condition.notifyAll.im_func
 
 
 Process = DummyProcess
