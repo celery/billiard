@@ -22,6 +22,7 @@ import threading
 from time import time as _time
 
 from ._ext import _billiard, ensure_SemLock
+from .five import range
 from .process import current_process
 from .util import Finalize, register_after_fork, debug
 from .forking import assert_spawning, Popen
@@ -36,7 +37,7 @@ ensure_SemLock()
 # Constants
 #
 
-RECURSIVE_MUTEX, SEMAPHORE = range(2)
+RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
 SEM_VALUE_MAX = _billiard.SemLock.SEM_VALUE_MAX
 
 try:
@@ -115,7 +116,7 @@ class SemLock(object):
     @staticmethod
     def _make_name():
         return '/%s-%s-%s' % (current_process()._semprefix,
-                              os.getpid(), SemLock._counter.next())
+                              os.getpid(), next(SemLock._counter))
 
 
 class Semaphore(SemLock):
@@ -248,7 +249,7 @@ class Condition(object):
 
         # release lock
         count = self._lock._semlock._count()
-        for i in xrange(count):
+        for i in range(count):
             self._lock.release()
 
         try:
@@ -259,7 +260,7 @@ class Condition(object):
             self._woken_count.release()
 
             # reacquire lock
-            for i in xrange(count):
+            for i in range(count):
                 self._lock.acquire()
             return ret
 
@@ -296,7 +297,7 @@ class Condition(object):
             sleepers += 1
 
         if sleepers:
-            for i in xrange(sleepers):
+            for i in range(sleepers):
                 self._woken_count.acquire()       # wait for a sleeper to wake
 
             # rezero wait_semaphore in case some timeouts just happened

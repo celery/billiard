@@ -96,10 +96,10 @@ else:
             cls.dispatch[type] = dispatcher
 
     def _reduce_method(m):  # noqa
-        if m.im_self is None:
-            return getattr, (m.im_class, m.im_func.func_name)
+        if m.__self__ is None:
+            return getattr, (m.__self__.__class__, m.__func__.__name__)
         else:
-            return getattr, (m.im_self, m.im_func.func_name)
+            return getattr, (m.__self__, m.__func__.__name__)
     ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
 
 
@@ -150,7 +150,10 @@ if PipeConnection:
 #
 
 if sys.platform != 'win32':
-    import thread
+    try:
+        import thread
+    except ImportError:
+        import _thread as thread  # noqa
     import select
 
     WINEXE = False
@@ -264,7 +267,10 @@ if sys.platform != 'win32':
 #
 
 else:
-    import thread
+    try:
+        import thread
+    except ImportError:
+        import _thread as thread  # noqa
     import msvcrt
     import _subprocess
 
@@ -657,7 +663,7 @@ def prepare(data):
             # Try to make the potentially picklable objects in
             # sys.modules['__main__'] realize they are in the main
             # module -- somewhat ugly.
-            for obj in main_module.__dict__.values():
+            for obj in list(main_module.__dict__.values()):
                 try:
                     if obj.__module__ == '__parents_main__':
                         obj.__module__ = '__main__'

@@ -80,7 +80,7 @@ def arbitrary_address(family):
         return tempfile.mktemp(prefix='listener-', dir=get_temp_dir())
     elif family == 'AF_PIPE':
         return tempfile.mktemp(prefix=r'\\.\pipe\pyc-%d-%d-' %
-                               (os.getpid(), _mmap_counter.next()))
+                               (os.getpid(), next(_mmap_counter)))
     else:
         raise ValueError('unrecognized family')
 
@@ -229,8 +229,8 @@ else:
 
         try:
             win32.ConnectNamedPipe(h1, win32.NULL)
-        except WindowsError, e:
-            if e.args[0] != win32.ERROR_PIPE_CONNECTED:
+        except WindowsError as exc:
+            if exc.args[0] != win32.ERROR_PIPE_CONNECTED:
                 raise
 
         c1 = _billiard.PipeConnection(h1, writable=duplex)
@@ -294,8 +294,8 @@ def SocketClient(address):
     while 1:
         try:
             s.connect(address)
-        except socket.error, e:
-            if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
+        except socket.error as exc:
+            if exc.args[0] != errno.ECONNREFUSED or _check_timeout(t):
                 debug('failed to connect to address %s', address)
                 raise
             time.sleep(0.01)
@@ -350,8 +350,8 @@ if sys.platform == 'win32':
             handle = self._handle_queue.pop(0)
             try:
                 win32.ConnectNamedPipe(handle, win32.NULL)
-            except WindowsError, e:
-                if e.args[0] != win32.ERROR_PIPE_CONNECTED:
+            except WindowsError as exc:
+                if exc.args[0] != win32.ERROR_PIPE_CONNECTED:
                     raise
             return _billiard.PipeConnection(handle)
 
@@ -373,8 +373,8 @@ if sys.platform == 'win32':
                     address, win32.GENERIC_READ | win32.GENERIC_WRITE,
                     0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL,
                     )
-            except WindowsError, e:
-                if e.args[0] not in (
+            except WindowsError as exc:
+                if exc.args[0] not in (
                         win32.ERROR_SEM_TIMEOUT,
                         win32.ERROR_PIPE_BUSY) or _check_timeout(t):
                     raise

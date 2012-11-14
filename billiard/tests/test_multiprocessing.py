@@ -33,7 +33,7 @@ import threading
 # Work around broken sem_open implementations
 try:
     import billiard.synchronize
-except ImportError, exc:
+except ImportError as exc:
     raise SkipTest(exc)
 
 import billiard.dummy
@@ -1344,8 +1344,8 @@ class _TestConnection(BaseTestCase):
             self.assertEqual(conn.send_bytes(longmsg), None)
             try:
                 res = conn.recv_bytes_into(buffer)
-            except billiard.BufferTooShort, e:
-                self.assertEqual(e.args, (longmsg,))
+            except billiard.BufferTooShort as exc:
+                self.assertEqual(exc.args, (longmsg,))
             else:
                 self.fail('expected BufferTooShort, got %s' % res)
 

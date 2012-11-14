@@ -50,7 +50,8 @@ import array
 
 from threading import Lock, RLock, Semaphore, BoundedSemaphore
 from threading import Event
-from Queue import Queue
+
+from billiard.five import Queue
 
 from .connection import Pipe
 
@@ -88,7 +89,7 @@ class Condition(_Condition):
     if sys.version_info[0] == 3:
         notify_all = _Condition.notifyAll
     else:
-        notify_all = _Condition.notifyAll.im_func
+        notify_all = _Condition.notifyAll.__func__
 
 
 Process = DummyProcess
@@ -114,7 +115,7 @@ class Namespace(object):
         self.__dict__.update(kwds)
 
     def __repr__(self):
-        items = self.__dict__.items()
+        items = list(self.__dict__.items())
         temp = []
         for name, value in items:
             if not name.startswith('_'):

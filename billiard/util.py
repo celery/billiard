@@ -156,12 +156,12 @@ def _run_after_forkers():
     for (index, ident, func), obj in items:
         try:
             func(obj)
-        except Exception, e:
-            info('after forker raised exception %s', e)
+        except Exception as exc:
+            info('after forker raised exception %s', exc)
 
 
 def register_after_fork(obj, func):
-    _afterfork_registry[(_afterfork_counter.next(), id(obj), func)] = obj
+    _afterfork_registry[(next(_afterfork_counter), id(obj), func)] = obj
 
 
 class Finalize(object):
@@ -179,7 +179,7 @@ class Finalize(object):
         self._callback = callback
         self._args = args
         self._kwargs = kwargs or {}
-        self._key = (exitpriority, _finalizer_counter.next())
+        self._key = (exitpriority, next(_finalizer_counter))
 
         _finalizer_registry[self._key] = self
 
@@ -253,7 +253,7 @@ def _run_finalizers(minpriority=None):
     else:
         f = lambda p: p[0][0] is not None and p[0][0] >= minpriority
 
-    items = [x for x in _finalizer_registry.items() if f(x)]
+    items = [x for x in list(_finalizer_registry.items()) if f(x)]
     items.sort(reverse=True)
 
     for key, finalizer in items:
@@ -330,7 +330,7 @@ def _eintr_retry(func):
         while 1:
             try:
                 return func(*args, **kwargs)
-            except OSError, exc:
+            except OSError as exc:
                 if exc.errno != errno.EINTR:
                     raise
     return wrapped

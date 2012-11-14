@@ -24,7 +24,6 @@ import signal
 import sys
 import threading
 import time
-import Queue
 import warnings
 
 from . import Event, Process, cpu_count
@@ -40,6 +39,7 @@ from .exceptions import (
     TimeoutError,
     WorkerLostError,
 )
+from .five import Empty, Queue, range, values
 from .util import Finalize, debug
 
 if platform.system() == 'Windows':  # pragma: no cover
@@ -49,18 +49,6 @@ if platform.system() == 'Windows':  # pragma: no cover
     from ._win import kill_processtree as _kill  # noqa
 else:
     from os import kill as _kill                 # noqa
-
-
-try:
-    next = next
-except NameError:
-    def next(it, *args):  # noqa
-        try:
-            return it.next()
-        except StopIteration:
-            if not args:
-                raise
-            return args[0]
 
 
 try:
@@ -111,7 +99,7 @@ job_counter = itertools.count()
 
 
 def mapstar(args):
-    return map(*args)
+    return list(map(*args))
 
 
 def starmapstar(args):
@@ -127,7 +115,7 @@ def safe_apply_callback(fun, *args):
     if fun:
         try:
             fun(*args)
-        except Exception, exc:
+        except Exception as exc:
             error("Pool callback raised exception: %r", exc,
                   exc_info=True)
 
@@ -237,7 +225,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     # Workaround for http://bugs.python.org/issue6721#msg140215
     # Python logging module uses RLock() objects which are broken after
     # fork. This can result in a deadlock (Issue #496).
-    logger_names = logging.Logger.manager.loggerDict.keys()
+    logger_names = list(logging.Logger.manager.loggerDict)
     logger_names.append(None)  # for root logger
     for name in logger_names:
         for handler in logging.getLogger(name).handlers:
@@ -260,7 +248,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
         def poll(timeout):  # noqa
             try:
                 return True, get(timeout=timeout)
-            except Queue.Empty:
+            except Empty:
                 return False, None
 
     if hasattr(inqueue, '_writer'):
@@ -303,7 +291,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             result = (False, ExceptionInfo())
         try:
             put((READY, (job, i, result)))
-        except Exception, exc:
+        except Exception as exc:
             _, _, tb = sys.exc_info()
             try:
                 wrapped = MaybeEncodingError(exc, result[1])
@@ -334,12 +322,12 @@ class PoolThread(threading.Thread):
     def run(self):
         try:
             return self.body()
-        except RestartFreqExceeded, exc:
+        except RestartFreqExceeded as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
             os.kill(os.getpid(), signal.SIGTERM)
             sys.exit()
-        except Exception, exc:
+        except Exception as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
             os._exit(1)
@@ -383,7 +371,7 @@ class Supervisor(PoolThread):
             # the max restart frequency.
             prev_state = pool.restart_state
             pool.restart_state = restart_state(10 * pool._processes, 1)
-            for _ in xrange(10):
+            for _ in range(10):
                 if self._state == RUN and pool._state == RUN:
                     pool._maintain_pool()
                     time.sleep(0.1)
@@ -432,7 +420,7 @@ class TaskHandler(PoolThread):
                         set_length(i + 1)
                     continue
                 break
-            except Exception, exc:
+            except Exception as exc:
                 print("Task Handler ERROR: %r" % (exc, ))
                 break
         else:
@@ -491,7 +479,7 @@ class TimeoutHandler(PoolThread):
 
         try:
             os.kill(job._worker_pid, SIG_SOFT_TIMEOUT)
-        except OSError, exc:
+        except OSError as exc:
             if exc.errno != errno.ESRCH:
                 raise
 
@@ -551,7 +539,7 @@ class TimeoutHandler(PoolThread):
             if dirty:
                 dirty = set(k for k in dirty if k in cache)
 
-            for i, job in cache.items():
+            for i, job in list(cache.items()):
                 ack_time = job._time_accepted
                 soft_timeout = job._soft_timeout
                 if soft_timeout is None:
@@ -579,7 +567,7 @@ class TimeoutHandler(PoolThread):
         if self._it is None:
             self._it = self.handle_timeouts()
         try:
-            self._it.next()
+            next(self._it)
         except StopIteration:
             self._it = None
 
@@ -643,7 +631,7 @@ class ResultHandler(PoolThread):
         while 1:
             try:
                 ready, task = poll(timeout)
-            except (IOError, EOFError), exc:
+            except (IOError, EOFError) as exc:
                 debug('result handler got %r -- exiting', exc)
                 raise CoroStop()
 
@@ -669,7 +657,7 @@ class ResultHandler(PoolThread):
             if self._it is None:
                 self._it = self._process_result(0)  # non-blocking
             try:
-                self._it.next()
+                next(self._it)
             except (StopIteration, CoroStop):
                 self._it = None
 
@@ -732,7 +720,7 @@ class ResultHandler(PoolThread):
                 check_timeouts()
             try:
                 ready, task = poll(1.0)
-            except (IOError, EOFError), exc:
+            except (IOError, EOFError) as exc:
                 debug('result handler got %r -- exiting', exc)
                 return
 
@@ -797,7 +785,7 @@ class Pool(object):
             putlocks=False,
             allow_restart=False):
         self._setup_queues()
-        self._taskqueue = Queue.Queue()
+        self._taskqueue = Queue()
         self._cache = {}
         self._state = RUN
         self.timeout = timeout
@@ -831,7 +819,8 @@ class Pool(object):
                 processes = 1
         self._processes = processes
 
-        if initializer is not None and not callable(initializer):
+        if initializer is not None and \
+                not isinstance(initializer, collections.Callable):
             raise TypeError('initializer must be a callable')
 
         self._pool = []
@@ -924,7 +913,7 @@ class Pool(object):
         # but we have no way to accurately tell if it did.  So we wait for
         # _lost_worker_timeout seconds before we mark the job with
         # WorkerLostError.
-        for job in [job for job in self._cache.values()
+        for job in [job for job in list(self._cache.values())
                 if not job.ready() and job._worker_lost]:
             now = now or time.time()
             lost_time, lost_ret = job._worker_lost
@@ -958,7 +947,7 @@ class Pool(object):
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
-            for job in self._cache.values():
+            for job in list(self._cache.values()):
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
                         if worker_pid in self.signalled:
@@ -970,12 +959,12 @@ class Pool(object):
                             job._worker_lost = (time.time(),
                                                 exitcodes[worker_pid])
                         break
-            for worker in cleaned.itervalues():
+            for worker in values(cleaned):
                 if self._putlock is not None:
                     self._putlock.release()
                 if self.on_process_down:
                     self.on_process_down(worker)
-            return exitcodes.values()
+            return list(exitcodes.values())
         return []
 
     def __enter__(self):
@@ -995,8 +984,7 @@ class Pool(object):
         raise ValueError("Can't shrink pool. All processes busy!")
 
     def grow(self, n=1):
-        for i in xrange(n):
-            #assert len(self._pool) == self._processes
+        for i in range(n):
             self._processes += 1
             if self._putlock:
                 self._putlock.grow()
@@ -1008,7 +996,7 @@ class Pool(object):
         raise StopIteration()
 
     def _worker_active(self, worker):
-        for job in self._cache.values():
+        for job in values(self._cache):
             if worker.pid in job.worker_pids():
                 return True
         return False
@@ -1280,7 +1268,7 @@ class Pool(object):
             p.join()
 
     def restart(self):
-        for e in self._poolctrl.itervalues():
+        for e in values(self._poolctrl):
             e.set()
 
     @staticmethod
@@ -1355,7 +1343,7 @@ class ApplyResult(object):
             on_timeout_set=None, on_timeout_cancel=None):
         self._mutex = threading.Lock()
         self._event = threading.Event()
-        self._job = job_counter.next()
+        self._job = next(job_counter)
         self._cache = cache
         self._callback = callback
         self._accept_callback = accept_callback
@@ -1383,7 +1371,7 @@ class ApplyResult(object):
         return self._success
 
     def worker_pids(self):
-        return filter(None, [self._worker_pid])
+        return [self._worker_pid] if self._worker_pid else []
 
     def wait(self, timeout=None):
         self._event.wait(timeout)
@@ -1486,7 +1474,7 @@ class MapResult(ApplyResult):
         return all(self._accepted)
 
     def worker_pids(self):
-        return filter(None, self._worker_pid)
+        return [pid for pid in self._worker_pid if pid]
 
 #
 # Class whose instances are returned by `Pool.imap()`
@@ -1498,7 +1486,7 @@ class IMapIterator(object):
 
     def __init__(self, cache, lost_worker_timeout=LOST_WORKER_TIMEOUT):
         self._cond = threading.Condition(threading.Lock())
-        self._job = job_counter.next()
+        self._job = next(job_counter)
         self._cache = cache
         self._items = collections.deque()
         self._index = 0
@@ -1600,15 +1588,15 @@ class ThreadPool(Pool):
         Pool.__init__(self, processes, initializer, initargs)
 
     def _setup_queues(self):
-        self._inqueue = Queue.Queue()
-        self._outqueue = Queue.Queue()
+        self._inqueue = Queue()
+        self._outqueue = Queue()
         self._quick_put = self._inqueue.put
         self._quick_get = self._outqueue.get
 
         def _poll_result(timeout):
             try:
                 return True, self._quick_get(timeout=timeout)
-            except Queue.Empty:
+            except Empty:
                 return False, None
         self._poll_result = _poll_result
 

@@ -12,6 +12,7 @@ import ctypes
 import weakref
 
 from . import heap, RLock
+from .five import int_types
 from .forking import assert_spawning, ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
@@ -48,7 +49,7 @@ def RawArray(typecode_or_type, size_or_initializer):
     Returns a ctypes array allocated from shared memory
     '''
     type_ = typecode_to_type.get(typecode_or_type, typecode_or_type)
-    if isinstance(size_or_initializer, (int, long)):
+    if isinstance(size_or_initializer, int_types):
         type_ = type_ * size_or_initializer
         obj = _new_value(type_)
         ctypes.memset(ctypes.addressof(obj), 0, ctypes.sizeof(obj))
@@ -66,7 +67,8 @@ def Value(typecode_or_type, *args, **kwds):
     '''
     lock = kwds.pop('lock', None)
     if kwds:
-        raise ValueError('unrecognized keyword argument(s): %s' % kwds.keys())
+        raise ValueError(
+            'unrecognized keyword argument(s): %s' % list(kwds.keys()))
     obj = RawValue(typecode_or_type, *args)
     if lock is False:
         return obj
@@ -83,7 +85,8 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
     '''
     lock = kwds.pop('lock', None)
     if kwds:
-        raise ValueError('unrecognized keyword argument(s): %s' % kwds.keys())
+        raise ValueError(
+            'unrecognized keyword argument(s): %s' % list(kwds.keys()))
     obj = RawArray(typecode_or_type, size_or_initializer)
     if lock is False:
         return obj

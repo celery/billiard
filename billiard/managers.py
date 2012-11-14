@@ -19,12 +19,13 @@ __all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 import sys
 import threading
 import array
-import Queue
 
+from collections import Callable
 from traceback import format_exc
 from time import time as _time
 
 from . import Process, current_process, active_children, Pool, util, connection
+from .five import Queue
 from .process import AuthenticationString
 from .forking import exit, Popen, ForkingPickler
 from .util import Finalize, error, info
@@ -123,7 +124,7 @@ def all_methods(obj):
     temp = []
     for name in dir(obj):
         func = getattr(obj, name)
-        if callable(func):
+        if isinstance(func, Callable):
             temp.append(name)
     return temp
 
@@ -205,14 +206,14 @@ class Server(object):
                 msg = ('#RETURN', result)
         try:
             c.send(msg)
-        except Exception, e:
+        except Exception as exc:
             try:
                 c.send(('#TRACEBACK', format_exc()))
             except Exception:
                 pass
             info('Failure to send message: %r', msg)
             info(' ... request was %r', request)
-            info(' ... exception was %r', e)
+            info(' ... exception was %r', exc)
 
         c.close()
 
@@ -245,8 +246,8 @@ class Server(object):
 
                 try:
                     res = function(*args, **kwds)
-                except Exception, e:
-                    msg = ('#ERROR', e)
+                except Exception as exc:
+                    msg = ('#ERROR', exc)
                 else:
                     typeid = gettypeid and gettypeid.get(methodname, None)
                     if typeid:
@@ -280,13 +281,13 @@ class Server(object):
             try:
                 try:
                     send(msg)
-                except Exception, e:
+                except Exception:
                     send(('#UNSERIALIZABLE', repr(msg)))
-            except Exception, e:
+            except Exception as exc:
                 info('exception in thread serving %r',
                         threading.currentThread().name)
                 info(' ... message was %r', msg)
-                info(' ... exception was %r', e)
+                info(' ... exception was %r', exc)
                 conn.close()
                 sys.exit(1)
 
@@ -314,7 +315,7 @@ class Server(object):
         '''
         with self.mutex:
             result = []
-            keys = self.id_to_obj.keys()
+            keys = list(self.id_to_obj.keys())
             keys.sort()
             for ident in keys:
                 if ident != '0':
@@ -492,7 +493,8 @@ class BaseManager(object):
         '''
         assert self._state.value == State.INITIAL
 
-        if initializer is not None and not callable(initializer):
+        if initializer is not None and \
+                not isinstance(initializer, Callable):
             raise TypeError('initializer must be a callable')
 
         # pipe over which we will retrieve address of server
@@ -639,7 +641,7 @@ class BaseManager(object):
                            getattr(proxytype, '_method_to_typeid_', None)
 
         if method_to_typeid:
-            for key, value in method_to_typeid.items():
+            for key, value in items(method_to_typeid):
                 assert type(key) is str, '%r is not a string' % key
                 assert type(value) is str, '%r is not a string' % value
 
@@ -795,8 +797,8 @@ class BaseProxy(object):
                 util.debug('DECREF %r', token.id)
                 conn = _Client(token.address, authkey=authkey)
                 dispatch(conn, None, 'decref', (token.id,))
-            except Exception, e:
-                util.debug('... decref failed %s', e)
+            except Exception as exc:
+                util.debug('... decref failed %s', exc)
 
         else:
             util.debug('DECREF %r -- manager already shutdown', token.id)
@@ -813,9 +815,9 @@ class BaseProxy(object):
         self._manager = None
         try:
             self._incref()
-        except Exception, e:
+        except Exception as exc:
             # the proxy may just be for a manager which has shutdown
-            info('incref failed: %s', e)
+            info('incref failed: %s', exc)
 
     def __reduce__(self):
         kwds = {}
@@ -931,7 +933,7 @@ class Namespace(object):
         self.__dict__.update(kwds)
 
     def __repr__(self):
-        items = self.__dict__.items()
+        items = list(self.__dict__.items())
         temp = []
         for name, value in items:
             if not name.startswith('_'):
@@ -1147,8 +1149,8 @@ class SyncManager(BaseManager):
     this class.
     '''
 
-SyncManager.register('Queue', Queue.Queue)
-SyncManager.register('JoinableQueue', Queue.Queue)
+SyncManager.register('Queue', Queue)
+SyncManager.register('JoinableQueue', Queue)
 SyncManager.register('Event', threading.Event, EventProxy)
 SyncManager.register('Lock', threading.Lock, AcquirerProxy)
 SyncManager.register('RLock', threading.RLock, AcquirerProxy)

@@ -3,13 +3,14 @@ from __future__ import absolute_import
 import errno
 import os
 import sys
-import __builtin__
+
+from .five import builtins, range
 
 if sys.version_info[0] == 3:
     bytes = bytes
 else:
     try:
-        _bytes = __builtin__.bytes
+        _bytes = builtins.bytes
     except AttributeError:
         _bytes = str
 
@@ -25,9 +26,9 @@ try:
 except AttributeError:
 
     def closerange(fd_low, fd_high):  # noqa
-        for fd in reversed(xrange(fd_low, fd_high)):
+        for fd in reversed(range(fd_low, fd_high)):
             try:
                 os.close(fd)
-            except OSError, exc:
+            except OSError as exc:
                 if exc.errno != errno.EBADF:
                     raise

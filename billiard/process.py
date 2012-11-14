@@ -25,6 +25,7 @@ try:
     from _weakrefset import WeakSet
 except ImportError:
     WeakSet = None  # noqa
+from .five import items, string_t
 
 try:
     ORIGINAL_DIR = os.path.abspath(os.getcwd())
@@ -69,7 +70,7 @@ class Process(object):
     def __init__(self, group=None, target=None, name=None, args=(), kwargs={},
             daemon=None, **_kw):
         assert group is None, 'group argument must be None for now'
-        count = _current_process._counter.next()
+        count = next(_current_process._counter)
         self._identity = _current_process._identity + (count,)
         self._authkey = _current_process._authkey
         if daemon is not None:
@@ -146,7 +147,7 @@ class Process(object):
         return self._name
 
     def _set_name(self, value):
-        assert isinstance(name, basestring), 'name must be a string'
+        assert isinstance(name, string_t), 'name must be a string'
         self._name = value
     name = property(_get_name, _set_name)
 
@@ -249,15 +250,15 @@ class Process(object):
                 exitcode = 0
             finally:
                 util._exit_function()
-        except SystemExit, e:
-            if not e.args:
+        except SystemExit as exc:
+            if not exc.args:
                 exitcode = 1
-            elif isinstance(e.args[0], int):
-                exitcode = e.args[0]
+            elif isinstance(exc.args[0], int):
+                exitcode = exc.args[0]
             else:
-                sys.stderr.write(str(e.args[0]) + '\n')
+                sys.stderr.write(str(exc.args[0]) + '\n')
                 sys.stderr.flush()
-                exitcode = 0 if isinstance(e.args[0], str) else 1
+                exitcode = 0 if isinstance(exc.args[0], str) else 1
         except:
             exitcode = 1
             if not util.error('Process %s', self.name, exc_info=True):
@@ -316,7 +317,7 @@ del _MainProcess
 
 _exitcode_to_name = {}
 
-for name, signum in signal.__dict__.items():
+for name, signum in items(signal.__dict__):
     if name[:3] == 'SIG' and '_' not in name:
         _exitcode_to_name[-signum] = name
 
