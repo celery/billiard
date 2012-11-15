@@ -44,18 +44,6 @@ DEFAULT_LOGGING_FORMAT = '[%(levelname)s/%(processName)s] %(message)s'
 _logger = None
 _log_to_stderr = False
 
-#: Support for reinitialization of objects when bootstrapping a child process
-_afterfork_registry = weakref.WeakValueDictionary()
-_afterfork_counter = itertools.count()
-
-#: Finalization using weakrefs
-_finalizer_registry = {}
-_finalizer_counter = itertools.count()
-
-#: set to true if the process is shutting down.
-_exiting = False
-
-
 def sub_debug(msg, *args, **kwargs):
     if _logger:
         _logger.log(SUBDEBUG, msg, *args, **kwargs)
@@ -137,6 +125,8 @@ def log_to_stderr(level=None):
     return _logger
 
 
+
+
 def get_temp_dir():
     '''
     Function returning a temp directory which will be removed on exit
@@ -149,175 +139,203 @@ def get_temp_dir():
         current_process()._tempdir = tempdir
     return current_process()._tempdir
 
+try:
+    from multiprocessing.util import (
+        _afterfork_registry,
+        _afterfork_counter,
+        _exit_function,
+        _finalizer_registry,
+        _finalizer_counter,
+        Finalize,
+        ForkAwareLocal,
+        ForkAwareThreadLock,
+        is_exiting,
+        register_after_fork,
+        _run_after_forkers,
+        _run_finalizers,
+    )
+except ImportError:
+    #: Support for reinitialization of objects when
+    #: bootstrapping a child process
+    _afterfork_registry = weakref.WeakValueDictionary()
+    _afterfork_counter = itertools.count()
 
-def _run_after_forkers():
-    items = list(_afterfork_registry.items())
-    items.sort()
-    for (index, ident, func), obj in items:
-        try:
-            func(obj)
-        except Exception as exc:
-            info('after forker raised exception %s', exc)
+    #: Finalization using weakrefs
+    _finalizer_registry = {}
+    _finalizer_counter = itertools.count()
+
+    #: set to true if the process is shutting down.
+    _exiting = False
 
 
-def register_after_fork(obj, func):
-    _afterfork_registry[(next(_afterfork_counter), id(obj), func)] = obj
+    def _run_after_forkers():
+        items = list(_afterfork_registry.items())
+        items.sort()
+        for (index, ident, func), obj in items:
+            try:
+                func(obj)
+            except Exception as exc:
+                info('after forker raised exception %s', exc)
 
 
-class Finalize(object):
-    '''
-    Class which supports object finalization using weakrefs
-    '''
-    def __init__(self, obj, callback, args=(), kwargs=None, exitpriority=None):
-        assert exitpriority is None or type(exitpriority) is int
+    def register_after_fork(obj, func):
+        _afterfork_registry[(next(_afterfork_counter), id(obj), func)] = obj
 
-        if obj is not None:
-            self._weakref = weakref.ref(obj, self)
+
+    class Finalize(object):
+        '''
+        Class which supports object finalization using weakrefs
+        '''
+        def __init__(self, obj, callback, args=(), kwargs=None, exitpriority=None):
+            assert exitpriority is None or type(exitpriority) is int
+
+            if obj is not None:
+                self._weakref = weakref.ref(obj, self)
+            else:
+                assert exitpriority is not None
+
+            self._callback = callback
+            self._args = args
+            self._kwargs = kwargs or {}
+            self._key = (exitpriority, next(_finalizer_counter))
+
+            _finalizer_registry[self._key] = self
+
+        def __call__(self, wr=None,
+                # Need to bind these locally because the globals can have
+                # been cleared at shutdown
+                _finalizer_registry=_finalizer_registry,
+                sub_debug=sub_debug):
+            '''
+            Run the callback unless it has already been called or cancelled
+            '''
+            try:
+                del _finalizer_registry[self._key]
+            except KeyError:
+                sub_debug('finalizer no longer registered')
+            else:
+                sub_debug('finalizer calling %s with args %s and kwargs %s',
+                        self._callback, self._args, self._kwargs)
+                res = self._callback(*self._args, **self._kwargs)
+                self._weakref = self._callback = self._args = \
+                                self._kwargs = self._key = None
+                return res
+
+        def cancel(self):
+            '''
+            Cancel finalization of the object
+            '''
+            try:
+                del _finalizer_registry[self._key]
+            except KeyError:
+                pass
+            else:
+                self._weakref = self._callback = self._args = \
+                                self._kwargs = self._key = None
+
+        def still_active(self):
+            '''
+            Return whether this finalizer is still waiting to invoke callback
+            '''
+            return self._key in _finalizer_registry
+
+        def __repr__(self):
+            try:
+                obj = self._weakref()
+            except (AttributeError, TypeError):
+                obj = None
+
+            if obj is None:
+                return '<Finalize object, dead>'
+
+            x = '<Finalize object, callback=%s' % \
+                getattr(self._callback, '__name__', self._callback)
+            if self._args:
+                x += ', args=' + str(self._args)
+            if self._kwargs:
+                x += ', kwargs=' + str(self._kwargs)
+            if self._key[0] is not None:
+                x += ', exitprority=' + str(self._key[0])
+            return x + '>'
+
+
+    def _run_finalizers(minpriority=None):
+        '''
+        Run all finalizers whose exit priority is not None and at least minpriority
+
+        Finalizers with highest priority are called first; finalizers with
+        the same priority will be called in reverse order of creation.
+        '''
+        if minpriority is None:
+            f = lambda p: p[0][0] is not None
         else:
-            assert exitpriority is not None
+            f = lambda p: p[0][0] is not None and p[0][0] >= minpriority
 
-        self._callback = callback
-        self._args = args
-        self._kwargs = kwargs or {}
-        self._key = (exitpriority, next(_finalizer_counter))
+        items = [x for x in list(_finalizer_registry.items()) if f(x)]
+        items.sort(reverse=True)
 
-        _finalizer_registry[self._key] = self
+        for key, finalizer in items:
+            sub_debug('calling %s', finalizer)
+            try:
+                finalizer()
+            except Exception:
+                if not error("Error calling finalizer %r", finalizer,
+                        exc_info=True):
+                    import traceback
+                    traceback.print_exc()
 
-    def __call__(self, wr=None,
-            # Need to bind these locally because the globals can have
-            # been cleared at shutdown
-            _finalizer_registry=_finalizer_registry,
-            sub_debug=sub_debug):
+        if minpriority is None:
+            _finalizer_registry.clear()
+
+
+    def is_exiting():
         '''
-        Run the callback unless it has already been called or cancelled
+        Returns true if the process is shutting down
         '''
-        try:
-            del _finalizer_registry[self._key]
-        except KeyError:
-            sub_debug('finalizer no longer registered')
-        else:
-            sub_debug('finalizer calling %s with args %s and kwargs %s',
-                     self._callback, self._args, self._kwargs)
-            res = self._callback(*self._args, **self._kwargs)
-            self._weakref = self._callback = self._args = \
-                            self._kwargs = self._key = None
-            return res
+        return _exiting or _exiting is None
 
-    def cancel(self):
+
+    def _exit_function():
         '''
-        Cancel finalization of the object
+        Clean up on exit
         '''
-        try:
-            del _finalizer_registry[self._key]
-        except KeyError:
-            pass
-        else:
-            self._weakref = self._callback = self._args = \
-                            self._kwargs = self._key = None
 
-    def still_active(self):
-        '''
-        Return whether this finalizer is still waiting to invoke callback
-        '''
-        return self._key in _finalizer_registry
+        global _exiting
 
-    def __repr__(self):
-        try:
-            obj = self._weakref()
-        except (AttributeError, TypeError):
-            obj = None
+        info('process shutting down')
+        debug('running all "atexit" finalizers with priority >= 0')
+        _run_finalizers(0)
 
-        if obj is None:
-            return '<Finalize object, dead>'
+        for p in active_children():
+            if p._daemonic:
+                info('calling terminate() for daemon %s', p.name)
+                p._popen.terminate()
 
-        x = '<Finalize object, callback=%s' % \
-            getattr(self._callback, '__name__', self._callback)
-        if self._args:
-            x += ', args=' + str(self._args)
-        if self._kwargs:
-            x += ', kwargs=' + str(self._kwargs)
-        if self._key[0] is not None:
-            x += ', exitprority=' + str(self._key[0])
-        return x + '>'
+        for p in active_children():
+            info('calling join() for process %s', p.name)
+            p.join()
+
+        debug('running the remaining "atexit" finalizers')
+        _run_finalizers()
+    atexit.register(_exit_function)
 
 
-def _run_finalizers(minpriority=None):
-    '''
-    Run all finalizers whose exit priority is not None and at least minpriority
+    class ForkAwareThreadLock(object):
 
-    Finalizers with highest priority are called first; finalizers with
-    the same priority will be called in reverse order of creation.
-    '''
-    if minpriority is None:
-        f = lambda p: p[0][0] is not None
-    else:
-        f = lambda p: p[0][0] is not None and p[0][0] >= minpriority
-
-    items = [x for x in list(_finalizer_registry.items()) if f(x)]
-    items.sort(reverse=True)
-
-    for key, finalizer in items:
-        sub_debug('calling %s', finalizer)
-        try:
-            finalizer()
-        except Exception:
-            if not error("Error calling finalizer %r", finalizer,
-                    exc_info=True):
-                import traceback
-                traceback.print_exc()
-
-    if minpriority is None:
-        _finalizer_registry.clear()
+        def __init__(self):
+            self._lock = threading.Lock()
+            self.acquire = self._lock.acquire
+            self.release = self._lock.release
+            register_after_fork(self, ForkAwareThreadLock.__init__)
 
 
-def is_exiting():
-    '''
-    Returns true if the process is shutting down
-    '''
-    return _exiting or _exiting is None
+    class ForkAwareLocal(threading.local):
 
+        def __init__(self):
+            register_after_fork(self, lambda obj: obj.__dict__.clear())
 
-def _exit_function():
-    '''
-    Clean up on exit
-    '''
-
-    global _exiting
-
-    info('process shutting down')
-    debug('running all "atexit" finalizers with priority >= 0')
-    _run_finalizers(0)
-
-    for p in active_children():
-        if p._daemonic:
-            info('calling terminate() for daemon %s', p.name)
-            p._popen.terminate()
-
-    for p in active_children():
-        info('calling join() for process %s', p.name)
-        p.join()
-
-    debug('running the remaining "atexit" finalizers')
-    _run_finalizers()
-atexit.register(_exit_function)
-
-
-class ForkAwareThreadLock(object):
-
-    def __init__(self):
-        self._lock = threading.Lock()
-        self.acquire = self._lock.acquire
-        self.release = self._lock.release
-        register_after_fork(self, ForkAwareThreadLock.__init__)
-
-
-class ForkAwareLocal(threading.local):
-
-    def __init__(self):
-        register_after_fork(self, lambda obj: obj.__dict__.clear())
-
-    def __reduce__(self):
-        return type(self), ()
+        def __reduce__(self):
+            return type(self), ()
 
 
 def _eintr_retry(func):
