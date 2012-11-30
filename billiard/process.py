@@ -58,8 +58,8 @@ def active_children(_cleanup=_cleanup):
     try:
         _cleanup()
     except TypeError:
-       # called after gc collect so _cleanup does not exist anymore
-       return []
+        # called after gc collect so _cleanup does not exist anymore
+        return []
     return list(_current_process._children)
 
 
