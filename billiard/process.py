@@ -43,6 +43,13 @@ def current_process():
     return _current_process
 
 
+def _cleanup():
+    # check for processes which have finished
+    for p in list(_current_process._children):
+        if p._popen.poll() is not None:
+            _current_process._children.discard(p)
+
+
 def active_children(_cleanup=_cleanup):
     '''
     Return list of process objects corresponding to live child processes
@@ -53,13 +60,6 @@ def active_children(_cleanup=_cleanup):
        # called after gc collect so _cleanup does not exist anymore
        return []
     return list(_current_process._children)
-
-
-def _cleanup():
-    # check for processes which have finished
-    for p in list(_current_process._children):
-        if p._popen.poll() is not None:
-            _current_process._children.discard(p)
 
 
 class Process(object):
