@@ -1,4 +1,14 @@
+2.7.3.19 - 2012-11-30
+---------------------
+
+- Fixes problem at shutdown when gc has collected symbols.
+
+- Pool now always uses _kill for Py2.5 compatibility on Windows (Issue #32).
+
+- Fixes Python 3 compatibility issues
+
 2.7.3.18 - 2012-11-05
+---------------------
 
 - [Pool] Fix for check_timeouts if not set.
 
