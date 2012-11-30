@@ -337,7 +337,7 @@ class PoolThread(threading.Thread):
         except RestartFreqExceeded, exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=True)
-            os.kill(os.getpid(), signal.SIGTERM)
+            _kill(os.getpid(), signal.SIGTERM)
             sys.exit()
         except Exception, exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
@@ -490,7 +490,7 @@ class TimeoutHandler(PoolThread):
             job._timeout_callback(soft=True, timeout=job._soft_timeout)
 
         try:
-            os.kill(job._worker_pid, SIG_SOFT_TIMEOUT)
+            _kill(job._worker_pid, SIG_SOFT_TIMEOUT)
         except OSError, exc:
             if exc.errno != errno.ESRCH:
                 raise
