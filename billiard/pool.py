@@ -527,7 +527,7 @@ class TimeoutHandler(PoolThread):
                 return
         debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
         try:
-            signal.signal(worker.pid, signal.SIGKILL)
+            _kill(worker.pid, signal.SIGKILL)
         except OSError:
             pass
 
