@@ -1395,7 +1395,7 @@ class ApplyResult(object):
         if self._success:
             return self._value
         else:
-            raise self._value
+            raise self._value.exception
 
     def _set(self, i, obj):
         with self._mutex:
