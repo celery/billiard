@@ -3,6 +3,11 @@ from __future__ import absolute_import
 import sys
 import traceback
 
+try:
+    import cPickle as pickle
+except ImportError:
+    import pickle  # noqa
+
 
 class _Code(object):
 
@@ -21,10 +26,13 @@ class _Frame(object):
             "__loader__": None,
         }
         self.f_locals = fl = {}
-        try:
-            fl["__traceback_hide__"] = frame.f_locals["__traceback_hide__"]
-        except KeyError:
-            pass
+        for k, v in frame.f_locals.items():
+            try:
+                pickle.loads(pickle.dumps(v))
+            except:
+                fl[k] = '<object of type %r>' % type(v).__name__
+            else:
+                fl[k] = v
         self.f_code = self.Code(frame.f_code)
         self.f_lineno = frame.f_lineno
 
