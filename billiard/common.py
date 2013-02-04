@@ -17,7 +17,7 @@ class restart_state(object):
         R = self.R
         if self.T and now - self.T >= self.maxT:
             self.R = 0
-        elif R >= self.maxR:
+        elif self.maxR and R >= self.maxR:
             # verify that R has a value as it may have been reset
             # by another thread, and we want to avoid locking.
             if self.R:

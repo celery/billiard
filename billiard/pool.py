@@ -952,9 +952,9 @@ class Pool(object):
                 debug('Supervisor: worked %d joined', i)
                 cleaned[worker.pid] = worker
                 exitcodes[worker.pid] = worker.exitcode
-                if worker.exitcode not in (EX_OK, EX_RECYCLE):
+                if -worker.exitcode not in (EX_OK, EX_RECYCLE):
                     error('Process %r pid:%r exited with exitcode %r' % (
-                        worker.name, worker.pid, worker.exitcode))
+                        worker.name, worker.pid, -worker.exitcode))
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
@@ -1021,7 +1021,7 @@ class Pool(object):
             if self._state != RUN:
                 return
             try:
-                if exitcodes and exitcodes[i] != EX_OK:
+                if exitcodes and exitcodes[i] not in (EX_OK, EX_REUSE):
                     self.restart_state.step()
             except IndexError:
                 self.restart_state.step()
