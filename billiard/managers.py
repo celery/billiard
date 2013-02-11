@@ -39,7 +39,7 @@ def reduce_array(a):
 ForkingPickler.register(array.array, reduce_array)
 
 view_types = [type(getattr({}, name)())
-                 for name in ('items', 'keys', 'values')]
+              for name in ('items', 'keys', 'values')]
 if view_types[0] is not list:  # only needed in Py3.0
 
     def rebuild_as_list(obj):
@@ -237,9 +237,9 @@ class Server(object):
 
                 if methodname not in exposed:
                     raise AttributeError(
-                        'method %r of %r object is not in exposed=%r' %
-                        (methodname, type(obj), exposed)
-                        )
+                        'method %r of %r object is not in exposed=%r' % (
+                            methodname, type(obj), exposed)
+                    )
 
                 function = getattr(obj, methodname)
 
@@ -264,7 +264,7 @@ class Server(object):
                         fallback_func = self.fallback_mapping[methodname]
                         result = fallback_func(
                             self, conn, ident, obj, *args, **kwds
-                            )
+                        )
                         msg = ('#RETURN', result)
                     except Exception:
                         msg = ('#TRACEBACK', format_exc())
@@ -284,7 +284,7 @@ class Server(object):
                     send(('#UNSERIALIZABLE', repr(msg)))
             except Exception, e:
                 info('exception in thread serving %r',
-                        threading.currentThread().name)
+                     threading.currentThread().name)
                 info(' ... message was %r', msg)
                 info(' ... exception was %r', e)
                 conn.close()
@@ -368,7 +368,7 @@ class Server(object):
         '''
         with self.mutex:
             callable, exposed, method_to_typeid, proxytype = \
-                      self.registry[typeid]
+                self.registry[typeid]
 
             if callable is None:
                 assert len(args) == 1 and not kwds
@@ -466,8 +466,8 @@ class BaseManager(object):
         self._Listener, self._Client = listener_client[serializer]
 
     def __reduce__(self):
-        return type(self).from_address, \
-               (self._address, self._authkey, self._serializer)
+        return (type(self).from_address,
+                (self._address, self._authkey, self._serializer))
 
     def get_server(self):
         '''
@@ -503,7 +503,7 @@ class BaseManager(object):
             target=type(self)._run_server,
             args=(self._registry, self._address, self._authkey,
                   self._serializer, writer, initializer, initargs),
-            )
+        )
         ident = ':'.join(str(i) for i in self._process._identity)
         self._process.name = type(self).__name__ + '-' + ident
         self._process.start()
@@ -520,7 +520,7 @@ class BaseManager(object):
             args=(self._process, self._address, self._authkey,
                   self._state, self._Client),
             exitpriority=0
-            )
+        )
 
     @classmethod
     def _run_server(cls, registry, address, authkey, serializer, writer,
@@ -635,8 +635,10 @@ class BaseManager(object):
 
         exposed = exposed or getattr(proxytype, '_exposed_', None)
 
-        method_to_typeid = method_to_typeid or \
-                           getattr(proxytype, '_method_to_typeid_', None)
+        method_to_typeid = (
+            method_to_typeid or
+            getattr(proxytype, '_method_to_typeid_', None),
+        )
 
         if method_to_typeid:
             for key, value in method_to_typeid.items():
@@ -645,7 +647,7 @@ class BaseManager(object):
 
         cls._registry[typeid] = (
             callable, exposed, method_to_typeid, proxytype
-            )
+        )
 
         if create_method:
             def temp(self, *args, **kwds):
@@ -654,7 +656,7 @@ class BaseManager(object):
                 proxy = proxytype(
                     token, self._serializer, manager=self,
                     authkey=self._authkey, exposed=exp
-                    )
+                )
                 conn = self._Client(token.address, authkey=self._authkey)
                 dispatch(conn, None, 'decref', (token.id,))
                 return proxy
@@ -756,7 +758,7 @@ class BaseProxy(object):
             proxy = proxytype(
                 token, self._serializer, manager=self._manager,
                 authkey=self._authkey, exposed=exposed
-                )
+            )
             conn = self._Client(token.address, authkey=self._authkey)
             dispatch(conn, None, 'decref', (token.id,))
             return proxy
@@ -782,7 +784,7 @@ class BaseProxy(object):
             args=(self._token, self._authkey, state,
                   self._tls, self._idset, self._Client),
             exitpriority=10
-            )
+        )
 
     @staticmethod
     def _decref(token, authkey, state, tls, idset, _Client):
@@ -865,7 +867,7 @@ def RebuildProxy(func, token, serializer, kwds):
         incref = (
             kwds.pop('incref', True) and
             not getattr(current_process(), '_inheriting', False)
-            )
+        )
         return func(token, serializer, incref=incref, **kwds)
 
 #
@@ -1092,8 +1094,8 @@ BaseListProxy = MakeProxyType('BaseListProxy', (
     '__getitem__', '__getslice__', '__len__', '__mul__',
     '__reversed__', '__rmul__', '__setitem__', '__setslice__',
     'append', 'count', 'extend', 'index', 'insert', 'pop', 'remove',
-    'reverse', 'sort', '__imul__'
-    ))                  # XXX __getslice__ and __setslice__ unneeded in Py3.0
+    'reverse', 'sort', '__imul__',
+))  # XXX __getslice__ and __setslice__ unneeded in Py3.0
 
 
 class ListProxy(BaseListProxy):
@@ -1110,26 +1112,26 @@ class ListProxy(BaseListProxy):
 DictProxy = MakeProxyType('DictProxy', (
     '__contains__', '__delitem__', '__getitem__', '__len__',
     '__setitem__', 'clear', 'copy', 'get', 'has_key', 'items',
-    'keys', 'pop', 'popitem', 'setdefault', 'update', 'values'
-    ))
+    'keys', 'pop', 'popitem', 'setdefault', 'update', 'values',
+))
 
 
 ArrayProxy = MakeProxyType('ArrayProxy', (
-    '__len__', '__getitem__', '__setitem__', '__getslice__', '__setslice__'
-    ))                  # XXX __getslice__ and __setslice__ unneeded in Py3.0
+    '__len__', '__getitem__', '__setitem__', '__getslice__', '__setslice__',
+))  # XXX __getslice__ and __setslice__ unneeded in Py3.0
 
 
 PoolProxy = MakeProxyType('PoolProxy', (
     'apply', 'apply_async', 'close', 'imap', 'imap_unordered', 'join',
     'map', 'map_async', 'starmap', 'starmap_async', 'terminate',
-    ))
+))
 PoolProxy._method_to_typeid_ = {
     'apply_async': 'AsyncResult',
     'map_async': 'AsyncResult',
     'starmap_async': 'AsyncResult',
     'imap': 'Iterator',
-    'imap_unordered': 'Iterator'
-    }
+    'imap_unordered': 'Iterator',
+}
 
 #
 # Definition of SyncManager

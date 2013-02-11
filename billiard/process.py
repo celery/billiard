@@ -57,8 +57,8 @@ def active_children(_cleanup=_cleanup):
     try:
         _cleanup()
     except TypeError:
-       # called after gc collect so _cleanup does not exist anymore
-       return []
+        # called after gc collect so _cleanup does not exist anymore
+        return []
     return list(_current_process._children)
 
 
@@ -70,8 +70,8 @@ class Process(object):
     '''
     _Popen = None
 
-    def __init__(self, group=None, target=None, name=None, args=(), kwargs={},
-            daemon=None, **_kw):
+    def __init__(self, group=None, target=None, name=None,
+                 args=(), kwargs={}, daemon=None, **_kw):
         assert group is None, 'group argument must be None for now'
         count = _current_process._counter.next()
         self._identity = _current_process._identity + (count,)
@@ -88,8 +88,10 @@ class Process(object):
         self._target = target
         self._args = tuple(args)
         self._kwargs = dict(kwargs)
-        self._name = name or type(self).__name__ + '-' + \
-                     ':'.join(str(i) for i in self._identity)
+        self._name = (
+            name or type(self).__name__ + '-' +
+            ':'.join(str(i) for i in self._identity)
+        )
         if _dangling is not None:
             _dangling.add(self)
 
@@ -106,9 +108,9 @@ class Process(object):
         '''
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
-               'can only start a process object created by current process'
+            'can only start a process object created by current process'
         assert not _current_process._daemonic, \
-               'daemonic processes are not allowed to have children'
+            'daemonic processes are not allowed to have children'
         _cleanup()
         if self._Popen is not None:
             Popen = self._Popen
@@ -308,7 +310,7 @@ class _MainProcess(Process):
         self._authkey = AuthenticationString(os.urandom(32))
         self._tempdir = None
         self._semprefix = 'mp-' + binascii.hexlify(
-                                os.urandom(4)).decode('ascii')
+            os.urandom(4)).decode('ascii')
         self._unlinkfd = None
 
 _current_process = _MainProcess()

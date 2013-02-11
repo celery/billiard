@@ -165,8 +165,9 @@ class LaxBoundedSemaphore(_Semaphore):
                     self._value += 1
                     cond.notify_all()
                     if __debug__:
-                        self._note("%s.release: success, value=%s",
-                            self, self._value)
+                        self._note(
+                            "%s.release: success, value=%s", self, self._value,
+                        )
                 else:
                     if __debug__:
                         self._note(
@@ -186,7 +187,7 @@ class LaxBoundedSemaphore(_Semaphore):
                     cond.notifyAll()
                     if __debug__:
                         self._note("%s.release: success, value=%s",
-                            self, self._Semaphore__value)
+                                   self, self._Semaphore__value)
                 else:
                     if __debug__:
                         self._note(
@@ -216,7 +217,7 @@ class MaybeEncodingError(Exception):
 
     def __str__(self):
         return "Error sending result: '%r'. Reason: '%r'." % (
-                    self.value, self.exc)
+            self.value, self.exc)
 
 
 class WorkersJoined(Exception):
@@ -587,7 +588,7 @@ class TimeoutHandler(PoolThread):
 class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
-            join_exited_workers, putlock, restart_state, check_timeouts):
+                 join_exited_workers, putlock, restart_state, check_timeouts):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
@@ -754,7 +755,7 @@ class ResultHandler(PoolThread):
                         break
                     debug('result handler: all workers terminated, '
                           'timeout in %ss',
-                              abs(min(now - time_terminate - 5.0, 0)))
+                          abs(min(now - time_terminate - 5.0, 0)))
 
         if hasattr(outqueue, '_reader'):
             debug('ensuring that outqueue is not full')
@@ -785,17 +786,17 @@ class Pool(object):
     SoftTimeLimitExceeded = SoftTimeLimitExceeded
 
     def __init__(self, processes=None, initializer=None, initargs=(),
-            maxtasksperchild=None, timeout=None, soft_timeout=None,
-            lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            max_restarts=None, max_restart_freq=1,
-            on_process_up=None,
-            on_process_down=None,
-            on_timeout_set=None,
-            on_timeout_cancel=None,
-            threads=True,
-            semaphore=None,
-            putlocks=False,
-            allow_restart=False):
+                 maxtasksperchild=None, timeout=None, soft_timeout=None,
+                 lost_worker_timeout=LOST_WORKER_TIMEOUT,
+                 max_restarts=None, max_restart_freq=1,
+                 on_process_up=None,
+                 on_process_down=None,
+                 on_timeout_set=None,
+                 on_timeout_cancel=None,
+                 threads=True,
+                 semaphore=None,
+                 putlocks=False,
+                 allow_restart=False):
         self._setup_queues()
         self._taskqueue = Queue.Queue()
         self._cache = {}
@@ -820,8 +821,10 @@ class Pool(object):
         self.signalled = set()
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
-            warnings.warn(UserWarning("Soft timeouts are not supported: "
-                    "on this platform: It does not have the SIGUSR1 signal."))
+            warnings.warn(UserWarning(
+                "Soft timeouts are not supported: "
+                "on this platform: It does not have the SIGUSR1 signal.",
+            ))
             soft_timeout = None
 
         if processes is None:
@@ -847,7 +850,7 @@ class Pool(object):
         else:
             self.readers.update(
                 dict((w._popen.sentinel, self.maintain_pool)
-                        for w in self._pool))
+                     for w in self._pool))
 
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
@@ -858,8 +861,9 @@ class Pool(object):
 
         # Thread killing timedout jobs.
         self._timeout_handler = self.TimeoutHandler(
-                        self._pool, self._cache,
-                        self.soft_timeout, self.timeout)
+            self._pool, self._cache,
+            self.soft_timeout, self.timeout,
+        )
         self._timeout_handler_mutex = threading.Lock()
         self._timeout_handler_started = False
         if self.timeout is not None or self.soft_timeout is not None:
@@ -872,19 +876,17 @@ class Pool(object):
             check_timeouts = self._timeout_handler.handle_event
 
         # Thread processing results in the outqueue.
-        self._result_handler = self.ResultHandler(self._outqueue,
-                                        self._quick_get, self._cache,
-                                        self._poll_result,
-                                        self._join_exited_workers,
-                                        self._putlock,
-                                        self.restart_state,
-                                        check_timeouts)
+        self._result_handler = self.ResultHandler(
+            self._outqueue, self._quick_get, self._cache,
+            self._poll_result, self._join_exited_workers,
+            self._putlock, self.restart_state, check_timeouts,
+        )
 
         if threads:
             self._result_handler.start()
         else:
             self.readers[self._outqueue._reader] = \
-                    self._result_handler.handle_event
+                self._result_handler.handle_event
 
         self._terminate = Finalize(
             self, self._terminate_pool,
@@ -893,17 +895,19 @@ class Pool(object):
                   self._result_handler, self._cache,
                   self._timeout_handler),
             exitpriority=15,
-            )
+        )
 
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
         w = self.Process(
             target=worker,
-            args=(self._inqueue, self._outqueue,
-                    self._initializer, self._initargs,
-                    self._maxtasksperchild,
-                    sentinel),
-            )
+            args=(
+                self._inqueue, self._outqueue,
+                self._initializer, self._initargs,
+                self._maxtasksperchild,
+                sentinel
+            ),
+        )
         self._pool.append(w)
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
@@ -925,7 +929,7 @@ class Pool(object):
         # _lost_worker_timeout seconds before we mark the job with
         # WorkerLostError.
         for job in [job for job in self._cache.values()
-                if not job.ready() and job._worker_lost]:
+                    if not job.ready() and job._worker_lost]:
             now = now or time.time()
             lost_time, lost_ret = job._worker_lost
             if now - lost_time > job._lost_worker_timeout:
@@ -1021,7 +1025,7 @@ class Pool(object):
             if self._state != RUN:
                 return
             try:
-                if exitcodes and exitcodes[i] not in (EX_OK, EX_REUSE):
+                if exitcodes and exitcodes[i] not in (EX_OK, EX_RECYCLE):
                     self.restart_state.step()
             except IndexError:
                 self.restart_state.step()
@@ -1089,8 +1093,8 @@ class Pool(object):
             return self._map_async(func, iterable,
                                    starmapstar, chunksize).get()
 
-    def starmap_async(self, func, iterable, chunksize=None, callback=None,
-            error_callback=None):
+    def starmap_async(self, func, iterable, chunksize=None,
+                      callback=None, error_callback=None):
         '''
         Asynchronous version of `starmap()` method.
         '''
@@ -1116,16 +1120,22 @@ class Pool(object):
         if chunksize == 1:
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
-            self._taskqueue.put((((result._job, i, func, (x,), {})
-                         for i, x in enumerate(iterable)), result._set_length))
+            self._taskqueue.put((
+                ((result._job, i, func, (x,), {})
+                 for i, x in enumerate(iterable)),
+                result._set_length,
+            ))
             return result
         else:
             assert chunksize > 1
             task_batches = Pool._get_tasks(func, iterable, chunksize)
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
-            self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-                     for i, x in enumerate(task_batches)), result._set_length))
+            self._taskqueue.put((
+                ((result._job, i, mapstar, (x,), {})
+                 for i, x in enumerate(task_batches)),
+                result._set_length,
+            ))
             return (item for chunk in result for item in chunk)
 
     def imap_unordered(self, func, iterable, chunksize=1,
@@ -1137,24 +1147,32 @@ class Pool(object):
             return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
         if chunksize == 1:
-            result = IMapUnorderedIterator(self._cache,
-                    lost_worker_timeout=lost_worker_timeout)
-            self._taskqueue.put((((result._job, i, func, (x,), {})
-                         for i, x in enumerate(iterable)), result._set_length))
+            result = IMapUnorderedIterator(
+                self._cache, lost_worker_timeout=lost_worker_timeout,
+            )
+            self._taskqueue.put((
+                ((result._job, i, func, (x,), {})
+                 for i, x in enumerate(iterable)),
+                result._set_length,
+            ))
             return result
         else:
             assert chunksize > 1
             task_batches = Pool._get_tasks(func, iterable, chunksize)
-            result = IMapUnorderedIterator(self._cache,
-                    lost_worker_timeout=lost_worker_timeout)
-            self._taskqueue.put((((result._job, i, mapstar, (x,), {})
-                     for i, x in enumerate(task_batches)), result._set_length))
+            result = IMapUnorderedIterator(
+                self._cache, lost_worker_timeout=lost_worker_timeout,
+            )
+            self._taskqueue.put((
+                ((result._job, i, mapstar, (x,), {})
+                 for i, x in enumerate(task_batches)),
+                result._set_length,
+            ))
             return (item for chunk in result for item in chunk)
 
     def apply_async(self, func, args=(), kwds={},
-            callback=None, error_callback=None, accept_callback=None,
-            timeout_callback=None, waitforslot=None,
-            soft_timeout=None, timeout=None, lost_worker_timeout=None):
+                    callback=None, error_callback=None, accept_callback=None,
+                    timeout_callback=None, waitforslot=None,
+                    soft_timeout=None, timeout=None, lost_worker_timeout=None):
         '''
         Asynchronous equivalent of `apply()` method.
 
@@ -1176,20 +1194,22 @@ class Pool(object):
         timeout = timeout or self.timeout
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
-            warnings.warn(UserWarning("Soft timeouts are not supported: "
-                    "on this platform: It does not have the SIGUSR1 signal."))
+            warnings.warn(UserWarning(
+                "Soft timeouts are not supported: "
+                "on this platform: It does not have the SIGUSR1 signal.",
+            ))
             soft_timeout = None
         if waitforslot is None:
             waitforslot = self.putlocks
         if waitforslot and self._putlock is not None and self._state == RUN:
             self._putlock.acquire()
         if self._state == RUN:
-            result = ApplyResult(self._cache, callback,
-                                accept_callback, timeout_callback,
-                                error_callback, soft_timeout, timeout,
-                                lost_worker_timeout,
-                                on_timeout_set=self.on_timeout_set,
-                                on_timeout_cancel=self.on_timeout_cancel)
+            result = ApplyResult(
+                self._cache, callback, accept_callback, timeout_callback,
+                error_callback, soft_timeout, timeout, lost_worker_timeout,
+                on_timeout_set=self.on_timeout_set,
+                on_timeout_cancel=self.on_timeout_cancel,
+            )
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
                 self._start_timeout_handler()
@@ -1204,16 +1224,17 @@ class Pool(object):
         self.signalled.add(pid)
         _kill(pid, sig or signal.SIGTERM)
 
-    def map_async(self, func, iterable, chunksize=None, callback=None,
-            error_callback=None):
+    def map_async(self, func, iterable, chunksize=None,
+                  callback=None, error_callback=None):
         '''
         Asynchronous equivalent of `map()` method.
         '''
-        return self._map_async(func, iterable, mapstar, chunksize,
-                callback, error_callback)
+        return self._map_async(
+            func, iterable, mapstar, chunksize, callback, error_callback,
+        )
 
     def _map_async(self, func, iterable, mapper, chunksize=None,
-            callback=None, error_callback=None):
+                   callback=None, error_callback=None):
         '''
         Helper function to implement map, starmap and their async counterparts.
         '''
@@ -1247,8 +1268,8 @@ class Pool(object):
 
     def __reduce__(self):
         raise NotImplementedError(
-              'pool objects cannot be passed between '
-              'processes or pickled')
+            'pool objects cannot be passed between processes or pickled',
+        )
 
     def close(self):
         debug('closing pool')
@@ -1350,9 +1371,9 @@ class ApplyResult(object):
     _worker_lost = None
 
     def __init__(self, cache, callback, accept_callback=None,
-            timeout_callback=None, error_callback=None, soft_timeout=None,
-            timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
-            on_timeout_set=None, on_timeout_cancel=None):
+                 timeout_callback=None, error_callback=None, soft_timeout=None,
+                 timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
+                 on_timeout_set=None, on_timeout_cancel=None):
         self._mutex = threading.Lock()
         self._event = threading.Event()
         self._job = job_counter.next()
@@ -1436,8 +1457,9 @@ class ApplyResult(object):
 class MapResult(ApplyResult):
 
     def __init__(self, cache, chunksize, length, callback, error_callback):
-        ApplyResult.__init__(self, cache, callback,
-                error_callback=error_callback)
+        ApplyResult.__init__(
+            self, cache, callback, error_callback=error_callback,
+        )
         self._success = True
         self._length = length
         self._value = [None] * length
