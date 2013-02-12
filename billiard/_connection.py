@@ -113,8 +113,9 @@ class Listener(object):
     connections, or for a Windows named pipe.
     '''
     def __init__(self, address=None, family=None, backlog=1, authkey=None):
-        family = family or (address and address_type(address)) \
-                 or default_family
+        family = (family or
+                  (address and address_type(address)) or
+                  default_family)
         address = address or arbitrary_address(family)
 
         if family == 'AF_PIPE':
@@ -219,13 +220,13 @@ else:
             win32.PIPE_TYPE_MESSAGE | win32.PIPE_READMODE_MESSAGE |
             win32.PIPE_WAIT,
             1, obsize, ibsize, win32.NMPWAIT_WAIT_FOREVER, win32.NULL
-            )
+        )
         h2 = win32.CreateFile(
             address, access, 0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL
-            )
+        )
         win32.SetNamedPipeHandleState(
             h2, win32.PIPE_READMODE_MESSAGE, None, None
-            )
+        )
 
         try:
             win32.ConnectNamedPipe(h1, win32.NULL)
@@ -266,7 +267,7 @@ class SocketListener(object):
         if family == 'AF_UNIX':
             self._unlink = Finalize(
                 self, os.unlink, args=(address,), exitpriority=0
-                )
+            )
         else:
             self._unlink = None
 
@@ -327,7 +328,7 @@ if sys.platform == 'win32':
                 win32.PIPE_WAIT,
                 win32.PIPE_UNLIMITED_INSTANCES, BUFSIZE, BUFSIZE,
                 win32.NMPWAIT_WAIT_FOREVER, win32.NULL
-                )
+            )
             self._handle_queue = [handle]
             self._last_accepted = None
 
@@ -336,7 +337,7 @@ if sys.platform == 'win32':
             self.close = Finalize(
                 self, PipeListener._finalize_pipe_listener,
                 args=(self._handle_queue, self._address), exitpriority=0
-                )
+            )
 
         def accept(self):
             newhandle = win32.CreateNamedPipe(
@@ -345,7 +346,7 @@ if sys.platform == 'win32':
                 win32.PIPE_WAIT,
                 win32.PIPE_UNLIMITED_INSTANCES, BUFSIZE, BUFSIZE,
                 win32.NMPWAIT_WAIT_FOREVER, win32.NULL
-                )
+            )
             self._handle_queue.append(newhandle)
             handle = self._handle_queue.pop(0)
             try:
@@ -372,7 +373,7 @@ if sys.platform == 'win32':
                 h = win32.CreateFile(
                     address, win32.GENERIC_READ | win32.GENERIC_WRITE,
                     0, win32.NULL, win32.OPEN_EXISTING, 0, win32.NULL,
-                    )
+                )
             except WindowsError as exc:
                 if exc.args[0] not in (
                         win32.ERROR_SEM_TIMEOUT,
@@ -385,7 +386,7 @@ if sys.platform == 'win32':
 
         win32.SetNamedPipeHandleState(
             h, win32.PIPE_READMODE_MESSAGE, None, None
-            )
+        )
         return _billiard.PipeConnection(h)
 
 #

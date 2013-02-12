@@ -13,9 +13,7 @@ import time
 import sys
 import os
 import gc
-import signal
 import array
-import socket
 import random
 import logging
 from nose import SkipTest
@@ -45,18 +43,10 @@ import billiard.pool
 from billiard import util
 from billiard.compat import bytes
 
-#
-#
-#
-
 latin = str
 
-#
 # Constants
-#
-
 LOG_LEVEL = util.SUBWARNING
-#LOG_LEVEL = logging.DEBUG
 
 DELTA = 0.1
 CHECK_TIMINGS = False     # making true makes tests take a lot longer
@@ -73,10 +63,7 @@ HAVE_GETVALUE = not getattr(_billiard,
 
 WIN32 = (sys.platform == "win32")
 
-#
 # Some tests require ctypes
-#
-
 try:
     from ctypes import Structure, c_int, c_double
 except ImportError:
@@ -93,11 +80,10 @@ try:
 except ImportError:
     ctypes_copy = None
 
-#
-# Creates a wrapper for a function which records the time it takes to finish
-#
 
 class TimingWrapper(object):
+    """Creates a wrapper for a function which records the
+    time it takes to finish"""
 
     def __init__(self, func):
         self.func = func
@@ -110,12 +96,9 @@ class TimingWrapper(object):
         finally:
             self.elapsed = time.time() - t
 
-#
-# Base class for test cases
-#
 
 class BaseTestCase(object):
-
+    """Base class for test cases"""
     ALLOWED_TYPES = ('processes', 'manager', 'threads')
 
     def assertTimingAlmostEqual(self, a, b):
@@ -130,11 +113,9 @@ class BaseTestCase(object):
         else:
             return self.assertEqual(value, res)
 
-#
-# Return the value of a semaphore
-#
 
 def get_value(self):
+    """Return the value of a semaphore"""
     try:
         return self.get_value()
     except AttributeError:
@@ -146,9 +127,6 @@ def get_value(self):
             except AttributeError:
                 raise NotImplementedError
 
-#
-# Testcases
-#
 
 class _TestProcess(BaseTestCase):
 
@@ -179,13 +157,13 @@ class _TestProcess(BaseTestCase):
 
     def test_process(self):
         q = self.Queue(1)
-        e = self.Event()
+        e = self.Event()  # noqa
         args = (q, 1, 2)
-        kwargs = {'hello':23, 'bye':2.54}
+        kwargs = {'hello': 23, 'bye': 2.54}
         name = 'SomeProcess'
         p = self.Process(
             target=self._test, args=args, kwargs=kwargs, name=name
-            )
+        )
         p.daemon = True
         current = self.current_process()
 
@@ -266,13 +244,13 @@ class _TestProcess(BaseTestCase):
         self.assertNotIn(p, self.active_children())
 
     def _test_recursion(self, wconn, id):
-        from billiard import forking
+        __import__('billiard.forking')
         wconn.send(id)
         if len(id) < 2:
             for i in range(2):
                 p = self.Process(
-                    target=self._test_recursion, args=(wconn, id+[i])
-                    )
+                    target=self._test_recursion, args=(wconn, id + [i])
+                )
                 p.start()
                 p.join()
 
@@ -287,18 +265,15 @@ class _TestProcess(BaseTestCase):
 
         expected = [
             [],
-              [0],
-                [0, 0],
-                [0, 1],
-              [1],
-                [1, 0],
-                [1, 1]
-            ]
+            [0],
+            [0, 0],
+            [0, 1],
+            [1],
+            [1, 0],
+            [1, 1]
+        ]
         self.assertEqual(result, expected)
 
-#
-#
-#
 
 class _UpperCaser(billiard.Process):
 
@@ -322,6 +297,7 @@ class _UpperCaser(billiard.Process):
         self.parent_conn.close()
         self.child_conn.close()
 
+
 class _TestSubclassingProcess(BaseTestCase):
 
     ALLOWED_TYPES = ('processes',)
@@ -334,15 +310,13 @@ class _TestSubclassingProcess(BaseTestCase):
         uppercaser.stop()
         uppercaser.join()
 
-#
-#
-#
 
 def queue_empty(q):
     if hasattr(q, 'empty'):
         return q.empty()
     else:
         return q.qsize() == 0
+
 
 def queue_full(q, maxsize):
     if hasattr(q, 'full'):
@@ -352,7 +326,6 @@ def queue_full(q, maxsize):
 
 
 class _TestQueue(BaseTestCase):
-
 
     def _test_put(self, queue, child_can_start, parent_can_continue):
         child_can_start.wait()
@@ -369,7 +342,7 @@ class _TestQueue(BaseTestCase):
         proc = self.Process(
             target=self._test_put,
             args=(queue, child_can_start, parent_can_continue)
-            )
+        )
         proc.daemon = True
         proc.start()
 
@@ -435,7 +408,7 @@ class _TestQueue(BaseTestCase):
         proc = self.Process(
             target=self._test_get,
             args=(queue, child_can_start, parent_can_continue)
-            )
+        )
         proc.daemon = True
         proc.start()
 
@@ -555,9 +528,6 @@ class _TestQueue(BaseTestCase):
         for p in workers:
             p.join()
 
-#
-#
-#
 
 class _TestLock(BaseTestCase):
 
@@ -807,9 +777,6 @@ class _TestEvent(BaseTestCase):
         self.Process(target=self._test_event, args=(event,)).start()
         self.assertEqual(wait(), True)
 
-#
-#
-#
 
 class _TestValue(BaseTestCase):
 
@@ -820,12 +787,11 @@ class _TestValue(BaseTestCase):
         ('d', 3.625, -4.25),
         ('h', -232, 234),
         ('c', latin('x'), latin('y'))
-        ]
+    ]
 
     def _test(self, values):
         for sv, cv in zip(values, self.codes_values):
             sv.value = cv[2]
-
 
     @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_value(self, raw=False):
@@ -853,17 +819,17 @@ class _TestValue(BaseTestCase):
     @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_getobj_getlock(self):
         val1 = self.Value('i', 5)
-        lock1 = val1.get_lock()
-        obj1 = val1.get_obj()
+        lock1 = val1.get_lock()  # noqa
+        obj1 = val1.get_obj()    # noqa
 
         val2 = self.Value('i', 5, lock=None)
-        lock2 = val2.get_lock()
-        obj2 = val2.get_obj()
+        lock2 = val2.get_lock()  # noqa
+        obj2 = val2.get_obj()    # noqa
 
         lock = self.Lock()
         val3 = self.Value('i', 5, lock=lock)
-        lock3 = val3.get_lock()
-        obj3 = val3.get_obj()
+        lock3 = val3.get_lock()  # noqa
+        obj3 = val3.get_obj()    # noqa
         self.assertEqual(lock, lock3)
 
         arr4 = self.Value('i', 5, lock=False)
@@ -883,7 +849,7 @@ class _TestArray(BaseTestCase):
 
     def f(self, seq):
         for i in range(1, len(seq)):
-            seq[i] += seq[i-1]
+            seq[i] += seq[i - 1]
 
     @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_array(self, raw=False):
@@ -916,17 +882,17 @@ class _TestArray(BaseTestCase):
     @unittest.skipIf(c_int is None, "requires _ctypes")
     def test_getobj_getlock_obj(self):
         arr1 = self.Array('i', range(10))
-        lock1 = arr1.get_lock()
-        obj1 = arr1.get_obj()
+        lock1 = arr1.get_lock()  # noqa
+        obj1 = arr1.get_obj()    # noqa
 
         arr2 = self.Array('i', range(10), lock=None)
-        lock2 = arr2.get_lock()
-        obj2 = arr2.get_obj()
+        lock2 = arr2.get_lock()  # noqa
+        obj2 = arr2.get_obj()    # noqa
 
         lock = self.Lock()
         arr3 = self.Array('i', range(10), lock=lock)
         lock3 = arr3.get_lock()
-        obj3 = arr3.get_obj()
+        obj3 = arr3.get_obj()    # noqa
         self.assertEqual(lock, lock3)
 
         arr4 = self.Array('i', range(10), lock=False)
@@ -939,9 +905,6 @@ class _TestArray(BaseTestCase):
         self.assertFalse(hasattr(arr5, 'get_lock'))
         self.assertFalse(hasattr(arr5, 'get_obj'))
 
-#
-#
-#
 
 class _TestContainers(BaseTestCase):
 
@@ -958,7 +921,7 @@ class _TestContainers(BaseTestCase):
         self.assertEqual(b[:], range(5))
 
         self.assertEqual(b[2], 2)
-        self.assertEqual(b[2:10], [2,3,4])
+        self.assertEqual(b[2:10], [2, 3, 4])
 
         b *= 2
         self.assertEqual(b[:], [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
@@ -972,7 +935,7 @@ class _TestContainers(BaseTestCase):
         self.assertEqual(
             e[:],
             [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4, 0, 1, 2, 3, 4]]
-            )
+        )
 
         f = self.list([a])
         a.append('hello')
@@ -999,19 +962,18 @@ class _TestContainers(BaseTestCase):
         self.assertTrue(hasattr(n, 'name'))
         self.assertTrue(not hasattr(n, 'job'))
 
-#
-#
-#
 
 def sqr(x, wait=0.0):
     time.sleep(wait)
-    return x*x
+    return x * x
+
+
 class _TestPool(BaseTestCase):
 
     def test_apply(self):
         papply = self.pool.apply
         self.assertEqual(papply(sqr, (5,)), sqr(5))
-        self.assertEqual(papply(sqr, (), {'x':3}), sqr(x=3))
+        self.assertEqual(papply(sqr, (), {'x': 3}), sqr(x=3))
 
     def test_map(self):
         pmap = self.pool.map
@@ -1043,12 +1005,12 @@ class _TestPool(BaseTestCase):
 
         it = self.pool.imap(sqr, range(10))
         for i in range(10):
-            self.assertEqual(it.next(), i*i)
+            self.assertEqual(it.next(), i * i)
         self.assertRaises(StopIteration, it.next)
 
         it = self.pool.imap(sqr, range(1000), chunksize=100)
         for i in range(1000):
-            self.assertEqual(it.next(), i*i)
+            self.assertEqual(it.next(), i * i)
         self.assertRaises(StopIteration, it.next)
 
     def test_imap_unordered(self):
@@ -1074,17 +1036,18 @@ class _TestPool(BaseTestCase):
             # when using a manager.
             return
 
-        result = self.pool.map_async(
+        self.pool.map_async(
             time.sleep, [0.1 for i in range(10000)], chunksize=1
-            )
+        )
         self.pool.terminate()
         join = TimingWrapper(self.pool.join)
         join()
         self.assertTrue(join.elapsed < 0.2)
 
-class _TestPoolWorkerLifetime(BaseTestCase):
 
+class _TestPoolWorkerLifetime(BaseTestCase):
     ALLOWED_TYPES = ('processes', )
+
     def test_pool_worker_lifetime(self):
         p = billiard.Pool(3, maxtasksperchild=10)
         self.assertEqual(3, len(p._pool))
@@ -1113,11 +1076,10 @@ class _TestPoolWorkerLifetime(BaseTestCase):
         p.close()
         p.join()
 
-#
-# Test that manager has expected number of shared objects left
-#
 
 class _TestZZZNumberOfObjects(BaseTestCase):
+    # Test that manager has expected number of shared objects left
+
     # Because test cases are sorted alphabetically, this one will get
     # run after all the other tests for the manager.  It tests that
     # there have been no "reference leaks" for the manager's shared
@@ -1136,32 +1098,39 @@ class _TestZZZNumberOfObjects(BaseTestCase):
 
         self.assertEqual(refs, EXPECTED_NUMBER)
 
-#
 # Test of creating a customized manager class
-#
-
 from billiard.managers import BaseManager, BaseProxy, RemoteError
 
+
 class FooBar(object):
+
     def f(self):
         return 'f()'
+
     def g(self):
         raise ValueError
+
     def _h(self):
         return '_h()'
 
+
 def baz():
     for i in xrange(10):
-        yield i*i
+        yield i * i
+
 
 class IteratorProxy(BaseProxy):
     _exposed_ = ('next', '__next__')
+
     def __iter__(self):
         return self
+
     def next(self):
         return self._callmethod('next')
+
     def __next__(self):
         return self._callmethod('__next__')
+
 
 class MyManager(BaseManager):
     pass
@@ -1199,21 +1168,22 @@ class _TestMyManager(BaseTestCase):
         self.assertEqual(bar._callmethod('f'), 'f()')
         self.assertEqual(bar._callmethod('_h'), '_h()')
 
-        self.assertEqual(list(baz), [i*i for i in range(10)])
+        self.assertEqual(list(baz), [i * i for i in range(10)])
 
         manager.shutdown()
 
-#
-# Test of connecting to a remote server and using xmlrpclib for serialization
-#
-
 _queue = Queue.Queue()
+
+
+# Test of connecting to a remote server and using xmlrpclib for serialization
 def get_queue():
     return _queue
+
 
 class QueueManager(BaseManager):
     '''manager class used by server process'''
 QueueManager.register('get_queue', callable=get_queue)
+
 
 class QueueManager2(BaseManager):
     '''manager class which specifies the same interface as QueueManager'''
@@ -1222,6 +1192,7 @@ QueueManager2.register('get_queue')
 
 SERIALIZER = 'xmlrpclib'
 
+
 class _TestRemoteManager(BaseTestCase):
 
     ALLOWED_TYPES = ('manager',)
@@ -1229,7 +1200,7 @@ class _TestRemoteManager(BaseTestCase):
     def _putter(self, address, authkey):
         manager = QueueManager2(
             address=address, authkey=authkey, serializer=SERIALIZER
-            )
+        )
         manager.connect()
         queue = manager.get_queue()
         queue.put(('hello world', None, True, 2.25))
@@ -1239,7 +1210,7 @@ class _TestRemoteManager(BaseTestCase):
 
         manager = QueueManager(
             address=('localhost', 0), authkey=authkey, serializer=SERIALIZER
-            )
+        )
         manager.start()
 
         p = self.Process(target=self._putter, args=(manager.address, authkey))
@@ -1247,7 +1218,7 @@ class _TestRemoteManager(BaseTestCase):
 
         manager2 = QueueManager2(
             address=manager.address, authkey=authkey, serializer=SERIALIZER
-            )
+        )
         manager2.connect()
         queue = manager2.get_queue()
 
@@ -1261,6 +1232,7 @@ class _TestRemoteManager(BaseTestCase):
         # Make queue finalizer run before the server is stopped
         del queue
         manager.shutdown()
+
 
 class _TestManagerRestart(BaseTestCase):
 
@@ -1289,11 +1261,8 @@ class _TestManagerRestart(BaseTestCase):
         manager.start()
         manager.shutdown()
 
-#
-#
-#
-
 SENTINEL = latin('')
+
 
 class _TestConnection(BaseTestCase):
 
@@ -1326,14 +1295,14 @@ class _TestConnection(BaseTestCase):
         self.assertEqual(conn.recv_bytes(), msg)
 
         if self.TYPE == 'processes':
-            buffer = array.array('i', [0]*10)
+            buffer = array.array('i', [0] * 10)
             expected = list(arr) + [0] * (10 - len(arr))
             self.assertEqual(conn.send_bytes(arr), None)
             self.assertEqual(conn.recv_bytes_into(buffer),
                              len(arr) * buffer.itemsize)
             self.assertEqual(list(buffer), expected)
 
-            buffer = array.array('i', [0]*10)
+            buffer = array.array('i', [0] * 10)
             expected = [0] * 3 + list(arr) + [0] * (10 - 3 - len(arr))
             self.assertEqual(conn.send_bytes(arr), None)
             self.assertEqual(conn.recv_bytes_into(buffer, 3 * buffer.itemsize),
@@ -1426,7 +1395,7 @@ class _TestConnection(BaseTestCase):
         self.assertEqual(b.recv_bytes(), msg[5:])
 
         a.send_bytes(msg, 7, 8)
-        self.assertEqual(b.recv_bytes(), msg[7:7+8])
+        self.assertEqual(b.recv_bytes(), msg[7:7 + 8])
 
         a.send_bytes(msg, 26)
         self.assertEqual(b.recv_bytes(), latin(''))
@@ -1435,14 +1404,11 @@ class _TestConnection(BaseTestCase):
         self.assertEqual(b.recv_bytes(), latin(''))
 
         self.assertRaises(ValueError, a.send_bytes, msg, 27)
-
         self.assertRaises(ValueError, a.send_bytes, msg, 22, 5)
-
         self.assertRaises(ValueError, a.send_bytes, msg, 26, 1)
-
         self.assertRaises(ValueError, a.send_bytes, msg, -1)
-
         self.assertRaises(ValueError, a.send_bytes, msg, 4, -1)
+
 
 class _TestListenerClient(BaseTestCase):
 
@@ -1463,11 +1429,9 @@ class _TestListenerClient(BaseTestCase):
             self.assertEqual(conn.recv(), 'hello')
             p.join()
             l.close()
-#
-# Test of sending connection and socket objects between processes
-#
-"""
+'''
 class _TestPicklingConnections(BaseTestCase):
+    """Test of sending connection and socket objects between processes"""
 
     ALLOWED_TYPES = ('processes',)
 
@@ -1548,10 +1512,9 @@ class _TestPicklingConnections(BaseTestCase):
 
         lp.join()
         rp.join()
-"""
-#
-#
-#
+
+'''
+
 
 class _TestHeap(BaseTestCase):
 
@@ -1580,33 +1543,31 @@ class _TestHeap(BaseTestCase):
         for L in heap._len_to_seq.values():
             for arena, start, stop in L:
                 all.append((heap._arenas.index(arena), start, stop,
-                            stop-start, 'free'))
+                            stop - start, 'free'))
         for arena, start, stop in heap._allocated_blocks:
             all.append((heap._arenas.index(arena), start, stop,
-                        stop-start, 'occupied'))
-            occupied += (stop-start)
+                        stop - start, 'occupied'))
+            occupied += stop - start
 
         all.sort()
 
-        for i in range(len(all)-1):
+        for i in range(len(all) - 1):
             (arena, start, stop) = all[i][:3]
-            (narena, nstart, nstop) = all[i+1][:3]
+            (narena, nstart, nstop) = all[i + 1][:3]
             self.assertTrue((arena != narena and nstart == 0) or
                             (stop == nstart))
 
-#
-#
-#
 
 class _Foo(Structure):
     _fields_ = [
         ('x', c_int),
         ('y', c_double)
-        ]
+    ]
+
 
 class _TestSharedCTypes(BaseTestCase):
 
-    ALLOWED_TYPES = ('processes',)
+    ALLOWED_TYPES = ('processes', )
 
     def _double(self, x, y, foo, arr, string):
         x.value *= 2
@@ -1620,7 +1581,7 @@ class _TestSharedCTypes(BaseTestCase):
     @unittest.skipIf(Value is None, "requires ctypes.Value")
     def test_sharedctypes(self, lock=False):
         x = Value('i', 7, lock=lock)
-        y = Value(c_double, 1.0/3.0, lock=lock)
+        y = Value(c_double, 1.0 / 3.0, lock=lock)
         foo = Value(_Foo, 3, 2, lock=lock)
         arr = self.Array('d', range(10), lock=lock)
         string = self.Array('c', 20, lock=lock)
@@ -1631,11 +1592,11 @@ class _TestSharedCTypes(BaseTestCase):
         p.join()
 
         self.assertEqual(x.value, 14)
-        self.assertAlmostEqual(y.value, 2.0/3.0)
+        self.assertAlmostEqual(y.value, 2.0 / 3.0)
         self.assertEqual(foo.x, 6)
         self.assertAlmostEqual(foo.y, 4.0)
         for i in range(10):
-            self.assertAlmostEqual(arr[i], i*2)
+            self.assertAlmostEqual(arr[i], i * 2)
         self.assertEqual(string.value, latin('hellohello'))
 
     @unittest.skipIf(Value is None, "requires ctypes.Value")
@@ -1651,9 +1612,6 @@ class _TestSharedCTypes(BaseTestCase):
         self.assertEqual(bar.x, 2)
         self.assertAlmostEqual(bar.y, 5.0)
 
-#
-#
-#
 
 class _TestFinalize(BaseTestCase):
 
@@ -1706,12 +1664,9 @@ class _TestFinalize(BaseTestCase):
         result = [obj for obj in iter(conn.recv, 'STOP')]
         self.assertEqual(result, ['a', 'b', 'd10', 'd03', 'd02', 'd01', 'e'])
 
-#
-# Test that from ... import * works for each module
-#
 
 class _TestImportStar(BaseTestCase):
-
+    """Test that from ... import * works for each module"""
     ALLOWED_TYPES = ('processes',)
 
     def test_import(self):
@@ -1721,7 +1676,7 @@ class _TestImportStar(BaseTestCase):
             'billiard.pool', 'billiard.process',
             'billiard.reduction',
             'billiard.synchronize', 'billiard.util'
-            ]
+        ]
 
         if c_int is not None:
             # This module requires _ctypes
@@ -1735,14 +1690,11 @@ class _TestImportStar(BaseTestCase):
                 self.assertTrue(
                     hasattr(mod, attr),
                     '%r does not have attribute %r' % (mod, attr)
-                    )
+                )
 
-#
-# Quick test that logging works -- does not test logging output
-#
 
 class _TestLogging(BaseTestCase):
-
+    """Quick test that logging works -- does not test logging output"""
     ALLOWED_TYPES = ('processes',)
 
     def test_enable_logging(self):
@@ -1803,6 +1755,7 @@ class _TestLogging(BaseTestCase):
 # Test to verify handle verification, see issue 3321
 #
 
+
 class TestInvalidHandle(unittest.TestCase):
 
     @unittest.skipIf(WIN32, "skipped on Windows")
@@ -1811,9 +1764,6 @@ class TestInvalidHandle(unittest.TestCase):
         self.assertRaises(IOError, conn.poll)
         self.assertRaises(IOError, _billiard.Connection, -1)
 
-#
-# Functions used to create test cases from the base ones in this module
-#
 
 def get_attributes(Source, names):
     d = {}
@@ -1823,6 +1773,7 @@ def get_attributes(Source, names):
             obj = staticmethod(obj)
         d[name] = obj
     return d
+
 
 def create_test_cases(Mixin, type):
     result = {}
@@ -1834,16 +1785,15 @@ def create_test_cases(Mixin, type):
             base = glob[name]
             if type in base.ALLOWED_TYPES:
                 newname = 'With' + Type + name[1:]
+
                 class Temp(base, unittest.TestCase, Mixin):
                     pass
+
                 result[newname] = Temp
                 Temp.__name__ = newname
                 Temp.__module__ = Mixin.__module__
     return result
 
-#
-# Create test cases
-#
 
 class ProcessesMixin(object):
     TYPE = 'processes'
@@ -1853,7 +1803,7 @@ class ProcessesMixin(object):
         'Condition', 'Event', 'Value', 'Array', 'RawValue',
         'RawArray', 'current_process', 'active_children', 'Pipe',
         'connection', 'JoinableQueue'
-        )))
+    )))
 
 testcases_processes = create_test_cases(ProcessesMixin, type='processes')
 globals().update(testcases_processes)
@@ -1865,9 +1815,9 @@ class ManagerMixin(object):
     manager = object.__new__(billiard.managers.SyncManager)
     locals().update(get_attributes(manager, (
         'Queue', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore',
-       'Condition', 'Event', 'Value', 'Array', 'list', 'dict',
+        'Condition', 'Event', 'Value', 'Array', 'list', 'dict',
         'Namespace', 'JoinableQueue'
-        )))
+    )))
 
 testcases_manager = create_test_cases(ManagerMixin, type='manager')
 globals().update(testcases_manager)
@@ -1881,17 +1831,21 @@ class ThreadsMixin(object):
         'Condition', 'Event', 'Value', 'Array', 'current_process',
         'active_children', 'Pipe', 'connection', 'dict', 'list',
         'Namespace', 'JoinableQueue'
-        )))
+    )))
 
 testcases_threads = create_test_cases(ThreadsMixin, type='threads')
 globals().update(testcases_threads)
 
+
 class OtherTest(unittest.TestCase):
     # TODO: add more tests for deliver/answer challenge.
     def test_deliver_challenge_auth_failure(self):
+
         class _FakeConnection(object):
+
             def recv_bytes(self, size):
                 return bytes('something bogus')
+
             def send_bytes(self, data):
                 pass
         self.assertRaises(billiard.AuthenticationError,
@@ -1899,9 +1853,12 @@ class OtherTest(unittest.TestCase):
                           _FakeConnection(), bytes('abc'))
 
     def test_answer_challenge_auth_failure(self):
+
         class _FakeConnection(object):
+
             def __init__(self):
                 self.count = 0
+
             def recv_bytes(self, size):
                 self.count += 1
                 if self.count == 1:
@@ -1909,20 +1866,24 @@ class OtherTest(unittest.TestCase):
                 elif self.count == 2:
                     return bytes('something bogus')
                 return bytes('')
+
             def send_bytes(self, data):
                 pass
         self.assertRaises(billiard.AuthenticationError,
                           billiard.connection.answer_challenge,
                           _FakeConnection(), bytes('abc'))
 
-#
-# Test Manager.start()/Pool.__init__() initializer feature - see issue 5585
-#
 
 def initializer(ns):
     ns.test += 1
 
+
 class TestInitializers(unittest.TestCase):
+    """Test Manager.start()/Pool.__init__() initializer feature
+
+    - see issue 5585
+
+    """
     def setUp(self):
         self.mgr = billiard.Manager()
         self.ns = self.mgr.Namespace()
@@ -1945,29 +1906,34 @@ class TestInitializers(unittest.TestCase):
         p.join()
         self.assertEqual(self.ns.test, 1)
 
-#
-# Issue 5155, 5313, 5331: Test process in processes
-# Verifies os.close(sys.stdin.fileno) vs. sys.stdin.close() behavior
-#
 
 def _ThisSubProcess(q):
     try:
-        item = q.get(block=False)
+        q.get(block=False)
     except Queue.Empty:
         pass
 
+
 def _TestProcess(q):
+    """Issue 5155, 5313, 5331: Test process in processes
+
+    Verifies os.close(sys.stdin.fileno) vs. sys.stdin.close() behavior
+
+    """
     queue = billiard.Queue()
     subProc = billiard.Process(target=_ThisSubProcess, args=(queue,))
     subProc.start()
     subProc.join()
 
+
 def _afunc(x):
-    return x*x
+    return x * x
+
 
 def pool_in_process():
     pool = billiard.Pool(processes=4)
-    x = pool.map(_afunc, [1, 2, 3, 4, 5, 6, 7])
+    pool.map(_afunc, [1, 2, 3, 4, 5, 6, 7])
+
 
 class _file_like(object):
     def __init__(self, delegate):
@@ -1990,6 +1956,7 @@ class _file_like(object):
         self._delegate.write(''.join(self.cache))
         self._cache = []
 
+
 class TestStdinBadfiledescriptor(unittest.TestCase):
 
     def test_queue_in_process(self):
@@ -2008,20 +1975,18 @@ class TestStdinBadfiledescriptor(unittest.TestCase):
         flike = _file_like(sio)
         flike.write('foo')
         proc = billiard.Process(target=lambda: flike.flush())
+        self.assertTrue(proc)
         flike.flush()
         assert sio.getvalue() == 'foo'
 
 testcases_other = [OtherTest, TestInvalidHandle, TestInitializers,
                    TestStdinBadfiledescriptor]
 
-#
-#
-#
 
 def test_main(run=None):
     if sys.platform.startswith("linux"):
         try:
-            lock = billiard.RLock()
+            billiard.RLock()
         except OSError:
             raise SkipTest("OSError raises on RLock creation, see issue 3111!")
 
@@ -2039,11 +2004,11 @@ def test_main(run=None):
     ManagerMixin.pool = ManagerMixin.manager.Pool(4)
 
     testcases = (
-        sorted(testcases_processes.values(), key=lambda tc:tc.__name__) +
-        sorted(testcases_threads.values(), key=lambda tc:tc.__name__) +
-        sorted(testcases_manager.values(), key=lambda tc:tc.__name__) +
+        sorted(testcases_processes.values(), key=lambda tc: tc.__name__) +
+        sorted(testcases_threads.values(), key=lambda tc: tc.__name__) +
+        sorted(testcases_manager.values(), key=lambda tc: tc.__name__) +
         testcases_other
-        )
+    )
 
     loadTestsFromTestCase = unittest.defaultTestLoader.loadTestsFromTestCase
     suite = unittest.TestSuite(loadTestsFromTestCase(tc) for tc in testcases)
@@ -2063,6 +2028,7 @@ def test_main(run=None):
     ManagerMixin.manager.shutdown()
 
     del ProcessesMixin.pool, ThreadsMixin.pool, ManagerMixin.pool
+
 
 def main():
     test_main(unittest.TextTestRunner(verbosity=2).run)

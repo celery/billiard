@@ -24,7 +24,7 @@ typecode_to_type = {
     'i': ctypes.c_int,   'I': ctypes.c_uint,
     'l': ctypes.c_long,  'L': ctypes.c_ulong,
     'f': ctypes.c_float, 'd': ctypes.c_double
-    }
+}
 
 
 def _new_value(type_):

@@ -40,12 +40,12 @@ class _Truncated(object):
     def __init__(self):
         self.tb_lineno = -1
         self.tb_frame = _Object(
-                f_globals={"__file__": "",
-                           "__name__": "",
-                           "__loader__": None},
-                f_fileno=None,
-                f_code=_Object(co_filename="...",
-                               co_name="[rest of traceback truncated]"),
+            f_globals={"__file__": "",
+                       "__name__": "",
+                       "__loader__": None},
+            f_fileno=None,
+            f_code=_Object(co_filename="...",
+                           co_name="[rest of traceback truncated]"),
         )
         self.tb_next = None
 
@@ -94,8 +94,9 @@ class ExceptionInfo(object):
         self.type, self.exception, tb = exc_info or sys.exc_info()
         try:
             self.tb = Traceback(tb)
-            self.traceback = ''.join(traceback.format_exception(
-                                        self.type, self.exception, tb))
+            self.traceback = ''.join(
+                traceback.format_exception(self.type, self.exception, tb),
+            )
             self.internal = internal
         finally:
             del(tb)

@@ -25,7 +25,7 @@ __all__ = [
     'log_to_stderr', 'get_temp_dir', 'register_after_fork',
     'is_exiting', 'Finalize', 'ForkAwareThreadLock', 'ForkAwareLocal',
     'SUBDEBUG', 'SUBWARNING',
-    ]
+]
 
 #
 # Logging
@@ -43,6 +43,7 @@ DEFAULT_LOGGING_FORMAT = '[%(levelname)s/%(processName)s] %(message)s'
 
 _logger = None
 _log_to_stderr = False
+
 
 def sub_debug(msg, *args, **kwargs):
     if _logger:
@@ -125,8 +126,6 @@ def log_to_stderr(level=None):
     return _logger
 
 
-
-
 def get_temp_dir():
     '''
     Function returning a temp directory which will be removed on exit
@@ -157,18 +156,17 @@ try:
 except ImportError:
     #: Support for reinitialization of objects when
     #: bootstrapping a child process
-    _afterfork_registry = weakref.WeakValueDictionary()
-    _afterfork_counter = itertools.count()
+    _afterfork_registry = weakref.WeakValueDictionary()  # noqa
+    _afterfork_counter = itertools.count()               # noqa
 
     #: Finalization using weakrefs
-    _finalizer_registry = {}
-    _finalizer_counter = itertools.count()
+    _finalizer_registry = {}                             # noqa
+    _finalizer_counter = itertools.count()               # noqa
 
     #: set to true if the process is shutting down.
-    _exiting = False
+    _exiting = False                                     # noqa
 
-
-    def _run_after_forkers():
+    def _run_after_forkers():  # noqa
         items = list(_afterfork_registry.items())
         items.sort()
         for (index, ident, func), obj in items:
@@ -177,16 +175,14 @@ except ImportError:
             except Exception as exc:
                 info('after forker raised exception %s', exc)
 
-
-    def register_after_fork(obj, func):
+    def register_after_fork(obj, func):  # noqa
         _afterfork_registry[(next(_afterfork_counter), id(obj), func)] = obj
 
+    class Finalize(object):  # noqa
+        """Class which supports object finalization using weakrefs"""
 
-    class Finalize(object):
-        '''
-        Class which supports object finalization using weakrefs
-        '''
-        def __init__(self, obj, callback, args=(), kwargs=None, exitpriority=None):
+        def __init__(self, obj, callback, args=(), kwargs=None,
+                     exitpriority=None):
             assert exitpriority is None or type(exitpriority) is int
 
             if obj is not None:
@@ -202,10 +198,10 @@ except ImportError:
             _finalizer_registry[self._key] = self
 
         def __call__(self, wr=None,
-                # Need to bind these locally because the globals can have
-                # been cleared at shutdown
-                _finalizer_registry=_finalizer_registry,
-                sub_debug=sub_debug):
+                     # Need to bind these locally because the globals
+                     # could have been cleared at shutdown
+                     _finalizer_registry=_finalizer_registry,
+                     sub_debug=sub_debug):
             '''
             Run the callback unless it has already been called or cancelled
             '''
@@ -214,11 +210,13 @@ except ImportError:
             except KeyError:
                 sub_debug('finalizer no longer registered')
             else:
-                sub_debug('finalizer calling %s with args %s and kwargs %s',
-                        self._callback, self._args, self._kwargs)
+                sub_debug(
+                    'finalizer calling %s with args %s and kwargs %s',
+                    self._callback, self._args, self._kwargs,
+                )
                 res = self._callback(*self._args, **self._kwargs)
                 self._weakref = self._callback = self._args = \
-                                self._kwargs = self._key = None
+                    self._kwargs = self._key = None
                 return res
 
         def cancel(self):
@@ -231,7 +229,7 @@ except ImportError:
                 pass
             else:
                 self._weakref = self._callback = self._args = \
-                                self._kwargs = self._key = None
+                    self._kwargs = self._key = None
 
         def still_active(self):
             '''
@@ -258,14 +256,14 @@ except ImportError:
                 x += ', exitprority=' + str(self._key[0])
             return x + '>'
 
-
-    def _run_finalizers(minpriority=None):
-        '''
-        Run all finalizers whose exit priority is not None and at least minpriority
+    def _run_finalizers(minpriority=None):  # noqa
+        """Run all finalizers whose exit priority is not None
+        and at least minpriority'.
 
         Finalizers with highest priority are called first; finalizers with
         the same priority will be called in reverse order of creation.
-        '''
+
+        """
         if minpriority is None:
             f = lambda p: p[0][0] is not None
         else:
@@ -279,23 +277,21 @@ except ImportError:
             try:
                 finalizer()
             except Exception:
-                if not error("Error calling finalizer %r", finalizer,
-                        exc_info=True):
+                if not error("Error calling finalizer %r",
+                             finalizer, exc_info=True):
                     import traceback
                     traceback.print_exc()
 
         if minpriority is None:
             _finalizer_registry.clear()
 
-
-    def is_exiting():
+    def is_exiting():  # noqa
         '''
         Returns true if the process is shutting down
         '''
         return _exiting or _exiting is None
 
-
-    def _exit_function():
+    def _exit_function():  # noqa
         '''
         Clean up on exit
         '''
@@ -319,8 +315,7 @@ except ImportError:
         _run_finalizers()
     atexit.register(_exit_function)
 
-
-    class ForkAwareThreadLock(object):
+    class ForkAwareThreadLock(object):  # noqa
 
         def __init__(self):
             self._lock = threading.Lock()
@@ -328,8 +323,7 @@ except ImportError:
             self.release = self._lock.release
             register_after_fork(self, ForkAwareThreadLock.__init__)
 
-
-    class ForkAwareLocal(threading.local):
+    class ForkAwareLocal(threading.local):  # noqa
 
         def __init__(self):
             register_after_fork(self, lambda obj: obj.__dict__.clear())

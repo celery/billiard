@@ -8,10 +8,17 @@ try:
         AuthenticationError,
     )
 except ImportError:
-    class ProcessError(Exception): pass         # noqa
-    class BufferTooShort(Exception): pass       # noqa
-    class TimeoutError(Exception): pass         # noqa
-    class AuthenticationError(Exception): pass  # noqa
+    class ProcessError(Exception):          # noqa
+        pass
+
+    class BufferTooShort(Exception):        # noqa
+        pass
+
+    class TimeoutError(Exception):          # noqa
+        pass
+
+    class AuthenticationError(Exception):   # noqa
+        pass
 
 
 class TimeLimitExceeded(Exception):

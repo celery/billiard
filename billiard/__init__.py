@@ -39,7 +39,7 @@ __all__ = [
     'Event', 'Queue', 'JoinableQueue', 'Pool', 'Value', 'Array',
     'RawValue', 'RawArray', 'SUBDEBUG', 'SUBWARNING', 'set_executable',
     'forking_enable', 'forking_is_enabled'
-    ]
+]
 
 #
 # Imports

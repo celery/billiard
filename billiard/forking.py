@@ -24,7 +24,8 @@ __all__ = ['Popen', 'assert_spawning', 'exit',
 try:
     WindowsError = WindowsError  # noqa
 except NameError:
-    class WindowsError(Exception): pass  # noqa
+    class WindowsError(Exception):  # noqa
+        pass
 
 W_OLD_DJANGO_LAYOUT = """\
 Will add directory %r to path! This is necessary to accommodate \
@@ -50,7 +51,7 @@ def assert_spawning(self):
         raise RuntimeError(
             '%s objects should only be shared between processes'
             ' through inheritance' % type(self).__name__
-            )
+        )
 
 #
 # Try making some callable types picklable
@@ -136,7 +137,7 @@ def reduce_connection(conn):
         raise RuntimeError(
             'By default %s objects can only be shared between processes\n'
             'using inheritance' % type(conn).__name__
-            )
+        )
     return type(conn), (Popen.duplicate_for_child(conn.fileno()),
                         conn.readable, conn.writable)
 
@@ -295,7 +296,7 @@ else:
         return _subprocess.DuplicateHandle(
             _subprocess.GetCurrentProcess(), handle, target_process,
             0, inheritable, _subprocess.DUPLICATE_SAME_ACCESS
-            ).Detach()
+        ).Detach()
 
     #
     # We define a Popen class similar to the one from subprocess, but
@@ -322,7 +323,7 @@ else:
             cmd = ' '.join('"%s"' % x for x in cmd)
             hp, ht, pid, tid = _subprocess.CreateProcess(
                 _python_exe, cmd, None, None, 1, 0, None, None, None
-                )
+            )
             ht.Close()
             close(rhandle)
 
@@ -527,7 +528,8 @@ def main():
             else:
                 handler = logging.FileHandler(logfile)
             formatter = logging.Formatter(
-                    format or util.DEFAULT_LOGGING_FORMAT)
+                format or util.DEFAULT_LOGGING_FORMAT,
+            )
             handler.setFormatter(formatter)
             logger.addHandler(handler)
 
@@ -553,7 +555,7 @@ def get_preparation_data(name):
         log_to_stderr=_log_to_stderr,
         orig_dir=process.ORIGINAL_DIR,
         authkey=process.current_process().authkey,
-        )
+    )
 
     if _logger is not None:
         d['log_level'] = _logger.getEffectiveLevel()
@@ -563,8 +565,8 @@ def get_preparation_data(name):
         if not main_path and sys.argv[0] not in ('', '-c'):
             main_path = sys.argv[0]
         if main_path is not None:
-            if not os.path.isabs(main_path) and \
-                                        process.ORIGINAL_DIR is not None:
+            if (not os.path.isabs(main_path) and
+                    process.ORIGINAL_DIR is not None):
                 main_path = os.path.join(process.ORIGINAL_DIR, main_path)
             d['main_path'] = os.path.normpath(main_path)
 
@@ -579,7 +581,7 @@ def get_preparation_data(name):
             raise RuntimeError(
                 'By default %s objects can only be shared between processes\n'
                 'using inheritance' % type(conn).__name__
-                )
+            )
         return type(conn), (Popen.duplicate_for_child(conn.fileno()),
                             conn.readable, conn.writable)
 
@@ -652,7 +654,7 @@ def prepare(data):
                 # "__main__"' clauses to be executed.
                 main_module = imp.load_module(
                     '__parents_main__', file, path_name, etc
-                    )
+                )
             finally:
                 if file:
                     file.close()

@@ -157,7 +157,7 @@ class Queue(object):
             args=(self._buffer, self._notempty, self._send,
                   self._wlock, self._writer.close, self._ignore_epipe),
             name='QueueFeederThread'
-            )
+        )
         self._thread.daemon = True
 
         debug('doing self._thread.start()')
@@ -176,14 +176,14 @@ class Queue(object):
                 self._thread, Queue._finalize_join,
                 [weakref.ref(self._thread)],
                 exitpriority=-5
-                )
+            )
 
         # Send sentinel to the thread queue object when garbage collected
         self._close = Finalize(
             self, Queue._finalize_close,
             [self._buffer, self._notempty],
             exitpriority=10
-            )
+        )
 
     @staticmethod
     def _finalize_join(twr):
