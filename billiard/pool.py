@@ -942,7 +942,7 @@ class Pool(object):
                 # worker exited
                 debug('Supervisor: cleaning up worker %d', i)
                 worker.join()
-                debug('Supervisor: worked %d joined', i)
+                debug('Supervisor: worker %d joined', i)
                 cleaned[worker.pid] = worker
                 exitcodes[worker.pid] = worker.exitcode
                 if worker.exitcode not in (EX_OK, EX_RECYCLE):
