@@ -241,7 +241,7 @@ class Condition(object):
 
     def wait(self, timeout=None):
         assert self._lock._semlock._is_mine(), \
-               'must acquire() condition before using wait()'
+            'must acquire() condition before using wait()'
 
         # indicate that this thread is going to sleep
         self._sleeping_count.release()

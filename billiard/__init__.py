@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 from __future__ import with_statement
 
-VERSION = (2, 7, 3, 19)
+VERSION = (2, 7, 3, 21)
 __version__ = ".".join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
@@ -39,7 +39,7 @@ __all__ = [
     'Event', 'Queue', 'JoinableQueue', 'Pool', 'Value', 'Array',
     'RawValue', 'RawArray', 'SUBDEBUG', 'SUBWARNING', 'set_executable',
     'forking_enable', 'forking_is_enabled'
-    ]
+]
 
 #
 # Imports

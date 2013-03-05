@@ -37,7 +37,7 @@ __all__ = [
     'Process', 'current_process', 'active_children', 'freeze_support',
     'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition',
     'Event', 'Queue', 'Manager', 'Pipe', 'Pool', 'JoinableQueue'
-    ]
+]
 
 #
 # Imports

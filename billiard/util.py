@@ -25,7 +25,7 @@ __all__ = [
     'log_to_stderr', 'get_temp_dir', 'register_after_fork',
     'is_exiting', 'Finalize', 'ForkAwareThreadLock', 'ForkAwareLocal',
     'SUBDEBUG', 'SUBWARNING',
-    ]
+]
 
 #
 # Logging
@@ -184,10 +184,10 @@ class Finalize(object):
         _finalizer_registry[self._key] = self
 
     def __call__(self, wr=None,
-            # Need to bind these locally because the globals can have
-            # been cleared at shutdown
-            _finalizer_registry=_finalizer_registry,
-            sub_debug=sub_debug):
+                 # Need to bind these locally because the globals
+                 # could've been cleared at shutdown
+                 _finalizer_registry=_finalizer_registry,
+                 sub_debug=sub_debug):
         '''
         Run the callback unless it has already been called or cancelled
         '''
@@ -196,11 +196,13 @@ class Finalize(object):
         except KeyError:
             sub_debug('finalizer no longer registered')
         else:
-            sub_debug('finalizer calling %s with args %s and kwargs %s',
-                     self._callback, self._args, self._kwargs)
+            sub_debug(
+                'finalizer calling %s with args %s and kwargs %s',
+                self._callback, self._args, self._kwargs,
+            )
             res = self._callback(*self._args, **self._kwargs)
             self._weakref = self._callback = self._args = \
-                            self._kwargs = self._key = None
+                self._kwargs = self._key = None
             return res
 
     def cancel(self):
@@ -213,7 +215,7 @@ class Finalize(object):
             pass
         else:
             self._weakref = self._callback = self._args = \
-                            self._kwargs = self._key = None
+                self._kwargs = self._key = None
 
     def still_active(self):
         '''
@@ -262,7 +264,7 @@ def _run_finalizers(minpriority=None):
             finalizer()
         except Exception:
             if not error("Error calling finalizer %r", finalizer,
-                    exc_info=True):
+                         exc_info=True):
                 import traceback
                 traceback.print_exc()
 

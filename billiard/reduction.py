@@ -43,7 +43,7 @@ if sys.platform == 'win32':
     def send_handle(conn, handle, destination_pid):
         process_handle = win32.OpenProcess(
             win32.PROCESS_ALL_ACCESS, False, destination_pid
-            )
+        )
         try:
             new_handle = duplicate(handle, process_handle)
             conn.send(new_handle)
@@ -150,7 +150,7 @@ def rebuild_connection(reduced_handle, readable, writable):
     handle = rebuild_handle(reduced_handle)
     return _billiard.Connection(
         handle, readable=readable, writable=writable
-        )
+    )
 
 ForkingPickler.register(_billiard.Connection, reduce_connection)
 
@@ -192,5 +192,5 @@ if sys.platform == 'win32':
         handle = rebuild_handle(reduced_handle)
         return _billiard.PipeConnection(
             handle, readable=readable, writable=writable
-            )
+        )
     ForkingPickler.register(_billiard.PipeConnection, reduce_pipe_connection)

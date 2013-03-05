@@ -1,3 +1,25 @@
+2.7.3.21 - 2013-02-11
+---------------------
+
+- Fixed typo EX_REUSE -> EX_RECYCLE
+
+- Code now conforms to new pep8.py rules.
+
+2.7.3.20 - 2013-02-08
+---------------------
+
+- Pool: Disable restart limit if maxR is not set.
+
+- Pool: Now uses os.kill instead of signal.signal.
+
+    Contributed by Lukasz Langa
+
+- Fixed name error in process.py
+
+- Pool: ApplyResult.get now properly raises exceptions.
+
+    Fix contributed by xentac.
+
 2.7.3.19 - 2012-11-30
 ---------------------
 
