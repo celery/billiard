@@ -1,3 +1,14 @@
+2.7.3.22 - 2013-03-08
+---------------------
+
+- Pool: apply_async now supports a ``callbacks_propagate`` keyword
+  argument that can be a tuple of exceptions to propagate in callbacks.
+  (callback, errback, accept_callback, timeout_callback).
+
+- Errors are no longer logged for OK and recycle exitcodes.
+
+- Fixed Python 2.5 compatibility problem (Issue #33).
+
 2.7.3.21 - 2013-02-11
 ---------------------
 
