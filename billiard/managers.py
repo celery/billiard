@@ -99,7 +99,7 @@ def convert_to_error(kind, result):
         return result
     elif kind == '#TRACEBACK':
         assert type(result) is str
-        return  RemoteError(result)
+        return RemoteError(result)
     elif kind == '#UNSERIALIZABLE':
         assert type(result) is str
         return RemoteError('Unserializable message: %s\n' % result)
