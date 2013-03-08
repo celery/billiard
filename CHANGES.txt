@@ -5,9 +5,17 @@
   argument that can be a tuple of exceptions to propagate in callbacks.
   (callback, errback, accept_callback, timeout_callback).
 
-- Errors are no longer logged for OK and recycle exitcodes.
+- Errors are no longer logged for OK and recycle exit codes.
+
+    This would cause normal maxtasksperchild recycled process
+    to log an error.
 
 - Fixed Python 2.5 compatibility problem (Issue #33).
+
+- FreeBSD: Compilation now disables semaphores if Python was built
+  without it (Issue #40).
+
+    Contributed by William Grzybowski
 
 2.7.3.21 - 2013-02-11
 ---------------------
