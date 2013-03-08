@@ -111,15 +111,6 @@ def error(msg, *args, **kwargs):
         util._logger.error(msg, *args, **kwargs)
 
 
-def safe_apply_callback(fun, *args):
-    if fun:
-        try:
-            fun(*args)
-        except Exception as exc:
-            error("Pool callback raised exception: %r", exc,
-                  exc_info=True)
-
-
 def stop_if_not_current(thread, timeout=None):
     if thread is not threading.currentThread():
         thread.stop(timeout)
@@ -1160,7 +1151,8 @@ class Pool(object):
     def apply_async(self, func, args=(), kwds={},
                     callback=None, error_callback=None, accept_callback=None,
                     timeout_callback=None, waitforslot=None,
-                    soft_timeout=None, timeout=None, lost_worker_timeout=None):
+                    soft_timeout=None, timeout=None, lost_worker_timeout=None,
+                    callbacks_propagate=()):
         '''
         Asynchronous equivalent of `apply()` method.
 
@@ -1197,6 +1189,7 @@ class Pool(object):
                 error_callback, soft_timeout, timeout, lost_worker_timeout,
                 on_timeout_set=self.on_timeout_set,
                 on_timeout_cancel=self.on_timeout_cancel,
+                callbacks_propagate=callbacks_propagate,
             )
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
@@ -1361,7 +1354,8 @@ class ApplyResult(object):
     def __init__(self, cache, callback, accept_callback=None,
                  timeout_callback=None, error_callback=None, soft_timeout=None,
                  timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
-                 on_timeout_set=None, on_timeout_cancel=None):
+                 on_timeout_set=None, on_timeout_cancel=None,
+                 callbacks_propagate=()):
         self._mutex = threading.Lock()
         self._event = threading.Event()
         self._job = next(job_counter)
@@ -1375,6 +1369,7 @@ class ApplyResult(object):
         self._lost_worker_timeout = lost_worker_timeout
         self._on_timeout_set = on_timeout_set
         self._on_timeout_cancel = on_timeout_cancel
+        self._callbacks_propagate = callbacks_propagate or ()
 
         self._accepted = False
         self._worker_pid = None
@@ -1406,6 +1401,16 @@ class ApplyResult(object):
         else:
             raise self._value.exception
 
+    def safe_apply_callback(self, fun, *args):
+        if fun:
+            try:
+                fun(*args)
+            except self._callbacks_propagate:
+                raise
+            except Exception as exc:
+                error("Pool callback raised exception: %r", exc,
+                      exc_info=True)
+
     def _set(self, i, obj):
         with self._mutex:
             if self._on_timeout_cancel:
@@ -1417,11 +1422,11 @@ class ApplyResult(object):
 
             # apply callbacks last
             if self._callback and self._success:
-                safe_apply_callback(
+                self.safe_apply_callback(
                     self._callback, self._value)
             if (self._value is not None and
                     self._error_callback and not self._success):
-                safe_apply_callback(
+                self.safe_apply_callback(
                     self._error_callback, self._value)
 
     def _ack(self, i, time_accepted, pid):
@@ -1434,7 +1439,7 @@ class ApplyResult(object):
             if self._on_timeout_set:
                 self._on_timeout_set(self, self._soft_timeout, self._timeout)
             if self._accept_callback:
-                safe_apply_callback(
+                self.safe_apply_callback(
                     self._accept_callback, pid, time_accepted)
 
 #
