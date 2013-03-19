@@ -222,7 +222,7 @@ def run_setup(with_extensions=True):
 
 try:
     run_setup(not (is_jython or is_pypy or is_py3k))
-except (Exception):
+except BaseException:
     import traceback
     sys.stderr.write(BUILD_WARNING % '\n'.join(traceback.format_stack(), ))
     run_setup(False)
