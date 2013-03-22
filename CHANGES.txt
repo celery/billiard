@@ -1,3 +1,9 @@
+2.7.3.23 - 2013-03-22
+---------------------
+
+- Windows: Now catches SystemExit from setuptools while trying to build
+  the C extension (Issue #41).
+
 2.7.3.22 - 2013-03-08
 ---------------------
 
