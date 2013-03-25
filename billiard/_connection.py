@@ -22,6 +22,7 @@ import itertools
 
 from . import AuthenticationError
 from ._ext import _billiard, win32
+from .compat import get_errno
 from .util import get_temp_dir, Finalize, sub_debug, debug
 from .forking import duplicate, close
 from .compat import bytes
@@ -295,8 +296,8 @@ def SocketClient(address):
     while 1:
         try:
             s.connect(address)
-        except socket.error, e:
-            if e.args[0] != errno.ECONNREFUSED or _check_timeout(t):
+        except socket.error, exc:
+            if get_errno(exc) != errno.ECONNREFUSED or _check_timeout(t):
                 debug('failed to connect to address %s', address)
                 raise
             time.sleep(0.01)

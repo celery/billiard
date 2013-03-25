@@ -23,6 +23,7 @@ from Queue import Empty, Full
 
 from . import Pipe
 from ._ext import _billiard
+from .compat import get_errno
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 from .util import debug, error, info, Finalize, register_after_fork
 from .forking import assert_spawning
@@ -237,8 +238,8 @@ class Queue(object):
                                 send(obj)
                 except IndexError:
                     pass
-        except Exception, e:
-            if ignore_epipe and getattr(e, 'errno', 0) == errno.EPIPE:
+        except Exception, exc:
+            if ignore_epipe and get_errno(exc) == errno.EPIPE:
                 return
             # Since this runs in a daemon thread the resources it uses
             # may be become unusable while the process is cleaning up.
@@ -246,9 +247,9 @@ class Queue(object):
             # started to cleanup.
             try:
                 if is_exiting():
-                    info('error in queue thread: %r', e, exc_info=True)
+                    info('error in queue thread: %r', exc, exc_info=True)
                 else:
-                    if not error('error in queue thread: %r', e,
+                    if not error('error in queue thread: %r', exc,
                                  exc_info=True):
                         import traceback
                         traceback.print_exc()
