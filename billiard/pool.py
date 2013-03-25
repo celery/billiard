@@ -29,6 +29,7 @@ import warnings
 from . import Event, Process, cpu_count
 from . import util
 from .common import restart_state
+from .compat import get_errno
 from .einfo import ExceptionInfo
 from .exceptions import (
     CoroStop,
@@ -265,7 +266,9 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             ready, task = poll(1.0)
             if not ready:
                 continue
-        except (EOFError, IOError):
+        except (EOFError, IOError), exc:
+            if get_errno(exc) == errno.EINTR:
+                continue  # interrupted, maybe by gdb
             debug('worker got EOFError or IOError -- exiting')
             exitcode = EX_FAILURE
             break
@@ -472,7 +475,7 @@ class TimeoutHandler(PoolThread):
         try:
             _kill(job._worker_pid, SIG_SOFT_TIMEOUT)
         except OSError as exc:
-            if exc.errno != errno.ESRCH:
+            if get_errno(exc) != errno.ESRCH:
                 raise
 
     def on_hard_timeout(self, job):

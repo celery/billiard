@@ -21,6 +21,7 @@ import errno
 
 from . import Pipe
 from ._ext import _billiard
+from .compat import get_errno
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 from .util import debug, error, info, Finalize, register_after_fork
 from .five import Empty, Full
@@ -237,7 +238,7 @@ class Queue(object):
                 except IndexError:
                     pass
         except Exception as exc:
-            if ignore_epipe and getattr(exc, 'errno', 0) == errno.EPIPE:
+            if ignore_epipe and get_errno(exc) == errno.EPIPE:
                 return
             # Since this runs in a daemon thread the resources it uses
             # may be become unusable while the process is cleaning up.

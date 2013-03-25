@@ -18,6 +18,7 @@ import tempfile
 import threading        # we want threading to install its
                         # cleanup function before multiprocessing does
 
+from .compat import get_errno
 from .process import current_process, active_children
 
 __all__ = [
@@ -343,6 +344,6 @@ def _eintr_retry(func):
             try:
                 return func(*args, **kwargs)
             except OSError as exc:
-                if exc.errno != errno.EINTR:
+                if get_errno(exc) != errno.EINTR:
                     raise
     return wrapped
