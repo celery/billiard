@@ -224,6 +224,11 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
+def _shutdown_cleanup(signum, frame):
+    # called on SIGTERM, as it does not call finally: blocks by default.
+    raise SystemExit(-signum)
+
+
 def worker(inqueue, outqueue, initializer=None, initargs=(),
            maxtasks=None, sentinel=None):
     # Re-init logging system.
@@ -265,6 +270,8 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
+
+    signal.signal(signal.SIGTERM, _shutdown_cleanup)
 
     exitcode = None
     completed = 0
