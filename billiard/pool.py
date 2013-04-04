@@ -134,11 +134,17 @@ class LaxBoundedSemaphore(_Semaphore):
     but ignores if # releases >= value."""
 
     def __init__(self, value=1, verbose=None):
-        _Semaphore.__init__(self, value, verbose)
+        if sys.version_info[0] == 3:
+            _Semaphore.__init__(self, value)
+        else:
+            _Semaphore.__init__(self, value, verbose)
         self._initial_value = value
 
     def grow(self):
-        cond = self._Semaphore__cond
+        try:
+            cond = self._Semaphore__cond
+        except AttributeError: # Py3
+            cond = self._cond
         with cond:
             self._initial_value += 1
             self._Semaphore__value += 1
@@ -151,7 +157,7 @@ class LaxBoundedSemaphore(_Semaphore):
     if sys.version_info[0] == 3:
 
         def release(self):
-            cond = self._Semaphore__cond
+            cond = self._cond
             with cond:
                 if self._value < self._initial_value:
                     self._value += 1
