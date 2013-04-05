@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import signal
+import sys
 
 from time import time
 
@@ -8,7 +9,7 @@ from .exceptions import RestartFreqExceeded
 
 
 def _shutdown_cleanup(signum, frame):
-    raise SystemExit(-signum)
+    sys.exit(-(256 - signum))
 
 
 def reset_signals(handler=_shutdown_cleanup):
