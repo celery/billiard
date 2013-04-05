@@ -29,7 +29,7 @@ import warnings
 
 from . import Event, Process, cpu_count
 from . import util
-from .common import restart_state
+from .common import reset_signals, restart_state
 from .compat import get_errno
 from .einfo import ExceptionInfo
 from .exceptions import (
@@ -224,11 +224,6 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-def _shutdown_cleanup(signum, frame):
-    # called on SIGTERM, as it does not call finally: blocks by default.
-    raise SystemExit(-signum)
-
-
 def worker(inqueue, outqueue, initializer=None, initargs=(),
            maxtasks=None, sentinel=None):
     # Re-init logging system.
@@ -268,10 +263,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     if initializer is not None:
         initializer(*initargs)
 
+    # Make sure all exiting signals call finally: blocks.
+    # this is important for the semaphore to be released.
+    reset_signals()
+    # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
-
-    signal.signal(signal.SIGTERM, _shutdown_cleanup)
 
     exitcode = None
     completed = 0
