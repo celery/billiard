@@ -28,7 +28,7 @@ import warnings
 
 from . import Event, Process, cpu_count
 from . import util
-from .common import restart_state
+from .common import reset_signals, restart_state
 from .compat import get_errno
 from .einfo import ExceptionInfo
 from .exceptions import (
@@ -257,6 +257,10 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     if initializer is not None:
         initializer(*initargs)
 
+    # Make sure all exiting signals call finally: blocks.
+    # this is important for the semaphore to be released.
+    reset_signals()
+    # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
 
