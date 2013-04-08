@@ -38,12 +38,8 @@ class Queue(object):
             maxsize = _billiard.SemLock.SEM_VALUE_MAX
         self._maxsize = maxsize
         self._reader, self._writer = Pipe(duplex=False)
-        self._rlock = Lock()
         self._opid = os.getpid()
-        if sys.platform == 'win32':
-            self._wlock = None
-        else:
-            self._wlock = Lock()
+        self._make_locks()
         self._sem = BoundedSemaphore(maxsize)
         # For use by concurrent.futures
         self._ignore_epipe = False
@@ -52,6 +48,10 @@ class Queue(object):
 
         if sys.platform != 'win32':
             register_after_fork(self, Queue._after_fork)
+
+    def _make_locks(self):
+        self._rlock = Lock()
+        self._wlock = Lock() if sys.platform != 'win32' else None
 
     def __getstate__(self):
         assert_spawning(self)
@@ -313,12 +313,8 @@ class SimpleQueue(object):
 
     def __init__(self):
         self._reader, self._writer = Pipe(duplex=False)
-        self._rlock = Lock()
         self._poll = self._reader.poll
-        if sys.platform == 'win32':
-            self._wlock = None
-        else:
-            self._wlock = Lock()
+        self._make_locks()
         self._make_methods()
 
     def empty(self):
@@ -331,6 +327,10 @@ class SimpleQueue(object):
     def __setstate__(self, state):
         (self._reader, self._writer, self._rlock, self._wlock) = state
         self._make_methods()
+
+    def _make_locks(self):
+        self._rlock = Lock()
+        self._wlock = Lock() if sys.platform != 'win32' else None
 
     def _make_methods(self):
         recv = self._reader.recv

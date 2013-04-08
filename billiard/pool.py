@@ -26,6 +26,7 @@ import threading
 import time
 import Queue
 import warnings
+import weakref
 
 from . import Event, Process, cpu_count
 from . import util
@@ -110,6 +111,25 @@ EX_OK = getattr(os, "EX_OK", 0)
 
 job_counter = itertools.count()
 
+_QUEUES = []
+_IN_GET = [False]
+
+
+class SemLost(Exception):
+    pass
+
+
+def _reset_semaphores(signum, frame):
+    sys.__stderr__.write('Process forced to recreate semaphores\n')
+
+    for qref in _QUEUES:
+        q = qref()
+        if q is not None:
+            q._make_locks()
+
+    if _IN_GET[0]:
+        raise SemLost()
+
 
 def mapstar(args):
     return map(*args)
@@ -143,7 +163,7 @@ class LaxBoundedSemaphore(_Semaphore):
     def grow(self):
         try:
             cond = self._Semaphore__cond
-        except AttributeError: # Py3
+        except AttributeError:  # Py3
             cond = self._cond
         with cond:
             self._initial_value += 1
@@ -243,6 +263,10 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             handler.createLock()
     logging._lock = threading.RLock()
 
+    global _QUEUES
+    _QUEUES[:] = [weakref.ref(inqueue),
+                  weakref.ref(outqueue)]
+
     pid = os.getpid()
     assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
     put = outqueue.put
@@ -252,7 +276,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
         def poll(timeout):
             if inqueue._reader.poll(timeout):
-                return True, get()
+                _IN_GET[0] = True
+                try:
+                    _res = get()
+                finally:
+                    _IN_GET[0] = False
+                return True, _res
             return False, None
     else:
 
@@ -275,6 +304,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
+    # SIGPWR / SIGINFO (29) causes the worker to rebuild
+    # semaphores
+    try:
+        signal.signal(signal.SIGINFO, _reset_semaphores)
+    except AttributeError:
+        pass
 
     exitcode = None
     completed = 0
@@ -285,8 +320,11 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             break
 
         try:
-            ready, task = poll(1.0)
-            if not ready:
+            try:
+                ready, task = poll(1.0)
+                if not ready:
+                    continue
+            except SemLost:
                 continue
         except (EOFError, IOError), exc:
             if get_errno(exc) == errno.EINTR:
@@ -316,6 +354,8 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
                 put((READY, (job, i, (False, einfo))))
             finally:
                 del(tb)
+        if not completed % 3:
+            os.kill(os.getpid(), signal.SIGKILL)
 
         completed += 1
     debug('worker exiting after %d tasks', completed)
@@ -963,6 +1003,15 @@ class Pool(object):
                 if worker.exitcode not in (EX_OK, EX_RECYCLE):
                     error('Process %r pid:%r exited with exitcode %r' % (
                         worker.name, worker.pid, worker.exitcode))
+                if worker.exitcode == -9:
+                    print('Found killed process, force others to rebuild sem.')
+                    for _w in self._pool:
+                        if _w.exitcode is None:
+                            try:
+                                os.kill(_w.pid, signal.SIGINFO)
+                            except (AttributeError, RuntimeError):
+                                print('OH NOES')
+                                pass
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
