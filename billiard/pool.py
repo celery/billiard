@@ -63,17 +63,18 @@ except NameError:
                 raise
             return args[0]
 
+PY3 = sys.version_info[0] == 3
 
 try:
     TIMEOUT_MAX = threading.TIMEOUT_MAX
-except AttributeError:
-    TIMEOUT_MAX = 1e10
+except AttributeError:  # pragma: no cover
+    TIMEOUT_MAX = 1e10  # noqa
 
 
-try:
-    _Semaphore = threading._Semaphore
-except AttributeError:  # Py3
-    _Semaphore = threading.Semaphore  # noqa
+if PY3:
+    _Semaphore = threading.Semaphore
+else:
+    _Semaphore = threading._Semaphore  # noqa
 
 #
 # Constants representing the state of a pool
@@ -134,17 +135,17 @@ class LaxBoundedSemaphore(_Semaphore):
     but ignores if # releases >= value."""
 
     def __init__(self, value=1, verbose=None):
-        if sys.version_info[0] == 3:
+        if PY3:
             _Semaphore.__init__(self, value)
         else:
             _Semaphore.__init__(self, value, verbose)
         self._initial_value = value
 
     def grow(self):
-        try:
-            cond = self._Semaphore__cond
-        except AttributeError: # Py3
+        if PY3:
             cond = self._cond
+        else:
+            cond = self._Semaphore__cond
         with cond:
             self._initial_value += 1
             self._Semaphore__value += 1
@@ -154,7 +155,7 @@ class LaxBoundedSemaphore(_Semaphore):
         self._initial_value -= 1
         self.acquire()
 
-    if sys.version_info[0] == 3:
+    if PY3:
 
         def release(self):
             cond = self._cond
