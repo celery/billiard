@@ -15,7 +15,8 @@ def _shutdown_cleanup(signum, frame):
 def reset_signals(handler=_shutdown_cleanup):
     for i in range(signal.NSIG):
         try:
-            if signal.getsignal(i) != signal.SIG_IGN:
+            if signal.getsignal(i) != signal.SIG_IGN and \
+                    signal.getsignal(i) is not None:
                 signal.signal(i, handler)
         except (ValueError, RuntimeError):
             pass
