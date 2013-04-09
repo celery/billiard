@@ -7,17 +7,39 @@ from time import time
 
 from .exceptions import RestartFreqExceeded
 
+TERMSIGS = frozenset([
+    'HUP',
+    'INT',
+    'QUIT',
+    'ILL',
+    'TRAP',
+    'ABRT',
+    'EMT',
+    'FPE',
+    'BUS',
+    'SEGV',
+    'SYS',
+    'PIPE',
+    'ALRM',
+    'TERM',
+    'XCPU',
+    'XFSZ',
+    'VTALRM',
+    'PROF',
+    'USR1',
+    'USR2',
+])
+
 
 def _shutdown_cleanup(signum, frame):
     sys.exit(-(256 - signum))
 
 
 def reset_signals(handler=_shutdown_cleanup):
-    for i in range(signal.NSIG):
+    for sig in TERMSIGS:
         try:
-            if signal.getsignal(i) != signal.SIG_IGN:
-                signal.signal(i, handler)
-        except (ValueError, RuntimeError):
+            signal.signal(getattr(signal, 'SIG%s' % (sig, )), handler)
+        except (AttributeError, ValueError, RuntimeError):
             pass
 
 
