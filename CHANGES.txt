@@ -1,3 +1,11 @@
+2.7.3.25 - 2013-04-09
+---------------------
+
+- Pool: 2.7.3.24 broke support for subprocesses (Issue #48).
+
+    Signals that should be ignored were instead handled
+    by terminating.
+
 2.7.3.24 - 2013-04-08
 ---------------------
 
