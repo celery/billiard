@@ -37,7 +37,9 @@ def _shutdown_cleanup(signum, frame):
 def reset_signals(handler=_shutdown_cleanup):
     for sig in TERMSIGS:
         try:
-            signal.signal(getattr(signal, 'SIG%s' % (sig, )), handler)
+            signum = getattr(signal, 'SIG%s' % (sig, ))
+            if signal.getsignal(signum) != signal.SIG_IGN:
+                signal.signal(signum, handler)
         except (AttributeError, ValueError, RuntimeError):
             pass
 
