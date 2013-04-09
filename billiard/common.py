@@ -9,7 +9,6 @@ from .exceptions import RestartFreqExceeded
 
 TERMSIGS = frozenset([
     'HUP',
-    'INT',
     'QUIT',
     'ILL',
     'TRAP',

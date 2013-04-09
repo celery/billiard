@@ -273,9 +273,15 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     # Make sure all exiting signals call finally: blocks.
     # this is important for the semaphore to be released.
     reset_signals()
+
     # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
+
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except (AttributeError):
+        pass
 
     exitcode = None
     completed = 0
