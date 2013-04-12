@@ -1,3 +1,16 @@
+2.7.3.27 - 2013-04-12
+---------------------
+
+- Manager now works again.
+
+- Python 3 fixes for billiard.connection.
+
+- Fixed invalid argument bug when running on Python 3.3
+
+    Fix contributed by Nathan Wan.
+
+- Ignore OSError when setting up signal handlers.
+
 2.7.3.26 - 2013-04-09
 ---------------------
 
