@@ -21,7 +21,7 @@ from test import test_support
 from StringIO import StringIO
 try:
     from billiard._ext import _billiard
-except ImportError:
+except ImportError, exc:
     raise SkipTest(exc)
 # import threading after _billiard to raise a more revelant error
 # message: "No module named _billiard". _billiard is not compiled
@@ -128,7 +128,7 @@ def get_value(self):
                 raise NotImplementedError
 
 
-class _TestProcess(BaseTestCase):
+class _TestProcesses(BaseTestCase):
 
     ALLOWED_TYPES = ('processes', 'threads')
 
@@ -948,8 +948,8 @@ class _TestContainers(BaseTestCase):
             d[i] = chr(i)
         self.assertEqual(d.copy(), dict((i, chr(i)) for i in indices))
         self.assertEqual(sorted(d.keys()), indices)
-        self.assertEqual(sorted(d.values()), [chr(i) for i in indices])
-        self.assertEqual(sorted(d.items()), [(i, chr(i)) for i in indices])
+        self.assertEqual(sorted(d.values()), [chr(j) for j in indices])
+        self.assertEqual(sorted(d.items()), [(x, chr(x)) for x in indices])
 
     def test_namespace(self):
         n = self.Namespace()
@@ -1067,7 +1067,7 @@ class _TestPoolWorkerLifetime(BaseTestCase):
         while countdown and not all(w.is_alive() for w in p._pool):
             countdown -= 1
             time.sleep(DELTA)
-        finalworkerpids = [w.pid for w in p._pool]
+        finalworkerpids = [worker.pid for worker in p._pool]
         # All pids should be assigned.  See issue #7805.
         self.assertNotIn(None, origworkerpids)
         self.assertNotIn(None, finalworkerpids)

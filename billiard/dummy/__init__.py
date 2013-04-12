@@ -52,7 +52,10 @@ from threading import Lock, RLock, Semaphore, BoundedSemaphore
 from threading import Event
 from Queue import Queue
 
-from .connection import Pipe
+if sys.version_info[0] == 3:
+    from multiprocessing.connection import Pipe
+else:
+    from billiard._connection import Pipe
 
 
 class DummyProcess(threading.Thread):

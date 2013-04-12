@@ -17,11 +17,15 @@ import sys
 import socket
 import threading
 
+if sys.version_info[0] == 3:
+    from multiprocessing.connection import Client, Listener
+else:
+    from billiard._connection import Client, Listener  # noqa
+
 from . import current_process
 from ._ext import _billiard, win32
 from .forking import Popen, duplicate, close, ForkingPickler
 from .util import register_after_fork, debug, sub_debug
-from .connection import Client, Listener
 
 if not(sys.platform == 'win32' or hasattr(_billiard, 'recvfd')):
     raise ImportError('pickling of connections not supported')

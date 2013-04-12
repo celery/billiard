@@ -94,7 +94,10 @@ def Pipe(duplex=True):
     '''
     Returns two connection object connected by a pipe
     '''
-    from .connection import Pipe
+    if sys.version_info[0] == 3:
+        from multiprocessing.connection import Pipe
+    else:
+        from billiard._connection import Pipe
     return Pipe(duplex)
 
 
