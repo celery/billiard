@@ -3,6 +3,8 @@ from __future__ import absolute_import
 import sys
 
 if sys.version_info[0] == 3:
-    from multiprocessing.connection import *  # noqa
+    from multiprocessing import connection
 else:
-    from billiard._connection import *        # noqa
+    from billiard import _connection as connection  # noqa
+
+sys.modules[__name__] = connection

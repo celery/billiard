@@ -639,7 +639,7 @@ class BaseManager(object):
 
         method_to_typeid = (
             method_to_typeid or
-            getattr(proxytype, '_method_to_typeid_', None),
+            getattr(proxytype, '_method_to_typeid_', None)
         )
 
         if method_to_typeid:
