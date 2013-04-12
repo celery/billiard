@@ -5,6 +5,37 @@
 
 - No longer compatible with Python 2.5
 
+2.7.3.26 - 2013-04-09
+---------------------
+
+- Pool: Child processes must ignore SIGINT.
+
+2.7.3.25 - 2013-04-09
+---------------------
+
+- Pool: 2.7.3.24 broke support for subprocesses (Issue #48).
+
+    Signals that should be ignored were instead handled
+    by terminating.
+
+2.7.3.24 - 2013-04-08
+---------------------
+
+- Pool:  Make sure finally blocks are called when process exits
+  due to a signal.
+
+    This fixes a deadlock problem when the process is killed
+    while having acquired the shared semaphore.  However, this solution
+    does not protect against the processes being killed, a more elaborate
+    solution is required for that. Hopefully this will be fixed soon in a
+    later version.
+
+- Pool:  Can now use GDB to debug pool child processes.
+
+- Fixes Python 3 compatibility problems.
+
+    Contributed by Albertas Agejevas.
+
 2.7.3.23 - 2013-03-22
 ---------------------
 

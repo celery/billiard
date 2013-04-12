@@ -21,7 +21,7 @@ from test import test_support
 from StringIO import StringIO
 try:
     from billiard._ext import _billiard
-except ImportError:
+except ImportError as exc:
     raise SkipTest(exc)
 # import threading after _billiard to raise a more revelant error
 # message: "No module named _billiard". _billiard is not compiled

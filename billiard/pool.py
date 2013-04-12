@@ -43,6 +43,8 @@ from .exceptions import (
 from .five import Empty, Queue, range, values
 from .util import Finalize, debug
 
+PY3 = sys.version_info[0] == 3
+
 if platform.system() == 'Windows':  # pragma: no cover
     # On Windows os.kill calls TerminateProcess which cannot be
     # handled by # any process, so this is needed to terminate the task
@@ -54,14 +56,14 @@ else:
 
 try:
     TIMEOUT_MAX = threading.TIMEOUT_MAX
-except AttributeError:
-    TIMEOUT_MAX = 1e10
+except AttributeError:  # pragma: no cover
+    TIMEOUT_MAX = 1e10  # noqa
 
 
-try:
-    _Semaphore = threading._Semaphore
-except AttributeError:  # Py3
-    _Semaphore = threading.Semaphore  # noqa
+if PY3:
+    _Semaphore = threading.Semaphore
+else:
+    _Semaphore = threading._Semaphore  # noqa
 
 #
 # Constants representing the state of a pool
@@ -122,17 +124,17 @@ class LaxBoundedSemaphore(_Semaphore):
     but ignores if # releases >= value."""
 
     def __init__(self, value=1, verbose=None):
-        if sys.version_info[0] == 3:
+        if PY3:
             _Semaphore.__init__(self, value)
         else:
             _Semaphore.__init__(self, value, verbose)
         self._initial_value = value
 
     def grow(self):
-        try:
-            cond = self._Semaphore__cond
-        except AttributeError: # Py3
+        if PY3:
             cond = self._cond
+        else:
+            cond = self._Semaphore__cond
         with cond:
             self._initial_value += 1
             self._Semaphore__value += 1
@@ -142,7 +144,7 @@ class LaxBoundedSemaphore(_Semaphore):
         self._initial_value -= 1
         self.acquire()
 
-    if sys.version_info[0] == 3:
+    if PY3:
 
         def release(self):
             cond = self._cond
@@ -260,9 +262,15 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     # Make sure all exiting signals call finally: blocks.
     # this is important for the semaphore to be released.
     reset_signals()
+
     # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
         signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
+
+    try:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+    except (AttributeError):
+        pass
 
     exitcode = None
     completed = 0
@@ -276,7 +284,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             ready, task = poll(1.0)
             if not ready:
                 continue
-        except (EOFError, IOError), exc:
+        except (EOFError, IOError) as exc:
             if get_errno(exc) == errno.EINTR:
                 continue  # interrupted, maybe by gdb
             debug('worker got EOFError or IOError -- exiting')
