@@ -40,7 +40,7 @@ def reset_signals(handler=_shutdown_cleanup):
             signum = getattr(signal, 'SIG%s' % (sig, ))
             if signal.getsignal(signum) != signal.SIG_IGN:
                 signal.signal(signum, handler)
-        except (AttributeError, ValueError, RuntimeError):
+        except (OSError, AttributeError, ValueError, RuntimeError):
             pass
 
 
