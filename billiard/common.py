@@ -58,12 +58,13 @@ class restart_state(object):
             # maxT passed, reset counter and time passed.
             self.T, self.R = now, 0
         elif self.maxR and self.R >= self.maxR:
-            # verify that R has a value as it may have been reset
-            # by another thread, and we want to avoid locking.
+            # verify that R has a value as the result handler
+            # resets this when a job is accepted. If a job is accepted
+            # the startup probably went fine (startup restart burst
+            # protection)
             if self.R:
-                raise self.RestartFreqExceeded(
-                    "%r in %rs" % (self.R, self.maxT),
-                )
+                pass
+            raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
         # first run sets T
         if self.T is None:
             self.T = now
