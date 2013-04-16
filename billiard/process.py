@@ -249,7 +249,7 @@ class Process(object):
                 # delay finalization of the old process object until after
                 # _run_after_forkers() is executed
                 del old_process
-            util.info('child process calling self.run()')
+            util.info('child process %s calling self.run()', self.pid)
             try:
                 self.run()
                 exitcode = 0
@@ -271,7 +271,8 @@ class Process(object):
                 sys.stderr.write('Process %s:\n' % self.name)
                 traceback.print_exc()
         finally:
-            util.info('process exiting with exitcode %d', exitcode)
+            util.info('process %s exiting with exitcode %d',
+                      self.pid, exitcode)
             sys.stdout.flush()
             sys.stderr.flush()
         return exitcode
