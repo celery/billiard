@@ -29,7 +29,7 @@ import warnings
 
 from . import Event, Process, cpu_count
 from . import util
-from .common import reset_signals, restart_state
+from .common import reset_signals, restart_state, _shutdown_cleanup
 from .compat import get_errno
 from .einfo import ExceptionInfo
 from .exceptions import (
@@ -75,6 +75,9 @@ if PY3:
     _Semaphore = threading.Semaphore
 else:
     _Semaphore = threading._Semaphore  # noqa
+
+SIGLOST = (getattr(signal, 'SIGLOST', None) or
+           getattr(signal, 'SIGINFO', None))
 
 #
 # Constants representing the state of a pool
@@ -226,13 +229,27 @@ class WorkersJoined(Exception):
 def soft_timeout_sighandler(signum, frame):
     raise SoftTimeLimitExceeded()
 
+_PARENT_PID = [None]
+
+
+def _send_siglost():
+    if _PARENT_PID[0] and SIGLOST:
+        print('SENDING SIGLOST BACK TO PARENT')
+        os.kill(_PARENT_PID[0], SIGLOST)
+
+
+def _on_worker_signalled(signum, frame):
+    _send_siglost()
+    _shutdown_cleanup(signum, frame)
+
 #
 # Code run by worker processes
 #
 
 
 def worker(inqueue, outqueue, initializer=None, initargs=(),
-           maxtasks=None, sentinel=None):
+           maxtasks=None, sentinel=None, parent=None):
+    _PARENT_PID[0] = parent
     # Re-init logging system.
     # Workaround for http://bugs.python.org/issue6721#msg140215
     # Python logging module uses RLock() objects which are broken after
@@ -250,13 +267,17 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     get = inqueue.get
 
     if hasattr(inqueue, '_reader'):
-
+        from pickle import UnpicklingError
         def poll(timeout):
             if inqueue._reader.poll(timeout):
-                return True, get()
+                try:
+                    _R = get()
+                except (TypeError, ValueError, UnpicklingError), exc:
+                    error('Received incomplete data: %r', exc, exc_info=1)
+                else:
+                    return True, _R
             return False, None
     else:
-
         def poll(timeout):  # noqa
             try:
                 return True, get(timeout=timeout)
@@ -272,7 +293,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
     # Make sure all exiting signals call finally: blocks.
     # this is important for the semaphore to be released.
-    reset_signals()
+    reset_signals(_on_worker_signalled)
 
     # install signal handler for soft timeouts.
     if SIG_SOFT_TIMEOUT is not None:
@@ -328,6 +349,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
     debug('worker exiting after %d tasks', completed)
     if exitcode is None and maxtasks:
         exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
+    _send_siglost()
     sys.exit(exitcode or EX_OK)
 
 #
@@ -916,7 +938,7 @@ class Pool(object):
                 self._inqueue, self._outqueue,
                 self._initializer, self._initargs,
                 self._maxtasksperchild,
-                sentinel
+                sentinel, os.getpid(),
             ),
         )
         self._pool.append(w)
@@ -984,6 +1006,7 @@ class Pool(object):
                         else:
                             job._worker_lost = (time.time(),
                                                 exitcodes[worker_pid])
+                        self.signalled.discard(worker_pid)
                         break
             for worker in cleaned.itervalues():
                 if self.on_process_down:
@@ -1236,8 +1259,20 @@ class Pool(object):
             return result
 
     def terminate_job(self, pid, sig=None):
-        self.signalled.add(pid)
-        _kill(pid, sig or signal.SIGTERM)
+        proc = next(w for w in self._pool if w.pid == pid)
+        if proc:
+            self.signalled.add(pid)
+            _kill(pid, sig or signal.SIGTERM)
+            print('JOINING TERMINATED PROCESS')
+            proc.join()
+            assert proc.exitcode
+            print('+MAINTAINING POOL')
+            try:
+                self.maintain_pool()
+            finally:
+                print('-MAINTAINING POOL')
+            return True
+        return False
 
     def map_async(self, func, iterable, chunksize=None,
                   callback=None, error_callback=None):

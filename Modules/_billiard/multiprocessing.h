@@ -123,6 +123,7 @@
 #define MP_BAD_MESSAGE_LENGTH (-1004)
 #define MP_SOCKET_ERROR (-1005)
 #define MP_EXCEPTION_HAS_BEEN_SET (-1006)
+#define MP_SOCKET_TIMEOUT (-1007)
 
 PyObject *Billiard_SetError(PyObject *Type, int num);
 
@@ -130,10 +131,11 @@ PyObject *Billiard_SetError(PyObject *Type, int num);
  * Externs - not all will really exist on all platforms
  */
 
-extern PyObject *pickle_dumps;
-extern PyObject *pickle_loads;
-extern PyObject *pickle_protocol;
-extern PyObject *BufferTooShort;
+extern PyObject *Billiard_pickle_dumps;
+extern PyObject *Billiard_pickle_loads;
+extern PyObject *Billiard_pickle_protocol;
+extern PyObject *Billiard_BufferTooShort;
+extern PyObject *Billiard_socket_timeout;
 extern PyTypeObject BilliardSemLockType;
 extern PyTypeObject BilliardConnectionType;
 extern PyTypeObject BilliardPipeConnectionType;

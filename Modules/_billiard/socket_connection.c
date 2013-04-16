@@ -18,22 +18,75 @@
 #  define CLOSE(h) close(h)
 #endif
 
+int _Billiard_set_timeout(HANDLE fd, double timeout)
+{
+    struct timeval tv;
+    //tv.tv_sec = (long)timeout;
+    //tv.tv_usec = (long)((timeout - tv.tv_sec) * 1e6 + 0.5);
+    tv.tv_sec = 1.0;
+    tv.tv_usec = 0.0;
+    int ret = setsockopt(fd, AF_UNIX, SO_SNDTIMEO, &tv, sizeof(struct timeval));
+    printf("SETSOCKOPT RETURNS: %d\n", ret);
+    return ret;
+}
+
+void _Billiard_sockblock(int fd, int blocking)
+{
+#ifdef WIN32_LEAN_AND_MEAN
+    unsigned long mode = blocking ? 0 : 1
+    ioctlsocket(fd, FIONBIO, &mode);
+#else
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags > 0) {
+        flags = blocking ? (flags &~ O_NONBLOCK) : (flags | O_NONBLOCK);
+        fcntl(fd, F_SETFL, flags);
+    }
+#endif
+}
+
+
 /*
  * Send string to file descriptor
  */
 
 static Py_ssize_t
-_Billiard_conn_sendall(HANDLE h, char *string, size_t length)
+_Billiard_conn_sendall(HANDLE h, char *string, size_t length, double timeout)
 {
     char *p = string;
-    Py_ssize_t res;
+    Py_ssize_t written;
+    size_t orig = length;
+    int sret = 0;
+    fd_set wfds;
+    struct timeval tv;
 
+    tv.tv_sec = (long)timeout;
+    tv.tv_usec = (long)((timeout - tv.tv_sec) * 1e6 + 0.5);
     while (length > 0) {
-        res = WRITE(h, p, length);
-        if (res < 0)
+        FD_ZERO(&wfds);
+        FD_SET((SOCKET)h, &wfds);
+        if (timeout > 0.0) {
+            sret = select((int)h+1, NULL, &wfds, NULL, &tv);
+            if (sret < 0)
+                return MP_SOCKET_ERROR;
+            if (FD_ISSET(h, &wfds)) {
+                printf("+WRITE %zd left of %zd\n", length, orig);
+                written = send(h, p, length, 0);
+                printf("-WROTE %zd of %zd\n", written, orig);
+            }
+            else {
+                return MP_SOCKET_TIMEOUT;
+            }
+        }
+        else {
+            written = WRITE(h, p, length);
+        }
+
+        if (written < 0) {
+            printf("returns socket error\n");
             return MP_SOCKET_ERROR;
-        length -= res;
-        p += res;
+        }
+        length -= written;
+        p += written;
     }
 
     return MP_SUCCESS;
@@ -71,9 +124,16 @@ _Billiard_conn_recvall(HANDLE h, char *buffer, size_t length)
  */
 
 static Py_ssize_t
-Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t length)
+Billiard_conn_send_string(BilliardConnectionObject *conn, char *string,
+    size_t length, double timeout)
 {
     Py_ssize_t res;
+    #ifndef MS_WINDOWS
+        if (((int)conn->handle) < 0 || ((int)conn->handle) >= FD_SETSIZE) {
+            PyErr_SetString(PyExc_IOError, "handle out of range in select()");
+            return MP_EXCEPTION_HAS_BEEN_SET;
+        }
+    #endif
     /* The "header" of the message is a 32 bit unsigned number (in
        network order) which specifies the length of the "body".  If
        the message is shorter than about 16kb then it is quicker to
@@ -89,7 +149,7 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t l
         *(UINT32*)message = htonl((UINT32)length);
         memcpy(message+4, string, length);
         Py_BEGIN_ALLOW_THREADS
-        res = _Billiard_conn_sendall(conn->handle, message, length+4);
+        res = _Billiard_conn_sendall(conn->handle, message, length+4, timeout);
         Py_END_ALLOW_THREADS
         PyMem_Free(message);
     } else {
@@ -100,8 +160,9 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t l
 
         lenbuff = htonl((UINT32)length);
         Py_BEGIN_ALLOW_THREADS
-        res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4) ||
-            _Billiard_conn_sendall(conn->handle, string, length);
+        res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4, timeout);
+        if (res == MP_SUCCESS)
+            res = _Billiard_conn_sendall(conn->handle, string, length, timeout);
         Py_END_ALLOW_THREADS
     }
     return res;
@@ -151,7 +212,6 @@ Billiard_conn_recv_string(BilliardConnectionObject *conn, char *buffer,
 /*
  * Check whether any data is available for reading -- neg timeout blocks
  */
-
 static int
 Billiard_conn_poll(BilliardConnectionObject *conn, double timeout, PyThreadState *_save)
 {

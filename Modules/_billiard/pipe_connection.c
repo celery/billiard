@@ -15,7 +15,8 @@
  */
 
 static Py_ssize_t
-Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t length)
+Billiard_conn_send_string(BilliardConnectionObject *conn, char *string,
+                          size_t length, double timeout)
 {
     DWORD amount_written;
     BOOL ret;

@@ -17,8 +17,12 @@
 
 PyObject *create_win32_namespace(void);
 
-PyObject *pickle_dumps, *pickle_loads, *pickle_protocol;
-PyObject *ProcessError, *BufferTooShort;
+PyObject *Billiard_pickle_dumps;
+PyObject *Billiard_pickle_loads;
+PyObject *Billiard_pickle_protocol;
+PyObject *Billiard_ProcessError;
+PyObject *Billiard_BufferTooShort;
+PyObject *Billiard_socket_timeout;
 
 /*
  * Function which raises exceptions based on error codes
@@ -28,6 +32,8 @@ PyObject *
 Billiard_SetError(PyObject *Type, int num)
 {
     switch (num) {
+    case MP_SUCCESS:
+        break;
 #ifdef MS_WINDOWS
     case MP_STANDARD_ERROR:
         if (Type == NULL)
@@ -47,6 +53,9 @@ Billiard_SetError(PyObject *Type, int num)
         PyErr_SetFromErrno(Type);
         break;
 #endif /* !MS_WINDOWS */
+    case MP_SOCKET_TIMEOUT:
+        PyErr_SetString(Billiard_socket_timeout, "timed out");
+        break;
     case MP_MEMORY_ERROR:
         PyErr_NoMemory();
         break;
@@ -233,16 +242,23 @@ init_billiard(void)
     temp = PyImport_ImportModule(PICKLE_MODULE);
     if (!temp)
         return;
-    pickle_dumps = PyObject_GetAttrString(temp, "dumps");
-    pickle_loads = PyObject_GetAttrString(temp, "loads");
-    pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
+    Billiard_pickle_dumps = PyObject_GetAttrString(temp, "dumps");
+    Billiard_pickle_loads = PyObject_GetAttrString(temp, "loads");
+    Billiard_pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
     Py_XDECREF(temp);
 
     /* Get copy of BufferTooShort */
     temp = PyImport_ImportModule("billiard");
     if (!temp)
         return;
-    BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
+    Billiard_BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
+    Py_XDECREF(temp);
+
+    /* Get copy of socket.timeout */
+    temp = PyImport_ImportModule("socket");
+    if (!temp)
+        return;
+    Billiard_socket_timeout = PyObject_GetAttrString(temp, "timeout");
     Py_XDECREF(temp);
 
     /* Add connection type to module */
