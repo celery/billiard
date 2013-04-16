@@ -39,7 +39,7 @@ def reset_signals(handler=_shutdown_cleanup):
         try:
             signum = getattr(signal, sig)
             current = signal.getsignal(signum)
-            if current and current != signal.SIG_IGN:
+            if current is not None and current != signal.SIG_IGN:
                 signal.signal(signum, handler)
         except (OSError, AttributeError, ValueError, RuntimeError):
             pass
@@ -62,7 +62,7 @@ class restart_state(object):
             # resets this when a job is accepted. If a job is accepted
             # the startup probably went fine (startup restart burst
             # protection)
-            if self.R:
+            if self.R:  # pragma: no cover
                 pass
             raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
         # first run sets T
