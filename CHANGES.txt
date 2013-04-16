@@ -1,3 +1,13 @@
+2.7.3.28 - 2013-04-16
+---------------------
+
+- Pool: Fixed regression that disabled the deadlock
+  fix in 2.7.3.24
+
+- Pool: RestartFreqExceeded could be raised prematurely.
+
+- Process: Include pid in startup and process INFO logs.
+
 2.7.3.27 - 2013-04-12
 ---------------------
 
