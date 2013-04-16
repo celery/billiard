@@ -6,6 +6,7 @@ import signal
 
 from contextlib import contextmanager
 from mock import call, patch, Mock
+from time import time
 
 from billiard.common import (
     _shutdown_cleanup,
@@ -38,20 +39,6 @@ class test_reset_signals(Case):
             self.assertTrue(exit.called)
             self.assertEqual(os.WTERMSIG(exit.call_args[0][0]), 15)
 
-    @contextmanager
-    def assert_context(self, sigs, get_returns=None, set_effect=None):
-        with termsigs(*sigs):
-            with patch('signal.getsignal') as GET:
-                with patch('signal.signal') as SET:
-                    GET.return_value = get_returns
-                    SET.side_effect = set_effect
-                    reset_signals()
-                    GET.assert_has_calls([
-                        call(signo(sig)) for sig in sigs
-                    ])
-                    yield GET, SET
-
-
     def test_does_not_reset_ignored_signal(self, sigs=['SIGTERM']):
         with self.assert_context(sigs, signal.SIG_IGN) as (_, SET):
             self.assertFalse(SET.called)
@@ -78,5 +65,34 @@ class test_reset_signals(Case):
             with self.assert_context(sigs, signal.SIG_DFL, exc) as (_, SET):
                 self.assertTrue(SET.called)
 
+    @contextmanager
+    def assert_context(self, sigs, get_returns=None, set_effect=None):
+        with termsigs(*sigs):
+            with patch('signal.getsignal') as GET:
+                with patch('signal.signal') as SET:
+                    GET.return_value = get_returns
+                    SET.side_effect = set_effect
+                    reset_signals()
+                    GET.assert_has_calls([
+                        call(signo(sig)) for sig in sigs
+                    ])
+                    yield GET, SET
 
 
+class test_restart_state(Case):
+
+    def test_raises(self):
+        s = restart_state(100, 1)  # max 100 restarts in 1 second.
+        s.R = 99
+        s.step()
+        with self.assertRaises(s.RestartFreqExceeded):
+            s.step()
+
+    def test_time_passed_resets_counter(self):
+        s = restart_state(100, 10)
+        s.R, s.T = 100, time()
+        with self.assertRaises(s.RestartFreqExceeded):
+            s.step()
+        s.R, s.T = 100, time()
+        s.step(time() + 20)
+        self.assertEqual(s.R, 1)

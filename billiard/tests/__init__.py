@@ -1,11 +1,12 @@
+from __future__ import absolute_import
+
 import atexit
 
 
 def teardown():
+    # Workaround for multiprocessing bug where logging
+    # is attempted after global already collected at shutdown.
     cancelled = set()
-    import billiard.util
-    cancelled.add(billiard.util._exit_function)
-
     try:
         import multiprocessing.util
         cancelled.add(multiprocessing.util._exit_function)

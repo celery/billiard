@@ -52,8 +52,9 @@ class restart_state(object):
         self.maxR, self.maxT = maxR, maxT
         self.R, self.T = 0, None
 
-    def step(self):
-        now = time()
+    def step(self, now=None):
+        now = time() if now is None else now
+        R = self.R
         if self.T and now - self.T >= self.maxT:
             # maxT passed, reset counter and time passed.
             self.T, self.R = now, 0
@@ -64,7 +65,8 @@ class restart_state(object):
             # protection)
             if self.R:  # pragma: no cover
                 pass
-            raise self.RestartFreqExceeded("%r in %rs" % (self.R, self.maxT))
+            self.R = 0  # reset in case someone catches the error
+            raise self.RestartFreqExceeded("%r in %rs" % (R, self.maxT))
         # first run sets T
         if self.T is None:
             self.T = now
