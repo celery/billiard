@@ -17,3 +17,8 @@ devdatabase.db
 bundle_version.gen
 celeryd.log
 celeryd.pid
+nosetests.xml
+coverage.xml
+cover/
+*.so
+.tox/

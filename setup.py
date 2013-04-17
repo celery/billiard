@@ -166,6 +166,26 @@ Changes
 """
 long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
 
+# -*- Installation Requires -*-
+
+py_version = sys.version_info
+is_jython = sys.platform.startswith('java')
+is_pypy = hasattr(sys, 'pypy_version_info')
+
+
+def strip_comments(l):
+    return l.split('#', 1)[0].strip()
+
+
+def reqs(f):
+    return list(filter(None, [strip_comments(l) for l in open(
+        os.path.join(os.getcwd(), 'requirements', f)).readlines()]))
+
+if py_version[0] == 3:
+    tests_require = reqs('test3.txt')
+else:
+    tests_require = reqs('test.txt')
+
 
 def run_setup(with_extensions=True):
     extensions = []
@@ -194,7 +214,7 @@ def run_setup(with_extensions=True):
         url=meta['homepage'],
         zip_safe=False,
         license='BSD',
-        tests_require=['nose', 'nose-cover3'],
+        tests_require=tests_require,
         test_suite='nose.collector',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
@@ -223,6 +243,7 @@ def run_setup(with_extensions=True):
 try:
     run_setup(not (is_jython or is_pypy or is_py3k))
 except BaseException:
-    import traceback
-    sys.stderr.write(BUILD_WARNING % '\n'.join(traceback.format_stack(), ))
-    run_setup(False)
+    if 'test' not in sys.argv:
+        import traceback
+        sys.stderr.write(BUILD_WARNING % '\n'.join(traceback.format_stack(), ))
+        run_setup(False)

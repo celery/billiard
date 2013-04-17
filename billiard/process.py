@@ -46,9 +46,10 @@ def current_process():
 
 def _cleanup():
     # check for processes which have finished
-    for p in list(_current_process._children):
-        if p._popen.poll() is not None:
-            _current_process._children.discard(p)
+    if _current_process is not None:
+        for p in list(_current_process._children):
+            if p._popen.poll() is not None:
+                _current_process._children.discard(p)
 
 
 def active_children(_cleanup=_cleanup):
@@ -60,7 +61,9 @@ def active_children(_cleanup=_cleanup):
     except TypeError:
         # called after gc collect so _cleanup does not exist anymore
         return []
-    return list(_current_process._children)
+    if _current_process is not None:
+        return list(_current_process._children)
+    return []
 
 
 class Process(object):
@@ -250,7 +253,7 @@ class Process(object):
                 # delay finalization of the old process object until after
                 # _run_after_forkers() is executed
                 del old_process
-            util.info('child process calling self.run()')
+            util.info('child process %s calling self.run()', self.pid)
             try:
                 self.run()
                 exitcode = 0
@@ -272,7 +275,8 @@ class Process(object):
                 sys.stderr.write('Process %s:\n' % self.name)
                 traceback.print_exc()
         finally:
-            util.info('process exiting with exitcode %d', exitcode)
+            util.info('process %s exiting with exitcode %d',
+                      self.pid, exitcode)
             sys.stdout.flush()
             sys.stderr.flush()
         return exitcode

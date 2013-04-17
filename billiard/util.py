@@ -257,7 +257,9 @@ except ImportError:
                 x += ', exitprority=' + str(self._key[0])
             return x + '>'
 
-    def _run_finalizers(minpriority=None):  # noqa
+    def _run_finalizers(minpriority=None,
+                        _finalizer_registry=_finalizer_registry,
+                        sub_debug=sub_debug):  # noqa
         """Run all finalizers whose exit priority is not None
         and at least minpriority'.
 
@@ -292,11 +294,12 @@ except ImportError:
         '''
         return _exiting or _exiting is None
 
-    def _exit_function():  # noqa
+    def _exit_function(info=info, debug=debug,
+                       _run_finalizers=_run_finalizers,
+                       active_children=active_children):  # noqa
         '''
         Clean up on exit
         '''
-
         global _exiting
 
         info('process shutting down')

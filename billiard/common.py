@@ -39,7 +39,7 @@ def reset_signals(handler=_shutdown_cleanup):
         try:
             signum = getattr(signal, sig)
             current = signal.getsignal(signum)
-            if current and current != signal.SIG_IGN:
+            if current is not None and current != signal.SIG_IGN:
                 signal.signal(signum, handler)
         except (OSError, AttributeError, ValueError, RuntimeError):
             pass
@@ -52,17 +52,22 @@ class restart_state(object):
         self.maxR, self.maxT = maxR, maxT
         self.R, self.T = 0, None
 
-    def step(self):
-        now = time()
+    def step(self, now=None):
+        now = time() if now is None else now
         R = self.R
         if self.T and now - self.T >= self.maxT:
-            self.R = 0
-        elif self.maxR and R >= self.maxR:
-            # verify that R has a value as it may have been reset
-            # by another thread, and we want to avoid locking.
-            if self.R:
-                raise self.RestartFreqExceeded(
-                    "%r in %rs" % (self.R, self.maxT),
-                )
+            # maxT passed, reset counter and time passed.
+            self.T, self.R = now, 0
+        elif self.maxR and self.R >= self.maxR:
+            # verify that R has a value as the result handler
+            # resets this when a job is accepted. If a job is accepted
+            # the startup probably went fine (startup restart burst
+            # protection)
+            if self.R:  # pragma: no cover
+                pass
+            self.R = 0  # reset in case someone catches the error
+            raise self.RestartFreqExceeded("%r in %rs" % (R, self.maxT))
+        # first run sets T
+        if self.T is None:
+            self.T = now
         self.R += 1
-        self.T = now

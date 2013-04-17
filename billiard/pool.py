@@ -807,8 +807,6 @@ class Pool(object):
         self._initializer = initializer
         self._initargs = initargs
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
-        self.max_restarts = max_restarts or round(processes * 100)
-        self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
         self.on_process_up = on_process_up
         self.on_process_down = on_process_down
         self.on_timeout_set = on_timeout_set
@@ -833,6 +831,8 @@ class Pool(object):
             except NotImplementedError:
                 processes = 1
         self._processes = processes
+        self.max_restarts = max_restarts or round(processes * 100)
+        self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
 
         if initializer is not None and \
                 not isinstance(initializer, collections.Callable):
@@ -976,8 +976,6 @@ class Pool(object):
                                                 exitcodes[worker_pid])
                         break
             for worker in values(cleaned):
-                if self._putlock is not None:
-                    self._putlock.release()
                 if self.on_process_down:
                     self.on_process_down(worker)
             return list(exitcodes.values())
@@ -1043,7 +1041,11 @@ class Pool(object):
     def _maintain_pool(self):
         """"Clean up any exited workers and start replacements for them.
         """
-        self._repopulate_pool(self._join_exited_workers())
+        joined = self._join_exited_workers()
+        self._repopulate_pool(joined)
+        for i in range(len(joined)):
+            if self._putlock is not None:
+                self._putlock.release()
 
     def maintain_pool(self, *args, **kwargs):
         if self._worker_handler._state == RUN and self._state == RUN:
