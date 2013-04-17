@@ -45,9 +45,10 @@ def current_process():
 
 def _cleanup():
     # check for processes which have finished
-    for p in list(_current_process._children):
-        if p._popen.poll() is not None:
-            _current_process._children.discard(p)
+    if _current_process is not None:
+        for p in list(_current_process._children):
+            if p._popen.poll() is not None:
+                _current_process._children.discard(p)
 
 
 def active_children(_cleanup=_cleanup):
@@ -59,7 +60,9 @@ def active_children(_cleanup=_cleanup):
     except TypeError:
         # called after gc collect so _cleanup does not exist anymore
         return []
-    return list(_current_process._children)
+    if _current_process is not None:
+        return list(_current_process._children)
+    return []
 
 
 class Process(object):
