@@ -324,6 +324,28 @@ _error:
  */
 
 static PyObject *
+Billiard_connection_send_offset(BilliardConnectionObject *self, PyObject *args)
+{
+    char *buf = NULL;
+    Py_ssize_t len = 0;
+    Py_ssize_t offset = 0;
+    ssize_t written = 0;
+
+    if (!PyArg_ParseTuple(args, "s#n", &buf, &len, &offset))
+        return NULL;
+
+    CHECK_WRITABLE(self);
+
+    written = _Billiard_conn_send_offset(self->handle, buf, (size_t)len, offset);
+    if (written < 0) {
+        Billiard_SetError(NULL, MP_SOCKET_ERROR);
+        return NULL;
+    }
+
+    return PyInt_FromSsize_t((Py_ssize_t)written);
+}
+
+static PyObject *
 Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *args)
 {
     char *buffer;
@@ -514,6 +536,8 @@ static PyMethodDef Billiard_connection_methods[] = {
 
     {"send", (PyCFunction)Billiard_connection_send_obj, METH_VARARGS,
      "send a (picklable) object"},
+    {"send_offset", (PyCFunction)Billiard_connection_send_offset, METH_VARARGS,
+      "send string/buffer (non-blocking)"},
     {"recv", (PyCFunction)Billiard_connection_recv_obj, METH_NOARGS,
      "receive a (picklable) object"},
 
