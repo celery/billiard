@@ -49,51 +49,15 @@ _Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t o
 }
 
 static Py_ssize_t
-_Billiard_conn_sendall(HANDLE h, char *string, size_t length,
-                       PyObject *on_block, PyThreadState *_save)
+_Billiard_conn_sendall(HANDLE h, char *string, size_t length)
 {
     char *p = string;
     Py_ssize_t res;
-    fd_set wfds;
-    int sret;
-    struct timeval tv;
-
-    tv.tv_sec = 1.0;
-    tv.tv_usec = 0.0;
-
-#ifdef MS_WINDOWS
-    unsigned long mode = 0;
-    ioctlsocket(h, FIONBIO, &mode);
-#else
-    if (((int)h) < 0 || ((int)h) >= FD_SETSIZE) {
-        Py_BLOCK_THREADS
-        PyErr_SetString(PyExc_IOError, "handle out of range in select()");
-        Py_UNBLOCK_THREADS
-        return MP_EXCEPTION_HAS_BEEN_SET;
-    }
-    int sockopts = fcntl(h, F_GETFL);
-    if (sockopts < 0)
-        return MP_SOCKET_ERROR;
-    fcntl(h, F_SETFL, sockopts | O_NONBLOCK);
-#endif
 
     while (length > 0) {
         res = WRITE(h, p, length);
-        if (res == -1) {
-            if (on_block != NULL) {
-                Py_BLOCK_THREADS
-                PyObject_CallFunction(on_block, NULL);
-                Py_UNBLOCK_THREADS
-            }
-            FD_ZERO(&wfds);
-            FD_SET((SOCKET)h, &wfds);
-            sret = select((int)h+1, NULL, &wfds, NULL, &tv);
-            if (sret < 0)
-                return MP_SOCKET_ERROR;
-            continue;
-        } else if (res < 0) {
+        if (res < 0)
             return MP_SOCKET_ERROR;
-        }
         length -= res;
         p += res;
     }
@@ -133,8 +97,7 @@ _Billiard_conn_recvall(HANDLE h, char *buffer, size_t length)
  */
 
 static Py_ssize_t
-Billiard_conn_send_string(BilliardConnectionObject *conn, char *string,
-                          size_t length, PyObject *on_block)
+Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t length)
 {
     Py_ssize_t res;
     /* The "header" of the message is a 32 bit unsigned number (in
@@ -152,9 +115,7 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string,
         *(UINT32*)message = htonl((UINT32)length);
         memcpy(message+4, string, length);
         Py_BEGIN_ALLOW_THREADS
-        res = _Billiard_conn_sendall(
-            conn->handle, message, length+4, on_block, _save
-        );
+        res = _Billiard_conn_sendall(conn->handle, message, length+4);
         Py_END_ALLOW_THREADS
         PyMem_Free(message);
     } else {
@@ -165,11 +126,9 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string,
 
         lenbuff = htonl((UINT32)length);
         Py_BEGIN_ALLOW_THREADS
-        res = _Billiard_conn_sendall(
-            conn->handle, (char*)&lenbuff, 4, on_block, _save);
+        res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4);
         if (!res)
-            res = _Billiard_conn_sendall(
-                conn->handle, string, length, on_block, _save);
+            res = _Billiard_conn_sendall(conn->handle, string, length);
         Py_END_ALLOW_THREADS
     }
     return res;
