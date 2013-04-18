@@ -17,10 +17,7 @@ import sys
 import socket
 import threading
 
-if sys.version_info[0] == 3:
-    from multiprocessing.connection import Client, Listener
-else:
-    from billiard._connection import Client, Listener  # noqa
+from multiprocessing.connection import Client, Listener
 
 from . import current_process
 from ._ext import _billiard, win32
@@ -141,24 +138,6 @@ def rebuild_handle(pickled_data):
     return new_handle
 
 #
-# Register `_billiard.Connection` with `ForkingPickler`
-#
-
-
-def reduce_connection(conn):
-    rh = reduce_handle(conn.fileno())
-    return rebuild_connection, (rh, conn.readable, conn.writable)
-
-
-def rebuild_connection(reduced_handle, readable, writable):
-    handle = rebuild_handle(reduced_handle)
-    return _billiard.Connection(
-        handle, readable=readable, writable=writable
-    )
-
-ForkingPickler.register(_billiard.Connection, reduce_connection)
-
-#
 # Register `socket.socket` with `ForkingPickler`
 #
 
@@ -181,20 +160,3 @@ def rebuild_socket(reduced_handle, family, type_, proto):
     close(fd)
     return _sock
 ForkingPickler.register(socket.socket, reduce_socket)
-
-#
-# Register `_billiard.PipeConnection` with `ForkingPickler`
-#
-
-if sys.platform == 'win32':
-
-    def reduce_pipe_connection(conn):
-        rh = reduce_handle(conn.fileno())
-        return rebuild_pipe_connection, (rh, conn.readable, conn.writable)
-
-    def rebuild_pipe_connection(reduced_handle, readable, writable):
-        handle = rebuild_handle(reduced_handle)
-        return _billiard.PipeConnection(
-            handle, readable=readable, writable=writable
-        )
-    ForkingPickler.register(_billiard.PipeConnection, reduce_pipe_connection)
