@@ -98,10 +98,11 @@ Billiard_connection_sendbytes(BilliardConnectionObject *self, PyObject *args)
 {
     char *buffer;
     Py_ssize_t length, offset=0, size=PY_SSIZE_T_MIN;
+    PyObject *on_block = NULL;
     int res;
 
-    if (!PyArg_ParseTuple(args, F_RBUFFER "#|" F_PY_SSIZE_T F_PY_SSIZE_T,
-                          &buffer, &length, &offset, &size))
+    if (!PyArg_ParseTuple(args, F_RBUFFER "#|O" F_PY_SSIZE_T F_PY_SSIZE_T,
+                          &buffer, &length, &offset, &size, &on_block))
         return NULL;
 
     CHECK_WRITABLE(self);
@@ -129,7 +130,7 @@ Billiard_connection_sendbytes(BilliardConnectionObject *self, PyObject *args)
         }
     }
 
-    res = Billiard_conn_send_string(self, buffer + offset, size);
+    res = Billiard_conn_send_string(self, buffer + offset, size, on_block);
 
     if (res < 0) {
         if (PyErr_Occurred())
@@ -323,12 +324,17 @@ _error:
  */
 
 static PyObject *
-Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
+Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *args)
 {
     char *buffer;
     int res;
     Py_ssize_t length;
     PyObject *pickled_string = NULL;
+    PyObject *obj = NULL;
+    PyObject *on_block = NULL;
+
+    if (!PyArg_ParseTuple(args, "O|O", &obj, &on_block))
+        return NULL;
 
     CHECK_WRITABLE(self);
 
@@ -340,7 +346,7 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
     if (PyString_AsStringAndSize(pickled_string, &buffer, &length) < 0)
         goto failure;
 
-    res = Billiard_conn_send_string(self, buffer, (int)length);
+    res = Billiard_conn_send_string(self, buffer, (int)length, on_block);
 
     if (res < 0) {
         Billiard_SetError(PyExc_IOError, res);
@@ -506,7 +512,7 @@ static PyMethodDef Billiard_connection_methods[] = {
      "receive byte data into a writeable buffer-like object\n"
      "returns the number of bytes read"},
 
-    {"send", (PyCFunction)Billiard_connection_send_obj, METH_O,
+    {"send", (PyCFunction)Billiard_connection_send_obj, METH_VARARGS,
      "send a (picklable) object"},
     {"recv", (PyCFunction)Billiard_connection_recv_obj, METH_NOARGS,
      "receive a (picklable) object"},
