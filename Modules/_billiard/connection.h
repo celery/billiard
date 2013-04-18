@@ -232,12 +232,12 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
         if (freeme == NULL) {
             result = PyInt_FromSsize_t(res);
         } else {
-            result = PyObject_CallFunction(BufferTooShort,
+            result = PyObject_CallFunction(Billiard_BufferTooShort,
                                            F_RBUFFER "#",
                                            freeme, res);
             PyMem_Free(freeme);
             if (result) {
-                PyErr_SetObject(BufferTooShort, result);
+                PyErr_SetObject(Billiard_BufferTooShort, result);
                 Py_DECREF(result);
             }
             goto _error;
@@ -295,12 +295,12 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
         if (freeme == NULL) {
             result = PyInt_FromSsize_t(res);
         } else {
-            result = PyObject_CallFunction(BufferTooShort,
+            result = PyObject_CallFunction(Billiard_BufferTooShort,
                     F_RBUFFER "#",
                     freeme, res);
             PyMem_Free(freeme);
             if (result) {
-                PyErr_SetObject(BufferTooShort, result);
+                PyErr_SetObject(Billiard_BufferTooShort, result);
                 Py_DECREF(result);
             }
             goto _error;
@@ -354,8 +354,9 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
 
     CHECK_WRITABLE(self);
 
-    pickled_string = PyObject_CallFunctionObjArgs(pickle_dumps, obj,
-                                                  pickle_protocol, NULL);
+    pickled_string = PyObject_CallFunctionObjArgs(
+        Billiard_pickle_dumps, obj, Billiard_pickle_protocol, NULL
+    );
     if (!pickled_string)
         goto failure;
 
@@ -364,8 +365,8 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
 
     res = Billiard_conn_send_string(self, buffer, (int)length);
 
-    if (res < 0) {
-        Billiard_SetError(PyExc_IOError, res);
+    if (res != MP_SUCCESS) {
+        Billiard_SetError(NULL, res);
         goto failure;
     }
 
@@ -411,7 +412,7 @@ Billiard_connection_recv_obj(BilliardConnectionObject *self)
     }
 
     if (temp)
-        result = PyObject_CallFunctionObjArgs(pickle_loads,
+        result = PyObject_CallFunctionObjArgs(Billiard_pickle_loads,
                                               temp, NULL);
     Py_XDECREF(temp);
     return result;

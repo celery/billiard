@@ -127,7 +127,7 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t l
         lenbuff = htonl((UINT32)length);
         Py_BEGIN_ALLOW_THREADS
         res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4);
-        if (!res)
+        if (res == MP_SUCCESS)
             res = _Billiard_conn_sendall(conn->handle, string, length);
         Py_END_ALLOW_THREADS
     }

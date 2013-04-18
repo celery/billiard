@@ -130,10 +130,10 @@ PyObject *Billiard_SetError(PyObject *Type, int num);
  * Externs - not all will really exist on all platforms
  */
 
-extern PyObject *pickle_dumps;
-extern PyObject *pickle_loads;
-extern PyObject *pickle_protocol;
-extern PyObject *BufferTooShort;
+extern PyObject *Billiard_pickle_dumps;
+extern PyObject *Billiard_pickle_loads;
+extern PyObject *Billiard_pickle_protocol;
+extern PyObject *Billiard_BufferTooShort;
 extern PyTypeObject BilliardSemLockType;
 extern PyTypeObject BilliardConnectionType;
 extern PyTypeObject BilliardPipeConnectionType;

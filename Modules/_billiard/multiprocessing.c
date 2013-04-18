@@ -17,8 +17,10 @@
 
 PyObject *create_win32_namespace(void);
 
-PyObject *pickle_dumps, *pickle_loads, *pickle_protocol;
-PyObject *ProcessError, *BufferTooShort;
+PyObject *Billiard_pickle_dumps;
+PyObject *Billiard_pickle_loads;
+PyObject *Billiard_pickle_protocol;
+PyObject *Billiard_BufferTooShort;
 
 /*
  * Function which raises exceptions based on error codes
@@ -28,6 +30,8 @@ PyObject *
 Billiard_SetError(PyObject *Type, int num)
 {
     switch (num) {
+    case MP_SUCCESS:
+        break;
 #ifdef MS_WINDOWS
     case MP_STANDARD_ERROR:
         if (Type == NULL)
@@ -233,16 +237,16 @@ init_billiard(void)
     temp = PyImport_ImportModule(PICKLE_MODULE);
     if (!temp)
         return;
-    pickle_dumps = PyObject_GetAttrString(temp, "dumps");
-    pickle_loads = PyObject_GetAttrString(temp, "loads");
-    pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
+    Billiard_pickle_dumps = PyObject_GetAttrString(temp, "dumps");
+    Billiard_pickle_loads = PyObject_GetAttrString(temp, "loads");
+    Billiard_pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
     Py_XDECREF(temp);
 
     /* Get copy of BufferTooShort */
     temp = PyImport_ImportModule("billiard");
     if (!temp)
         return;
-    BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
+    Billiard_BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
     Py_XDECREF(temp);
 
     /* Add connection type to module */
