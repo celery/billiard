@@ -27,6 +27,8 @@ import time
 import Queue
 import warnings
 
+from pickle import UnpicklingError
+
 from . import Event, Process, cpu_count
 from . import util
 from .common import reset_signals, restart_state
@@ -123,6 +125,11 @@ def starmapstar(args):
 def error(msg, *args, **kwargs):
     if util._logger:
         util._logger.error(msg, *args, **kwargs)
+
+
+def warning(msg, *args, **kwargs):
+    if util._logger:
+        util._logger.warning(msg, *args, **kwargs)
 
 
 def stop_if_not_current(thread, timeout=None):
@@ -292,8 +299,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             break
 
         try:
-            ready, task = poll(1.0)
-            if not ready:
+            try:
+                ready, task = poll(1.0)
+                if not ready:
+                    continue
+            except UnpicklingError:
+                warning('discarding partially written data')
                 continue
         except (EOFError, IOError), exc:
             if get_errno(exc) == errno.EINTR:
