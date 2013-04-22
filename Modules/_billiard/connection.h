@@ -379,6 +379,45 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
 }
 
 static PyObject *
+Billiard_connection_recv_payload(BilliardConnectionObject *self)
+{
+    char *freeme = NULL;
+    Py_ssize_t res;
+    PyObject *view = NULL;
+    PyObject *result = NULL;
+
+    CHECK_READABLE(self);
+
+    res = Billiard_conn_recv_string(self, self->buffer, CONNECTION_BUFFER_SIZE,
+                                    &freeme, PY_SSIZE_T_MAX);
+    if (res < 0) {
+        if (res == MP_BAD_MESSAGE_LENGTH) {
+            if ((self->flags & WRITABLE) == 0) {
+                Py_BEGIN_ALLOW_THREADS;
+                CLOSE(self->handle);
+                Py_END_ALLOW_THREADS;
+                self->handle = INVALID_HANDLE_VALUE;
+            } else {
+                self->flags = WRITABLE;
+            }
+        }
+        Billiard_SetError(PyExc_IOError, res);
+        goto error;
+    } else {
+        if (freeme == NULL) {
+            view = PyBuffer_FromMemory(self->buffer, res);
+        } else {
+            view = PyString_FromStringAndSize(freeme, res);
+            PyMem_Free(freeme);
+        }
+    }
+    //Py_XDECREF(view);
+    return view;
+error:
+    return NULL;
+}
+
+static PyObject *
 Billiard_connection_recv_obj(BilliardConnectionObject *self)
 {
     char *freeme = NULL;
@@ -535,7 +574,8 @@ static PyMethodDef Billiard_connection_methods[] = {
       "send string/buffer (non-blocking)"},
     {"recv", (PyCFunction)Billiard_connection_recv_obj, METH_NOARGS,
      "receive a (picklable) object"},
-
+    {"recv_payload", (PyCFunction)Billiard_connection_recv_payload, METH_NOARGS,
+     "receive raw payload (not unpickled)"},
     {"poll", (PyCFunction)Billiard_connection_poll, METH_VARARGS,
      "whether there is any input available to be read"},
     {"fileno", (PyCFunction)Billiard_connection_fileno, METH_NOARGS,

@@ -334,12 +334,18 @@ class SimpleQueue(object):
 
     def _make_methods(self):
         recv = self._reader.recv
+        recv_payload = self._reader.recv_payload
         rlock = self._rlock
 
         def get():
             with rlock:
                 return recv()
         self.get = get
+
+        def get_payload():
+            with rlock:
+                return recv_payload()
+        self.get_payload = get_payload
 
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
