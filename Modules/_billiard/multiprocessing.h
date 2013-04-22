@@ -165,7 +165,7 @@ extern HANDLE sigint_event;
  * Connection definition
  */
 
-#define CONNECTION_BUFFER_SIZE 1024
+#define CONNECTION_BUFFER_SIZE 131072
 
 typedef struct {
     PyObject_HEAD
