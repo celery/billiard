@@ -22,7 +22,7 @@
  * Send string to file descriptor
  */
 
-void _Billiard_sockblock(int fd, int blocking)
+void _Billiard_setblocking(int fd, int blocking)
 {
 #ifdef MS_WINDOWS
     unsigned long mode = blocking ? 0 : 1;
@@ -42,9 +42,9 @@ _Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t o
     p += offset;
     ssize_t res = 0;
 
-    _Billiard_sockblock(fd, 0);
+    _Billiard_setblocking(fd, 0);
     res = WRITE(fd, p, (size_t)len - offset);
-    _Billiard_sockblock(fd, 1);
+    _Billiard_setblocking(fd, 1);
     return res;
 }
 

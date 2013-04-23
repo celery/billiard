@@ -379,6 +379,14 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
 }
 
 static PyObject *
+Billiard_connection_setblocking(BilliardConnectionObject *self, PyObject *arg)
+{
+    _Billiard_setblocking(self->handle, PyInt_AS_LONG(arg));
+    Py_RETURN_NONE;
+
+}
+
+static PyObject *
 Billiard_connection_recv_payload(BilliardConnectionObject *self)
 {
     char *freeme = NULL;
@@ -574,6 +582,8 @@ static PyMethodDef Billiard_connection_methods[] = {
       "send string/buffer (non-blocking)"},
     {"recv", (PyCFunction)Billiard_connection_recv_obj, METH_NOARGS,
      "receive a (picklable) object"},
+    {"setblocking", (PyCFunction)Billiard_connection_setblocking, METH_O,
+     "set socket blocking/non-blocking"},
     {"recv_payload", (PyCFunction)Billiard_connection_recv_payload, METH_NOARGS,
      "receive raw payload (not unpickled)"},
     {"poll", (PyCFunction)Billiard_connection_poll, METH_VARARGS,
