@@ -27,8 +27,6 @@ import time
 import Queue
 import warnings
 
-from pickle import UnpicklingError
-
 from . import Event, Process, cpu_count
 from . import util
 from .common import pickle_loads, reset_signals, restart_state
@@ -52,6 +50,16 @@ if platform.system() == 'Windows':  # pragma: no cover
     from ._win import kill_processtree as _kill  # noqa
 else:
     from os import kill as _kill                 # noqa
+
+
+import pickle
+UNPICKLE_ERRORS = (pickle.UnpicklingError, )
+try:
+    import cPickle
+except ImportError:
+    pass
+else:
+    UNPICKLE_ERRORS += (cPickle.UnpicklingError, )
 
 
 try:
@@ -267,7 +275,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
                     payload = get_payload()
                     try:
                         return True, loads(payload)
-                    except (UnpicklingError, EOFError):
+                    except UNPICKLE_ERRORS + (EOFError, ):
                         warning('Discarding partially written payload')
                 return False, None
         else:
@@ -275,7 +283,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
                 try:
                     if inqueue._reader.poll(timeout):
                         return True, get()
-                except UnpicklingError:
+                except UNPICKLE_ERRORS:
                     warning('Discarding partially written payload')
                 return False, None
     else:
@@ -315,12 +323,8 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
             break
 
         try:
-            try:
-                ready, task = poll(1.0)
-                if not ready:
-                    continue
-            except UnpicklingError:
-                warning('discarding partially written data')
+            ready, task = poll(1.0)
+            if not ready:
                 continue
         except (EOFError, IOError), exc:
             if get_errno(exc) == errno.EINTR:
