@@ -54,16 +54,6 @@ else:
     from os import kill as _kill                 # noqa
 
 
-import pickle
-UNPICKLE_ERRORS = (pickle.UnpicklingError, )
-try:
-    import cPickle
-except ImportError:
-    pass
-else:
-    UNPICKLE_ERRORS += (cPickle.UnpicklingError, )
-
-
 try:
     next = next
 except NameError:
@@ -250,19 +240,24 @@ def soft_timeout_sighandler(signum, frame):
 
 class Worker(Process):
 
-    def __init__(self, inq, outq, initializer=None, initargs=(),
+    def __init__(self, pair, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
-        self._make_parent_methods()
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
         self._shutdown = sentinel
+        self.inq, self.outq = pair
+        self._quick_put = self.inq._writer.send
+        self._quick_get = self.outq._reader.recv
+        self.inq._writer.setblocking(0)
+
         super(Worker, self).__init__()
 
     def run(self, debug=debug):
         self._make_child_methods()
         self.after_fork()
+        self.inq._reader.setblocking(1)
         pid = os.getpid()
         put = self.outq.put
         poll = self.poll
@@ -308,23 +303,14 @@ class Worker(Process):
                     del(tb)
 
             completed += 1
+        self.inq._reader.close()
+        self.outq._writer.close()
         debug('worker exiting after %d tasks', completed)
         if exitcode is None and maxtasks:
             exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
         sys.exit(exitcode or EX_OK)
 
     def after_fork(self):
-        # Re-init logging system.
-        # Workaround for http://bugs.python.org/issue6721#msg140215
-        # Python logging module uses RLock() objects which are broken after
-        # fork. This can result in a deadlock (Issue #496).
-        logger_names = logging.Logger.manager.loggerDict.keys()
-        logger_names.append(None)  # for root logger
-        for name in logger_names:
-            for handler in logging.getLogger(name).handlers:
-                handler.createLock()
-        logging._lock = threading.RLock()
-
         if hasattr(self.inq, '_writer'):
             self.inq._writer.close()
         if hasattr(self.outq, '_reader'):
@@ -356,19 +342,12 @@ class Worker(Process):
 
                 def poll(timeout):
                     if _poll(timeout):
-                        payload = get_payload()
-                        try:
-                            return True, loads(payload)
-                        except UNPICKLE_ERRORS + (EOFError, ):
-                            warning('Discarding partially written payload')
+                        return True, loads(get_payload())
                     return False, None
             else:
                 def poll(timeout):  # noqa
-                    try:
-                        if _poll(timeout):
-                            return True, get()
-                    except UNPICKLE_ERRORS:
-                        warning('Discarding partially written payload')
+                    if _poll(timeout):
+                        return True, get()
                     return False, None
         else:
             def poll(timeout):  # noqa
@@ -378,16 +357,10 @@ class Worker(Process):
                     return False, None
         self.poll = poll
 
-    def _make_parent_methods(self):
-        from billiard.queues import _SimpleQueue
-        self.inq = _SimpleQueue()
-        self.outq = _SimpleQueue()
-        self._quick_put = self.inq._writer.send
-        self._quick_get = self.outq._reader.recv
-
 #
 # Class representing a process pool
 #
+
 
 
 class PoolThread(threading.Thread):
@@ -901,6 +874,8 @@ class Pool(object):
                 processes = cpu_count()
             except NotImplementedError:
                 processes = 1
+        self._queues = dict((self._create_in_out(), None)
+                            for _ in range(processes))
         self._processes = processes
         self._order = deque(reversed(range(processes)))
         self.max_restarts = max_restarts or round(processes * 100)
@@ -957,6 +932,7 @@ class Pool(object):
             self._putlock, self.restart_state, check_timeouts,
             self._fileno_to_outq,
         )
+        self.handle_result_event = self._result_handler.handle_event
 
         if threads:
             self._result_handler.start()
@@ -970,15 +946,25 @@ class Pool(object):
             exitpriority=15,
         )
 
-    def handle_result_event(self, fileno, events):
-        return self._result_handler.handle_event(fileno, events)
+    def handle_result_event(self, *args):
+        return self._result_handler.handle_event(*args)
+
+    def _available_pair(self):
+        return next(pair for pair, owner in self._queues.iteritems()
+                    if owner is None)
+
+    def _create_in_out(self):
+        from .queues import SimpleQueue
+        return SimpleQueue(), SimpleQueue()
 
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
-        w = self.Worker(self._inqueue, self._outqueue,
+        pair = self._available_pair()
+        w = self.Worker(pair,
                         self._initializer, self._initargs,
                         self._maxtasksperchild, sentinel)
         self._pool.append(w)
+        self._queues[pair] = w
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.index = i
@@ -986,7 +972,7 @@ class Pool(object):
         self._poolctrl[w.pid] = sentinel
         self._inqueues.append(w.inq)
         self.readers[w.outq._reader.fileno()] = self.handle_result_event
-        self._fileno_to_inq[w.outq._writer.fileno()] = w
+        self._fileno_to_inq[w.inq._writer.fileno()] = w
         self._fileno_to_outq[w.outq._reader.fileno()] = w
         if self.on_process_up:
             self.on_process_up(w)
@@ -1058,9 +1044,17 @@ class Pool(object):
                     self._fileno_to_inq.pop(
                         worker.inq._writer.fileno(), None,
                     )
+
+                    self._queues[self._pair_for_queue(worker)] = None
                     self.on_process_down(worker)
             return exitcodes.values()
         return []
+
+    def _pair_for_queue(self, worker):
+        for pair, owner in self._queues.iteritems():
+            if owner == worker:
+                return pair
+        raise ValueError(worker)
 
     def __enter__(self):
         return self

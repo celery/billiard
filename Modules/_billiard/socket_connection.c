@@ -42,9 +42,7 @@ _Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t o
     p += offset;
     ssize_t res = 0;
 
-    _Billiard_setblocking(fd, 0);
     res = WRITE(fd, p, (size_t)len - offset);
-    _Billiard_setblocking(fd, 1);
     return res;
 }
 
