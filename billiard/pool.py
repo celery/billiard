@@ -27,7 +27,6 @@ import Queue
 import warnings
 
 from collections import deque
-from pickle import UnpicklingError
 from random import shuffle
 
 from . import Event, Process, cpu_count
@@ -53,6 +52,16 @@ if platform.system() == 'Windows':  # pragma: no cover
     from ._win import kill_processtree as _kill  # noqa
 else:
     from os import kill as _kill                 # noqa
+
+
+import pickle
+UNPICKLE_ERRORS = (pickle.UnpicklingError, )
+try:
+    import cPickle
+except ImportError:
+    pass
+else:
+    UNPICKLE_ERRORS += (cPickle.UnpicklingError, )
 
 
 try:
@@ -350,7 +359,7 @@ class Worker(Process):
                         payload = get_payload()
                         try:
                             return True, loads(payload)
-                        except (UnpicklingError, EOFError):
+                        except UNPICKLE_ERRORS + (EOFError, ):
                             warning('Discarding partially written payload')
                     return False, None
             else:
@@ -358,7 +367,7 @@ class Worker(Process):
                     try:
                         if _poll(timeout):
                             return True, get()
-                    except UnpicklingError:
+                    except UNPICKLE_ERRORS:
                         warning('Discarding partially written payload')
                     return False, None
         else:
@@ -1073,7 +1082,7 @@ class Pool(object):
     def grow(self, n=1):
         for i in xrange(n):
             self._processes += 1
-            self._order[:] = deque(reverse(range(self._processes)))
+            self._order[:] = deque(reversed(range(self._processes)))
             if self._putlock:
                 self._putlock.grow()
 
