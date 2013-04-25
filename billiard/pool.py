@@ -954,8 +954,8 @@ class Pool(object):
                     if owner is None)
 
     def _create_in_out(self):
-        from .queues import SimpleQueue
-        return SimpleQueue(), SimpleQueue()
+        from .queues import _SimpleQueue
+        return _SimpleQueue(), _SimpleQueue()
 
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
