@@ -16,7 +16,6 @@ from __future__ import with_statement
 
 import errno
 import itertools
-import logging
 import os
 import platform
 import signal
@@ -27,7 +26,6 @@ import Queue
 import warnings
 
 from collections import deque
-from random import shuffle
 
 from . import Event, Process, cpu_count
 from . import util
@@ -303,8 +301,6 @@ class Worker(Process):
                     del(tb)
 
             completed += 1
-        self.inq._reader.close()
-        self.outq._writer.close()
         debug('worker exiting after %d tasks', completed)
         if exitcode is None and maxtasks:
             exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
@@ -360,7 +356,6 @@ class Worker(Process):
 #
 # Class representing a process pool
 #
-
 
 
 class PoolThread(threading.Thread):
@@ -686,8 +681,12 @@ class ResultHandler(PoolThread):
         while 1:
             fileno = (yield)
             proc = fileno_to_proc[fileno]
+            reader = proc.outq._reader
             try:
-                ready, task = True, proc.outq._reader.recv()
+                if reader.poll(timeout):
+                    ready, task = True, reader.recv()
+                else:
+                    ready, task = False, None
             except (IOError, EOFError), exc:
                 debug('result handler got %r -- exiting', exc)
                 raise CoroStop()
@@ -869,15 +868,7 @@ class Pool(object):
             ))
             soft_timeout = None
 
-        if processes is None:
-            try:
-                processes = cpu_count()
-            except NotImplementedError:
-                processes = 1
-        self._queues = dict((self._create_in_out(), None)
-                            for _ in range(processes))
-        self._processes = processes
-        self._order = deque(reversed(range(processes)))
+        self._processes = self.cpu_count() if processes is None else processes
         self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
 
@@ -886,7 +877,6 @@ class Pool(object):
 
         self._pool = []
         self._poolctrl = {}
-        self._inqueues = []
         self._fileno_to_outq = {}
         self._fileno_to_inq = {}
         self.putlocks = putlocks
@@ -946,31 +936,31 @@ class Pool(object):
             exitpriority=15,
         )
 
+    def cpu_count(self):
+        try:
+            return cpu_count()
+        except NotImplementedError:
+            return 1
+
     def handle_result_event(self, *args):
         return self._result_handler.handle_event(*args)
 
-    def _available_pair(self):
-        return next(pair for pair, owner in self._queues.iteritems()
-                    if owner is None)
-
-    def _create_in_out(self):
-        from .queues import _SimpleQueue
-        return _SimpleQueue(), _SimpleQueue()
+    def _process_register_queuepair(self, worker, pair):
+        pass
 
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
-        pair = self._available_pair()
+        pair = self.get_process_queuepair()
         w = self.Worker(pair,
                         self._initializer, self._initargs,
                         self._maxtasksperchild, sentinel)
         self._pool.append(w)
-        self._queues[pair] = w
+        self._process_register_queuepair(w, pair)
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.index = i
         w.start()
         self._poolctrl[w.pid] = sentinel
-        self._inqueues.append(w.inq)
         self.readers[w.outq._reader.fileno()] = self.handle_result_event
         self._fileno_to_inq[w.inq._writer.fileno()] = w
         self._fileno_to_outq[w.outq._reader.fileno()] = w
@@ -1023,6 +1013,8 @@ class Pool(object):
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in self._cache.values():
+                if not job._accepted and job._write_to:
+                    self.on_partial_read(job, job._write_to)
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
                         if worker_pid in self.signalled:
@@ -1031,11 +1023,21 @@ class Pool(object):
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
-                            job._worker_lost = (time.time(),
-                                                exitcodes[worker_pid])
+                            if job._write_to:
+                                try:
+                                    raise WorkerLostError(
+                                        "Worker exited prematurely (exitcode: %r)." % (
+                                            exitcodes[worker_pid], ))
+                                except WorkerLostError:
+                                    exc_info = ExceptionInfo()
+                                    job._set(None, (False, exc_info))
+                                else:  # pragma: no cover
+                                    pass
+                            else:
+                                job._worker_lost = (time.time(),
+                                                    exitcodes[worker_pid])
                         break
             for worker in cleaned.itervalues():
-                self._inqueues.remove(worker.inq)
                 if self.on_process_down:
                     self.readers.pop(worker.outq._reader.fileno(), None)
                     self._fileno_to_outq.pop(
@@ -1044,17 +1046,16 @@ class Pool(object):
                     self._fileno_to_inq.pop(
                         worker.inq._writer.fileno(), None,
                     )
-
-                    self._queues[self._pair_for_queue(worker)] = None
+                    self._process_cleanup_queuepair(worker)
                     self.on_process_down(worker)
             return exitcodes.values()
         return []
 
-    def _pair_for_queue(self, worker):
-        for pair, owner in self._queues.iteritems():
-            if owner == worker:
-                return pair
-        raise ValueError(worker)
+    def on_partial_read(self, job, worker):
+        pass
+
+    def _process_cleanup_queuepair(self, worker):
+        pass
 
     def __enter__(self):
         return self
@@ -1065,7 +1066,6 @@ class Pool(object):
     def shrink(self, n=1):
         for i, worker in enumerate(self._iterinactive()):
             self._processes -= 1
-            self._order[:] = deque(reversed(range(self._processes)))
             if self._putlock:
                 self._putlock.shrink()
             worker.terminate()
@@ -1076,7 +1076,6 @@ class Pool(object):
     def grow(self, n=1):
         for i in xrange(n):
             self._processes += 1
-            self._order[:] = deque(reversed(range(self._processes)))
             if self._putlock:
                 self._putlock.grow()
 
@@ -1132,6 +1131,9 @@ class Pool(object):
                 self.close()
                 self.join()
                 raise
+
+    def get_process_queuepair(self):
+        return self._inqueue, self._outqueue
 
     def _setup_queues(self):
         from billiard.queues import SimpleQueue
@@ -1298,13 +1300,9 @@ class Pool(object):
                 self._taskqueue.put(([(result._job, None,
                                     func, args, kwds)], None))
             else:
-                #order = self._order
-                #print('GIVING TO WORKER %r' % (order[-1], ))
-                #self._inqueues[order[-1]].put(
                 self._quick_put(
                     (result._job, None, func, args, kwds),
                 )
-                #order.rotate()
             return result
 
     def terminate_job(self, pid, sig=None):
@@ -1456,6 +1454,7 @@ DynamicPool = Pool
 
 class ApplyResult(object):
     _worker_lost = None
+    _write_to = None
 
     def __init__(self, cache, callback, accept_callback=None,
                  timeout_callback=None, error_callback=None, soft_timeout=None,
