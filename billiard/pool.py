@@ -60,7 +60,7 @@ except AttributeError:  # pragma: no cover
     TIMEOUT_MAX = 1e10  # noqa
 
 
-if PY3:
+if sys.version_info[:2] >= (3, 3):
     _Semaphore = threading.Semaphore
 else:
     _Semaphore = threading._Semaphore  # noqa
