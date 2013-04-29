@@ -245,6 +245,8 @@ class Worker(Process):
         self.maxtasks = maxtasks
         self._shutdown = sentinel
         self.inq, self.outq = pair
+        self.inqW_fd = self.inq._writer.fileno()
+        self.outqR_fd = self.outq._reader.fileno()
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
         self.inq._writer.setblocking(0)
@@ -859,10 +861,6 @@ class Pool(object):
         self._worker_handler = self.Supervisor(self)
         if threads:
             self._worker_handler.start()
-        else:
-            self.readers.update(
-                dict((w._popen.sentinel, self.maintain_pool)
-                     for w in self._pool))
 
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
@@ -933,9 +931,8 @@ class Pool(object):
         w.index = i
         w.start()
         self._poolctrl[w.pid] = sentinel
-        self.readers[w.outq._reader.fileno()] = self.handle_result_event
-        self._fileno_to_inq[w.inq._writer.fileno()] = w
-        self._fileno_to_outq[w.outq._reader.fileno()] = w
+        self._fileno_to_inq[w.inqW_fd] = w
+        self._fileno_to_outq[w.outqR_fd] = w
         if self.on_process_up:
             self.on_process_up(w)
         return w
@@ -1011,13 +1008,8 @@ class Pool(object):
                         break
             for worker in cleaned.itervalues():
                 if self.on_process_down:
-                    self.readers.pop(worker.outq._reader.fileno(), None)
-                    self._fileno_to_outq.pop(
-                        worker.outq._reader.fileno(), None,
-                    )
-                    self._fileno_to_inq.pop(
-                        worker.inq._writer.fileno(), None,
-                    )
+                    self._fileno_to_outq.pop(worker.outqR_fd, None)
+                    self._fileno_to_inq.pop(worker.inqW_fd, None)
                     if not shutdown:
                         self._process_cleanup_queuepair(worker)
                     self.on_process_down(worker)
@@ -1433,6 +1425,10 @@ class Pool(object):
                     debug('cleaning up worker %d', p.pid)
                     p.join()
             debug('pool workers joined')
+
+    @property
+    def process_sentinels(self):
+        return [w._popen.sentinel for w in self._pool]
 
 #
 # Class whose instances are returned by `Pool.apply_async()`
