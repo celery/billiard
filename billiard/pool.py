@@ -51,7 +51,6 @@ if platform.system() == 'Windows':  # pragma: no cover
 else:
     from os import kill as _kill                 # noqa
 
-
 try:
     next = next
 except NameError:
@@ -635,18 +634,17 @@ class ResultHandler(PoolThread):
         self._shutdown_complete = False
         self.check_timeouts = check_timeouts
         self.fileno_to_proc = fileno_to_proc
+        self._make_methods()
         super(ResultHandler, self).__init__()
 
     def on_stop_not_started(self):
         # used when pool started without result handler thread.
         self.finish_at_shutdown(handle_timeouts=True)
 
-    def _process_result(self, timeout=1.0):
+    def _make_methods(self):
         cache = self.cache
-        poll = self.poll
         putlock = self.putlock
         restart_state = self.restart_state
-        fileno_to_proc = self.fileno_to_proc
 
         def on_ack(job, i, time_accepted, pid):
             try:
@@ -677,6 +675,11 @@ class ResultHandler(PoolThread):
                 state_handlers[state](*args)
             except KeyError:
                 debug("Unknown job state: %s (args=%s)", state, args)
+        self.on_state_change = on_state_change
+
+    def _process_result(self, timeout=1.0):
+        fileno_to_proc = self.fileno_to_proc
+        on_state_change = self.on_state_change
 
         while 1:
             fileno = (yield)
@@ -735,39 +738,8 @@ class ResultHandler(PoolThread):
         cache = self.cache
         poll = self.poll
         join_exited_workers = self.join_exited_workers
-        putlock = self.putlock
-        restart_state = self.restart_state
         check_timeouts = self.check_timeouts
-
-        def on_ack(job, i, time_accepted, pid):
-            try:
-                cache[job]._ack(i, time_accepted, pid)
-            except (KeyError, AttributeError):
-                # Object gone or doesn't support _ack (e.g. IMAPIterator).
-                pass
-
-        def on_ready(job, i, obj):
-            restart_state.R = 0
-            try:
-                item = cache[job]
-            except KeyError:
-                return
-            if not item.ready():
-                if putlock is not None:
-                    putlock.release()
-            try:
-                item._set(i, obj)
-            except KeyError:
-                pass
-
-        state_handlers = {ACK: on_ack, READY: on_ready}
-
-        def on_state_change(task):
-            state, args = task
-            try:
-                state_handlers[state](*args)
-            except KeyError:
-                debug("Unknown job state: %s (args=%s)", state, args)
+        on_state_change = self.on_state_change
 
         time_terminate = None
         while cache and self._state != TERMINATE:
@@ -929,10 +901,10 @@ class Pool(object):
 
         self._terminate = Finalize(
             self, self._terminate_pool,
-            args=(self._taskqueue, self._inqueue, self._outqueue,
+            args=(self._inqueue, self._outqueue, self._taskqueue,
                   self._pool, self._worker_handler, self._task_handler,
                   self._result_handler, self._cache,
-                  self._timeout_handler),
+                  self._timeout_handler, self._pool, self._fileno_to_inq),
             exitpriority=15,
         )
 
@@ -1023,7 +995,7 @@ class Pool(object):
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
-                            if job._write_to:
+                            if not shutdown and job._write_to:
                                 try:
                                     raise WorkerLostError(
                                         "Worker exited prematurely (exitcode: %r)." % (
@@ -1046,7 +1018,8 @@ class Pool(object):
                     self._fileno_to_inq.pop(
                         worker.inq._writer.fileno(), None,
                     )
-                    self._process_cleanup_queuepair(worker)
+                    if not shutdown:
+                        self._process_cleanup_queuepair(worker)
                     self.on_process_down(worker)
             return exitcodes.values()
         return []
@@ -1306,8 +1279,13 @@ class Pool(object):
             return result
 
     def terminate_job(self, pid, sig=None):
-        self.signalled.add(pid)
-        _kill(pid, sig or signal.SIGTERM)
+        try:
+            _kill(pid, sig or signal.SIGTERM)
+        except OSError, exc:
+            if get_errno(exc) != errno.ESRCH:
+                raise
+        else:
+            self.signalled.add(pid)
 
     def map_async(self, func, iterable, chunksize=None,
                   callback=None, error_callback=None):
@@ -1372,12 +1350,16 @@ class Pool(object):
         self._worker_handler.terminate()
         self._terminate()
 
+    @staticmethod
+    def _stop_task_handler(task_handler):
+        stop_if_not_current(task_handler)
+
     def join(self):
         assert self._state in (CLOSE, TERMINATE)
         debug('joining worker handler')
         stop_if_not_current(self._worker_handler)
         debug('joining task handler')
-        stop_if_not_current(self._task_handler)
+        self._stop_task_handler(self._task_handler)
         debug('joining result handler')
         stop_if_not_current(self._result_handler)
         debug('result handler joined')
@@ -1390,18 +1372,23 @@ class Pool(object):
             e.set()
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, size):
-        # task_handler may be blocked trying to put items on inqueue
+    def _help_stuff_finish(cls, inqueue, task_handler, _size, _fileno_to_inq):
         debug('removing tasks from inqueue until task handler finished')
         inqueue._rlock.acquire()
+
         while task_handler.is_alive() and inqueue._reader.poll():
             inqueue._reader.recv()
             time.sleep(0)
 
     @classmethod
-    def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
+    def _set_result_sentinel(cls, outqueue, pool):
+        outqueue.put(None)
+
+    @classmethod
+    def _terminate_pool(cls, inqueue, outqueue, taskqueue, pool,
                         worker_handler, task_handler,
-                        result_handler, cache, timeout_handler):
+                        result_handler, cache, timeout_handler,
+                        workers, fileno_to_inq):
 
         # this is guaranteed to only be called once
         debug('finalizing pool')
@@ -1412,10 +1399,11 @@ class Pool(object):
         taskqueue.put(None)                 # sentinel
 
         debug('helping task handler/workers to finish')
-        cls._help_stuff_finish(inqueue, task_handler, len(pool))
+        cls._help_stuff_finish(inqueue, task_handler,
+                               len(pool), fileno_to_inq)
 
         result_handler.terminate()
-        outqueue.put(None)                  # sentinel
+        cls._set_result_sentinel(outqueue, pool)
 
         if timeout_handler is not None:
             timeout_handler.terminate()
@@ -1428,7 +1416,7 @@ class Pool(object):
                     p.terminate()
 
         debug('joining task handler')
-        task_handler.stop()
+        cls._stop_task_handler(task_handler)
 
         debug('joining result handler')
         result_handler.stop()
@@ -1445,7 +1433,6 @@ class Pool(object):
                     debug('cleaning up worker %d', p.pid)
                     p.join()
             debug('pool workers joined')
-DynamicPool = Pool
 
 #
 # Class whose instances are returned by `Pool.apply_async()`
@@ -1733,7 +1720,7 @@ class ThreadPool(Pool):
         self._poll_result = _poll_result
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, size):
+    def _help_stuff_finish(inqueue, task_handler, size, fileno_to_inq):
         # put sentinels at head of inqueue to make workers finish
         with inqueue.not_empty:
             inqueue.queue.clear()
