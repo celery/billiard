@@ -1358,6 +1358,7 @@ class Pool(object):
         for i, p in enumerate(self._pool):
             debug('joining worker %s/%s (%r)', i, len(self._pool), p)
             p.join()
+        debug('pool join complete')
 
     def restart(self):
         for e in self._poolctrl.itervalues():
