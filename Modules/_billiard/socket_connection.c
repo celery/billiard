@@ -22,6 +22,32 @@
  * Send string to file descriptor
  */
 
+void _Billiard_sockblock(int fd, int blocking)
+{
+#ifdef MS_WINDOWS
+    unsigned long mode = blocking ? 0 : 1;
+    ioctlsocket(fd, FOINBIO, &mode);
+#else
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags > 0) {
+        flags = blocking ? (flags &~ O_NONBLOCK) : (flags | O_NONBLOCK);
+        fcntl(fd, F_SETFL, flags);
+    }
+#endif
+}
+
+static ssize_t
+_Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t offset) {
+    char *p = string;
+    p += offset;
+    ssize_t res = 0;
+
+    _Billiard_sockblock(fd, 0);
+    res = WRITE(fd, p, (size_t)len - offset);
+    _Billiard_sockblock(fd, 1);
+    return res;
+}
+
 static Py_ssize_t
 _Billiard_conn_sendall(HANDLE h, char *string, size_t length)
 {
@@ -100,8 +126,9 @@ Billiard_conn_send_string(BilliardConnectionObject *conn, char *string, size_t l
 
         lenbuff = htonl((UINT32)length);
         Py_BEGIN_ALLOW_THREADS
-        res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4) ||
-            _Billiard_conn_sendall(conn->handle, string, length);
+        res = _Billiard_conn_sendall(conn->handle, (char*)&lenbuff, 4);
+        if (res == MP_SUCCESS)
+            res = _Billiard_conn_sendall(conn->handle, string, length);
         Py_END_ALLOW_THREADS
     }
     return res;

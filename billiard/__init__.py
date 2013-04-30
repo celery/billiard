@@ -232,7 +232,11 @@ def JoinableQueue(maxsize=0):
     return JoinableQueue(maxsize)
 
 
-def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None):
+def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None,
+         timeout=None, soft_timeout=None, lost_worker_timeout=None,
+         max_restarts=None, max_restart_freq=1, on_process_up=None,
+         on_process_down=None, on_timeout_set=None, on_timeout_cancel=None,
+         threads=True, semaphore=None, putlocks=False, allow_restart=False):
     '''
     Returns a process pool object
     '''
