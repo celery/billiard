@@ -52,16 +52,6 @@ else:
     from os import kill as _kill                 # noqa
 
 
-import pickle
-UNPICKLE_ERRORS = (pickle.UnpicklingError, )
-try:
-    import cPickle
-except ImportError:
-    pass
-else:
-    UNPICKLE_ERRORS += (cPickle.UnpicklingError, )
-
-
 try:
     next = next
 except NameError:
@@ -133,11 +123,6 @@ def starmapstar(args):
 def error(msg, *args, **kwargs):
     if util._logger:
         util._logger.error(msg, *args, **kwargs)
-
-
-def warning(msg, *args, **kwargs):
-    if util._logger:
-        util._logger.warning(msg, *args, **kwargs)
 
 
 def stop_if_not_current(thread, timeout=None):
@@ -272,19 +257,12 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
             def poll(timeout):
                 if inqueue._reader.poll(timeout):
-                    payload = get_payload()
-                    try:
-                        return True, loads(payload)
-                    except UNPICKLE_ERRORS + (EOFError, ):
-                        warning('Discarding partially written payload')
+                    return True, loads(get_payload())
                 return False, None
         else:
             def poll(timeout):
-                try:
-                    if inqueue._reader.poll(timeout):
-                        return True, get()
-                except UNPICKLE_ERRORS:
-                    warning('Discarding partially written payload')
+                if inqueue._reader.poll(timeout):
+                    return True, get()
                 return False, None
     else:
 
