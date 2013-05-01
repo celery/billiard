@@ -1245,8 +1245,13 @@ class Pool(object):
             return result
 
     def terminate_job(self, pid, sig=None):
-        self.signalled.add(pid)
-        _kill(pid, sig or signal.SIGTERM)
+        try:
+            _kill(pid, sig or signal.SIGTERM)
+        except OSError, exc:
+            if get_errno(exc) != errno.ESRCH:
+                raise
+        else:
+            self.signalled.add(pid)
 
     def map_async(self, func, iterable, chunksize=None,
                   callback=None, error_callback=None):
