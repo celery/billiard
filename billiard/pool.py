@@ -1246,7 +1246,7 @@ class Pool(object):
     def terminate_job(self, pid, sig=None):
         try:
             _kill(pid, sig or signal.SIGTERM)
-        except OSError as exc:
+        except OSError, exc:
             if get_errno(exc) != errno.ESRCH:
                 raise
         else:

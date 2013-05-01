@@ -248,16 +248,18 @@ class Process(object):
                     pass
             old_process = _current_process
             _current_process = self
+
             # Re-init logging system.
             # Workaround for http://bugs.python.org/issue6721/#msg140215
             # Python logging module uses RLock() objects which are broken
-            # after fork. This can result in a deadlock (celery issue #496).
+            # after fork. This can result in a deadlock (Celery Issue #496).
             logger_names = logging.Logger.manager.loggerDict.keys()
             logger_names.append(None)  # for root logger
             for name in logger_names:
                 for handler in logging.getLogger(name).handlers:
                     handler.createLock()
             logging._lock = threading.RLock()
+
             try:
                 util._finalizer_registry.clear()
                 util._run_after_forkers()
