@@ -220,7 +220,7 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-class Worker(object):
+class Worker(Process):
 
     def __init__(self, pair, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None):
@@ -235,7 +235,9 @@ class Worker(object):
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
 
-    def __call__(self, debug=debug, now=time.time):
+        super(Worker, self).__init__()
+
+    def run(self, debug=debug, now=time.time):
         self._make_child_methods()
         self.after_fork()
         pid = os.getpid()
@@ -768,7 +770,6 @@ class Pool(object):
     '''
     Class which supports an async version of applying functions to arguments.
     '''
-    Process = Process
     Worker = Worker
     Supervisor = Supervisor
     TaskHandler = TaskHandler
@@ -904,10 +905,10 @@ class Pool(object):
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
         pair = self.get_process_queuepair()
-        w = self.Process(target=self.Worker(
+        w = self.Worker(
             pair, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel,
-        ))
+        )
         self._pool.append(w)
         self._process_register_queuepair(w, pair)
         w.name = w.name.replace('Process', 'PoolWorker')
@@ -1346,6 +1347,10 @@ class Pool(object):
             time.sleep(0)
 
     @classmethod
+    def _set_result_sentinel(cls, outqueue, pool):
+        outqueue.put(None)
+
+    @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
                         worker_handler, task_handler,
                         result_handler, cache, timeout_handler,
@@ -1363,7 +1368,7 @@ class Pool(object):
         cls._help_stuff_finish(*help_stuff_finish_args)
 
         result_handler.terminate()
-        cls._set_result_sentinel(outqueue)
+        cls._set_result_sentinel(outqueue, pool)
 
         if timeout_handler is not None:
             timeout_handler.terminate()
