@@ -241,7 +241,11 @@ def Pool(processes=None, initializer=None, initargs=(), maxtasksperchild=None,
     Returns a process pool object
     '''
     from .pool import Pool
-    return Pool(processes, initializer, initargs, maxtasksperchild)
+    return Pool(processes, initializer, initargs, maxtasksperchild,
+                timeout, soft_timeout, lost_worker_timeout,
+                max_restarts, max_restart_freq, on_process_up,
+                on_process_down, on_timeout_set, on_timeout_cancel,
+                threads, semaphore, putlocks, allow_restart)
 
 
 def RawValue(typecode_or_type, *args):
