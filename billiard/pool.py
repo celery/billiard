@@ -606,8 +606,7 @@ class TimeoutHandler(PoolThread):
 class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
-                 join_exited_workers, putlock, restart_state, check_timeouts,
-                 fileno_to_proc):
+                 join_exited_workers, putlock, restart_state, check_timeouts):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
@@ -618,7 +617,6 @@ class ResultHandler(PoolThread):
         self._it = None
         self._shutdown_complete = False
         self.check_timeouts = check_timeouts
-        self.fileno_to_proc = fileno_to_proc
         self._make_methods()
         super(ResultHandler, self).__init__()
 
@@ -663,18 +661,12 @@ class ResultHandler(PoolThread):
         self.on_state_change = on_state_change
 
     def _process_result(self, timeout=1.0):
-        fileno_to_proc = self.fileno_to_proc
+        poll = self.poll
         on_state_change = self.on_state_change
 
         while 1:
-            fileno = (yield)
-            proc = fileno_to_proc[fileno]
-            reader = proc.outq._reader
             try:
-                if reader.poll(timeout):
-                    ready, task = True, reader.recv()
-                else:
-                    ready, task = False, None
+                ready, task = poll(timeout)
             except (IOError, EOFError) as exc:
                 debug('result handler got %r -- exiting', exc)
                 raise CoroStop()
@@ -693,14 +685,14 @@ class ResultHandler(PoolThread):
                     break
             else:
                 break
+            yield
 
     def handle_event(self, fileno=None, events=None):
         if self._state == RUN:
             if self._it is None:
                 self._it = self._process_result(0)  # non-blocking
-                next(self._it)  # start coroutine
             try:
-                self._it.send(fileno)
+                next(self._it)
             except (StopIteration, CoroStop):
                 self._it = None
 
@@ -835,8 +827,6 @@ class Pool(object):
 
         self._pool = []
         self._poolctrl = {}
-        self._fileno_to_outq = {}
-        self._fileno_to_inq = {}
         self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(processes):
@@ -865,17 +855,12 @@ class Pool(object):
 
         # If running without threads, we need to check for timeouts
         # while waiting for unfinished work at shutdown.
-        check_timeouts = None
+        self.check_timeouts = None
         if not threads:
-            check_timeouts = self._timeout_handler.handle_event
+            self.check_timeouts = self._timeout_handler.handle_event
 
         # Thread processing results in the outqueue.
-        self._result_handler = self.ResultHandler(
-            self._outqueue, self._quick_get, self._cache,
-            self._poll_result, self._join_exited_workers,
-            self._putlock, self.restart_state, check_timeouts,
-            self._fileno_to_outq,
-        )
+        self._result_handler = self.create_result_handler()
         self.handle_result_event = self._result_handler.handle_event
 
         if threads:
@@ -886,9 +871,21 @@ class Pool(object):
             args=(self._taskqueue, self._inqueue, self._outqueue,
                   self._pool, self._worker_handler, self._task_handler,
                   self._result_handler, self._cache,
-                  self._timeout_handler, self._fileno_to_inq),
+                  self._timeout_handler,
+                  self._help_stuff_finish_args()),
             exitpriority=15,
         )
+
+    def create_result_handler(self, **extra_kwargs):
+        return self.ResultHandler(
+            self._outqueue, self._quick_get, self._cache,
+            self._poll_result, self._join_exited_workers,
+            self._putlock, self.restart_state, self.check_timeouts,
+            **extra_kwargs
+        )
+
+    def _help_stuff_finish_args(self):
+        return self._inqueue, self._task_handler, self._pool
 
     def cpu_count(self):
         try:
@@ -919,8 +916,6 @@ class Pool(object):
         w.index = i
         w.start()
         self._poolctrl[w.pid] = sentinel
-        self._fileno_to_inq[w.inqW_fd] = w
-        self._fileno_to_outq[w.outqR_fd] = w
         if self.on_process_up:
             self.on_process_up(w)
         return w
@@ -977,8 +972,6 @@ class Pool(object):
                         break
             for worker in values(cleaned):
                 if self.on_process_down:
-                    self._fileno_to_outq.pop(worker.outqR_fd, None)
-                    self._fileno_to_inq.pop(worker.inqW_fd, None)
                     if not shutdown:
                         self._process_cleanup_queuepair(worker)
                     self.on_process_down(worker)
@@ -1345,7 +1338,7 @@ class Pool(object):
             e.set()
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, _size, _fileno_to_inq):
+    def _help_stuff_finish(inqueue, task_handler, _pool):
         # task_handler may be blocked trying to put items on inqueue
         debug('removing tasks from inqueue until task handler finished')
         inqueue._rlock.acquire()
@@ -1357,7 +1350,7 @@ class Pool(object):
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
                         worker_handler, task_handler,
                         result_handler, cache, timeout_handler,
-                        fileno_to_inq):
+                        help_stuff_finish_args):
 
         # this is guaranteed to only be called once
         debug('finalizing pool')
@@ -1368,7 +1361,7 @@ class Pool(object):
         taskqueue.put(None)                 # sentinel
 
         debug('helping task handler/workers to finish')
-        cls._help_stuff_finish(inqueue, task_handler, len(pool))
+        cls._help_stuff_finish(*help_stuff_finish_args)
 
         result_handler.terminate()
         cls._set_result_sentinel(outqueue)
@@ -1692,9 +1685,9 @@ class ThreadPool(Pool):
         self._poll_result = _poll_result
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, size, fileno_to_inq):
+    def _help_stuff_finish(inqueue, task_handler, pool):
         # put sentinels at head of inqueue to make workers finish
         with inqueue.not_empty:
             inqueue.queue.clear()
-            inqueue.queue.extend([None] * size)
+            inqueue.queue.extend([None] * len(pool))
             inqueue.not_empty.notify_all()
