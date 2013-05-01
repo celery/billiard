@@ -14,10 +14,8 @@ from __future__ import with_statement
 # Imports
 #
 
-import collections
 import errno
 import itertools
-import logging
 import os
 import platform
 import signal
@@ -25,6 +23,8 @@ import sys
 import threading
 import time
 import warnings
+
+from collections import Callable, deque
 
 from . import Event, Process, cpu_count
 from . import util
@@ -220,113 +220,122 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-def worker(inqueue, outqueue, initializer=None, initargs=(),
-           maxtasks=None, sentinel=None):
-    # Re-init logging system.
-    # Workaround for http://bugs.python.org/issue6721#msg140215
-    # Python logging module uses RLock() objects which are broken after
-    # fork. This can result in a deadlock (Issue #496).
-    logger_names = list(logging.Logger.manager.loggerDict)
-    logger_names.append(None)  # for root logger
-    for name in logger_names:
-        for handler in logging.getLogger(name).handlers:
-            handler.createLock()
-    logging._lock = threading.RLock()
+class Worker(object):
 
-    pid = os.getpid()
-    assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
-    put = outqueue.put
-    get = inqueue.get
-    loads = pickle_loads
+    def __init__(self, pair, initializer=None, initargs=(),
+                 maxtasks=None, sentinel=None):
+        assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
+        self.initializer = initializer
+        self.initargs = initargs
+        self.maxtasks = maxtasks
+        self._shutdown = sentinel
+        self.inq, self.outq = pair
+        self.inqW_fd = self.inq._writer.fileno()
+        self.outqR_fd = self.outq._reader.fileno()
+        self._quick_put = self.inq._writer.send
+        self._quick_get = self.outq._reader.recv
 
-    if hasattr(inqueue, '_reader'):
+    def __call__(self, debug=debug, now=time.time):
+        self._make_child_methods()
+        self.after_fork()
+        self.inq._reader.setblocking(1)
+        pid = os.getpid()
+        put = self.outq.put
+        poll = self.poll
+        maxtasks = self.maxtasks
+        should_shutdown = self._shutdown.is_set if self._shutdown else None
 
-        if hasattr(inqueue, 'get_payload'):
-            get_payload = inqueue.get_payload
+        exitcode = EX_OK
+        completed = 0
+        while maxtasks is None or (maxtasks and completed < maxtasks):
+            if should_shutdown and should_shutdown():
+                debug('worker got sentinel -- exiting')
+                break
+            try:
+                ready, task = poll(1.0)
+                if not ready:
+                    continue
+            except (EOFError, IOError) as exc:
+                if get_errno(exc) == errno.EINTR:
+                    continue  # interrupted, maybe by gdb
+                debug('worker got %s -- exiting', type(exc).__name__)
+                exitcode = EX_FAILURE
+                break
 
-            def poll(timeout):
-                if inqueue._reader.poll(timeout):
-                    return True, loads(get_payload())
-                return False, None
+            if task is None:
+                debug('worker got sentinel -- exiting')
+                break
+
+            job, i, fun, args, kwargs = task
+            put((ACK, (job, i, now(), pid)))
+            try:
+                result = (True, fun(*args, **kwargs))
+            except Exception:
+                result = (False, ExceptionInfo())
+            try:
+                put((READY, (job, i, result)))
+            except Exception, exc:
+                _, _, tb = sys.exc_info()
+                try:
+                    wrapped = MaybeEncodingError(exc, result[1])
+                    einfo = ExceptionInfo((MaybeEncodingError, wrapped, tb))
+                    put((READY, (job, i, (False, einfo))))
+                finally:
+                    del(tb)
+
+            completed += 1
+        debug('worker exiting after %d tasks', completed)
+        if exitcode is None and maxtasks:
+            exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
+        sys.exit(exitcode or EX_OK)
+
+    def after_fork(self):
+        if hasattr(self.inq, '_writer'):
+            self.inq._writer.close()
+        if hasattr(self.outq, '_reader'):
+            self.outq._reader.close()
+
+        if self.initializer is not None:
+            self.initializer(*self.initargs)
+
+        # Make sure all exiting signals call finally: blocks.
+        # This is important for the semaphore to be released.
+        reset_signals()
+
+        # install signal handler for soft timeouts.
+        if SIG_SOFT_TIMEOUT is not None:
+            signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
+
+        try:
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
+        except AttributeError:
+            pass
+
+    def _make_child_methods(self, loads=pickle_loads):
+        if hasattr(self.inq, '_reader'):
+            _poll = self.inq._reader.poll
+            if hasattr(self.inq, 'get_payload'):
+                get_payload = self.inq.get_payload
+
+                def poll(timeout):
+                    if _poll(timeout):
+                        return True, loads(get_payload())
+                    return False, None
+            else:
+                get = self.inq.get
+
+                def poll(timeout):  # noqa
+                    if _poll(timeout):
+                        return True, get()
+                    return False, None
         else:
-            def poll(timeout):
-                if inqueue._reader.poll(timeout):
-                    return True, get()
-                return False, None
-    else:
+            def poll(timeout):  # noqa
+                try:
+                    return True, get(timeout=timeout)
+                except Queue.Empty:
+                    return False, None
+        self.poll = poll
 
-        def poll(timeout):  # noqa
-            try:
-                return True, get(timeout=timeout)
-            except Empty:
-                return False, None
-
-    if hasattr(inqueue, '_writer'):
-        inqueue._writer.close()
-        outqueue._reader.close()
-
-    if initializer is not None:
-        initializer(*initargs)
-
-    # Make sure all exiting signals call finally: blocks.
-    # this is important for the semaphore to be released.
-    reset_signals()
-
-    # install signal handler for soft timeouts.
-    if SIG_SOFT_TIMEOUT is not None:
-        signal.signal(SIG_SOFT_TIMEOUT, soft_timeout_sighandler)
-
-    try:
-        signal.signal(signal.SIGINT, signal.SIG_IGN)
-    except (AttributeError):
-        pass
-
-    exitcode = None
-    completed = 0
-    while maxtasks is None or (maxtasks and completed < maxtasks):
-        if sentinel is not None and sentinel.is_set():
-            debug('worker got sentinel -- exiting')
-            exitcode = EX_OK
-            break
-
-        try:
-            ready, task = poll(1.0)
-            if not ready:
-                continue
-        except (EOFError, IOError) as exc:
-            if get_errno(exc) == errno.EINTR:
-                continue  # interrupted, maybe by gdb
-            debug('worker got EOFError or IOError -- exiting')
-            exitcode = EX_FAILURE
-            break
-
-        if task is None:
-            debug('worker got sentinel -- exiting')
-            exitcode = EX_OK
-            break
-
-        job, i, func, args, kwds = task
-        put((ACK, (job, i, time.time(), pid)))
-        try:
-            result = (True, func(*args, **kwds))
-        except Exception:
-            result = (False, ExceptionInfo())
-        try:
-            put((READY, (job, i, result)))
-        except Exception as exc:
-            _, _, tb = sys.exc_info()
-            try:
-                wrapped = MaybeEncodingError(exc, result[1])
-                einfo = ExceptionInfo((MaybeEncodingError, wrapped, tb))
-                put((READY, (job, i, (False, einfo))))
-            finally:
-                del(tb)
-
-        completed += 1
-    debug('worker exiting after %d tasks', completed)
-    if exitcode is None and maxtasks:
-        exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
-    sys.exit(exitcode or EX_OK)
 
 #
 # Class representing a process pool
@@ -597,7 +606,8 @@ class TimeoutHandler(PoolThread):
 class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
-                 join_exited_workers, putlock, restart_state, check_timeouts):
+                 join_exited_workers, putlock, restart_state, check_timeouts,
+                 fileno_to_proc):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
@@ -608,15 +618,16 @@ class ResultHandler(PoolThread):
         self._it = None
         self._shutdown_complete = False
         self.check_timeouts = check_timeouts
+        self.fileno_to_proc = fileno_to_proc
+        self._make_methods()
         super(ResultHandler, self).__init__()
 
     def on_stop_not_started(self):
         # used when pool started without result handler thread.
         self.finish_at_shutdown(handle_timeouts=True)
 
-    def _process_result(self, timeout=1.0):
+    def _make_methods(self):
         cache = self.cache
-        poll = self.poll
         putlock = self.putlock
         restart_state = self.restart_state
 
@@ -649,10 +660,21 @@ class ResultHandler(PoolThread):
                 state_handlers[state](*args)
             except KeyError:
                 debug("Unknown job state: %s (args=%s)", state, args)
+        self.on_state_change = on_state_change
+
+    def _process_result(self, timeout=1.0):
+        fileno_to_proc = self.fileno_to_proc
+        on_state_change = self.on_state_change
 
         while 1:
+            fileno = (yield)
+            proc = fileno_to_proc[fileno]
+            reader = proc.outq._reader
             try:
-                ready, task = poll(timeout)
+                if reader.poll(timeout):
+                    ready, task = True, reader.recv()
+                else:
+                    ready, task = False, None
             except (IOError, EOFError) as exc:
                 debug('result handler got %r -- exiting', exc)
                 raise CoroStop()
@@ -672,14 +694,13 @@ class ResultHandler(PoolThread):
             else:
                 break
 
-        yield
-
-    def handle_event(self, *args):
+    def handle_event(self, fileno=None, events=None):
         if self._state == RUN:
             if self._it is None:
                 self._it = self._process_result(0)  # non-blocking
+                next(self._it)  # start coroutine
             try:
-                next(self._it)
+                self._it.send(fileno)
             except (StopIteration, CoroStop):
                 self._it = None
 
@@ -702,39 +723,8 @@ class ResultHandler(PoolThread):
         cache = self.cache
         poll = self.poll
         join_exited_workers = self.join_exited_workers
-        putlock = self.putlock
-        restart_state = self.restart_state
         check_timeouts = self.check_timeouts
-
-        def on_ack(job, i, time_accepted, pid):
-            try:
-                cache[job]._ack(i, time_accepted, pid)
-            except (KeyError, AttributeError):
-                # Object gone or doesn't support _ack (e.g. IMAPIterator).
-                pass
-
-        def on_ready(job, i, obj):
-            restart_state.R = 0
-            try:
-                item = cache[job]
-            except KeyError:
-                return
-            if not item.ready():
-                if putlock is not None:
-                    putlock.release()
-            try:
-                item._set(i, obj)
-            except KeyError:
-                pass
-
-        state_handlers = {ACK: on_ack, READY: on_ready}
-
-        def on_state_change(task):
-            state, args = task
-            try:
-                state_handlers[state](*args)
-            except KeyError:
-                debug("Unknown job state: %s (args=%s)", state, args)
+        on_state_change = self.on_state_change
 
         time_terminate = None
         while cache and self._state != TERMINATE:
@@ -788,6 +778,7 @@ class Pool(object):
     Class which supports an async version of applying functions to arguments.
     '''
     Process = Process
+    Worker = Worker
     Supervisor = Supervisor
     TaskHandler = TaskHandler
     TimeoutHandler = TimeoutHandler
@@ -796,7 +787,7 @@ class Pool(object):
 
     def __init__(self, processes=None, initializer=None, initargs=(),
                  maxtasksperchild=None, timeout=None, soft_timeout=None,
-                 lost_worker_timeout=LOST_WORKER_TIMEOUT,
+                 lost_worker_timeout=None,
                  max_restarts=None, max_restart_freq=1,
                  on_process_up=None,
                  on_process_down=None,
@@ -834,21 +825,18 @@ class Pool(object):
             ))
             soft_timeout = None
 
-        if processes is None:
-            try:
-                processes = cpu_count()
-            except NotImplementedError:
-                processes = 1
-        self._processes = processes
+        self._processes = self.cpu_count() if processes is None else processes
         self.max_restarts = max_restarts or round(processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
 
         if initializer is not None and \
-                not isinstance(initializer, collections.Callable):
+                not isinstance(initializer, Callable):
             raise TypeError('initializer must be a callable')
 
         self._pool = []
         self._poolctrl = {}
+        self._fileno_to_outq = {}
+        self._fileno_to_inq = {}
         self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(processes):
@@ -857,10 +845,6 @@ class Pool(object):
         self._worker_handler = self.Supervisor(self)
         if threads:
             self._worker_handler.start()
-        else:
-            self.readers.update(
-                dict((w._popen.sentinel, self.maintain_pool)
-                     for w in self._pool))
 
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
@@ -890,42 +874,55 @@ class Pool(object):
             self._outqueue, self._quick_get, self._cache,
             self._poll_result, self._join_exited_workers,
             self._putlock, self.restart_state, check_timeouts,
+            self._fileno_to_outq,
         )
+        self.handle_result_event = self._result_handler.handle_event
 
         if threads:
             self._result_handler.start()
-        else:
-            self.readers[self._outqueue._reader] = \
-                self._result_handler.handle_event
 
         self._terminate = Finalize(
             self, self._terminate_pool,
             args=(self._taskqueue, self._inqueue, self._outqueue,
                   self._pool, self._worker_handler, self._task_handler,
                   self._result_handler, self._cache,
-                  self._timeout_handler),
+                  self._timeout_handler, self._fileno_to_inq),
             exitpriority=15,
         )
 
+    def cpu_count(self):
+        try:
+            return cpu_count()
+        except NotImplementedError:
+            return 1
+
+    def handle_result_event(self, *args):
+        return self._result_handler.handle_event(*args)
+
+    def _process_register_queuepair(self, worker, pair):
+        pass
+
+    def get_process_queuepair(self):
+        return self._inqueue, self._outqueue
+
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
-        w = self.Process(
-            target=worker,
-            args=(
-                self._inqueue, self._outqueue,
-                self._initializer, self._initargs,
-                self._maxtasksperchild,
-                sentinel
-            ),
-        )
+        pair = self.get_process_queuepair()
+        w = self.Process(target=self.Worker(
+            pair, self._initializer, self._initargs,
+            self._maxtasksperchild, sentinel,
+        ))
         self._pool.append(w)
+        self._process_register_queuepair(w, pair)
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.index = i
         w.start()
+        self._poolctrl[w.pid] = sentinel
+        self._fileno_to_inq[w.inqW_fd] = w
+        self._fileno_to_outq[w.outqR_fd] = w
         if self.on_process_up:
             self.on_process_up(w)
-        self._poolctrl[w.pid] = sentinel
         return w
 
     def _join_exited_workers(self, shutdown=False):
@@ -943,15 +940,7 @@ class Pool(object):
             now = now or time.time()
             lost_time, lost_ret = job._worker_lost
             if now - lost_time > job._lost_worker_timeout:
-                try:
-                    raise WorkerLostError(
-                        "Worker exited prematurely (exitcode: %r)." % (
-                            lost_ret, ))
-                except WorkerLostError:
-                    exc_info = ExceptionInfo()
-                    job._set(None, (False, exc_info))
-                else:  # pragma: no cover
-                    pass
+                self.mark_as_worker_lost(job, lost_ret)
 
         if shutdown and not len(self._pool):
             raise WorkersJoined()
@@ -973,6 +962,7 @@ class Pool(object):
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in list(self._cache.values()):
+                self.on_job_process_down(job)
                 for worker_pid in job.worker_pids():
                     if worker_pid in cleaned and not job.ready():
                         if worker_pid in self.signalled:
@@ -981,14 +971,41 @@ class Pool(object):
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
-                            job._worker_lost = (time.time(),
-                                                exitcodes[worker_pid])
+                            self.on_job_worker_lost(
+                                job, worker_pid, exitcodes[worker_pid],
+                            )
                         break
             for worker in values(cleaned):
                 if self.on_process_down:
+                    self._fileno_to_outq.pop(worker.outqR_fd, None)
+                    self._fileno_to_inq.pop(worker.inqW_fd, None)
+                    if not shutdown:
+                        self._process_cleanup_queuepair(worker)
                     self.on_process_down(worker)
             return list(exitcodes.values())
         return []
+
+    def on_partial_read(self, job, worker):
+        pass
+
+    def _process_cleanup_queuepair(self, worker):
+        pass
+
+    def on_job_process_down(self, job):
+        pass
+
+    def on_job_worker_lost(self, job, pid, exitcode):
+        job._worker_lost = (time.time(), exitcode)
+
+    def mark_as_worker_lost(self, job, exitcode):
+        try:
+            raise WorkerLostError(
+                'Worker exited prematurely (exitcode: %r).' % (exitcode, )
+            )
+        except WorkerLostError:
+            job._set(None, (False, ExceptionInfo()))
+        else:  # pragma: no cover
+            pass
 
     def __enter__(self):
         return self
@@ -1234,8 +1251,13 @@ class Pool(object):
             return result
 
     def terminate_job(self, pid, sig=None):
-        self.signalled.add(pid)
-        _kill(pid, sig or signal.SIGTERM)
+        try:
+            _kill(pid, sig or signal.SIGTERM)
+        except OSError as exc:
+            if get_errno(exc) != errno.ESRCH:
+                raise
+        else:
+            self.signalled.add(pid)
 
     def map_async(self, func, iterable, chunksize=None,
                   callback=None, error_callback=None):
@@ -1300,25 +1322,30 @@ class Pool(object):
         self._worker_handler.terminate()
         self._terminate()
 
+    @staticmethod
+    def _stop_task_handler(task_handler):
+        stop_if_not_current(task_handler)
+
     def join(self):
         assert self._state in (CLOSE, TERMINATE)
         debug('joining worker handler')
         stop_if_not_current(self._worker_handler)
         debug('joining task handler')
-        stop_if_not_current(self._task_handler)
+        self._stop_task_handler(self._task_handler)
         debug('joining result handler')
         stop_if_not_current(self._result_handler)
         debug('result handler joined')
         for i, p in enumerate(self._pool):
             debug('joining worker %s/%s (%r)', i, len(self._pool), p)
             p.join()
+        debug('pool join complete')
 
     def restart(self):
         for e in values(self._poolctrl):
             e.set()
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, size):
+    def _help_stuff_finish(inqueue, task_handler, _size, _fileno_to_inq):
         # task_handler may be blocked trying to put items on inqueue
         debug('removing tasks from inqueue until task handler finished')
         inqueue._rlock.acquire()
@@ -1329,7 +1356,8 @@ class Pool(object):
     @classmethod
     def _terminate_pool(cls, taskqueue, inqueue, outqueue, pool,
                         worker_handler, task_handler,
-                        result_handler, cache, timeout_handler):
+                        result_handler, cache, timeout_handler,
+                        fileno_to_inq):
 
         # this is guaranteed to only be called once
         debug('finalizing pool')
@@ -1343,7 +1371,7 @@ class Pool(object):
         cls._help_stuff_finish(inqueue, task_handler, len(pool))
 
         result_handler.terminate()
-        outqueue.put(None)                  # sentinel
+        cls._set_result_sentinel(outqueue)
 
         if timeout_handler is not None:
             timeout_handler.terminate()
@@ -1356,7 +1384,7 @@ class Pool(object):
                     p.terminate()
 
         debug('joining task handler')
-        task_handler.stop()
+        cls._stop_task_handler(task_handler)
 
         debug('joining result handler')
         result_handler.stop()
@@ -1373,7 +1401,10 @@ class Pool(object):
                     debug('cleaning up worker %d', p.pid)
                     p.join()
             debug('pool workers joined')
-DynamicPool = Pool
+
+    @property
+    def process_sentinels(self):
+        return [w._popen.sentinel for w in self._pool]
 
 #
 # Class whose instances are returned by `Pool.apply_async()`
@@ -1382,6 +1413,7 @@ DynamicPool = Pool
 
 class ApplyResult(object):
     _worker_lost = None
+    _write_to = None
 
     def __init__(self, cache, callback, accept_callback=None,
                  timeout_callback=None, error_callback=None, soft_timeout=None,
@@ -1547,7 +1579,7 @@ class IMapIterator(object):
         self._cond = threading.Condition(threading.Lock())
         self._job = next(job_counter)
         self._cache = cache
-        self._items = collections.deque()
+        self._items = deque()
         self._index = 0
         self._length = None
         self._ready = False
@@ -1660,7 +1692,7 @@ class ThreadPool(Pool):
         self._poll_result = _poll_result
 
     @staticmethod
-    def _help_stuff_finish(inqueue, task_handler, size):
+    def _help_stuff_finish(inqueue, task_handler, size, fileno_to_inq):
         # put sentinels at head of inqueue to make workers finish
         with inqueue.not_empty:
             inqueue.queue.clear()
