@@ -305,19 +305,15 @@ class JoinableQueue(Queue):
                 self._cond.wait()
 
 
-class SimpleQueue(object):
+class _SimpleQueue(object):
     '''
     Simplified Queue type -- really just a locked pipe
     '''
 
     def __init__(self):
         self._reader, self._writer = Pipe(duplex=False)
-        self._rlock = Lock()
         self._poll = self._reader.poll
-        if sys.platform == 'win32':
-            self._wlock = None
-        else:
-            self._wlock = Lock()
+        self._rlock = self._wlock = None
         self._make_methods()
 
     def empty(self):
@@ -336,15 +332,19 @@ class SimpleQueue(object):
         recv_payload = self._reader.recv_payload
         rlock = self._rlock
 
-        def get():
-            with rlock:
-                return recv()
-        self.get = get
+        if rlock is not None:
+            def get():
+                with rlock:
+                    return recv()
+            self.get = get
 
-        def get_payload():
-            with rlock:
-                return recv_payload()
-        self.get_payload = get_payload
+            def get_payload():
+                with rlock:
+                    return recv_payload()
+            self.get_payload = get_payload
+        else:
+            self.get = recv
+            self.get_payload = recv_payload
 
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
@@ -357,3 +357,13 @@ class SimpleQueue(object):
                 with wlock:
                     return send(obj)
             self.put = put
+
+
+class SimpleQueue(_SimpleQueue):
+
+    def __init__(self):
+        self._reader, self._writer = Pipe(duplex=False)
+        self._rlock = Lock()
+        if sys.platform != 'win32':
+            self._wlock = Lock()
+        self._make_methods()
