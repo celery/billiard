@@ -238,7 +238,6 @@ class Worker(object):
     def __call__(self, debug=debug, now=time.time):
         self._make_child_methods()
         self.after_fork()
-        self.inq._reader.setblocking(1)
         pid = os.getpid()
         put = self.outq.put
         poll = self.poll
