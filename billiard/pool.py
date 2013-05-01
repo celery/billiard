@@ -152,15 +152,6 @@ class LaxBoundedSemaphore(_Semaphore):
                 if self._value < self._initial_value:
                     self._value += 1
                     cond.notify_all()
-                    if __debug__:
-                        self._note(
-                            "%s.release: success, value=%s", self, self._value,
-                        )
-                else:
-                    if __debug__:
-                        self._note(
-                            "%s.release: success, value=%s (unchanged)" % (
-                                self, self._value))
 
         def clear(self):
             while self._value < self._initial_value:
@@ -173,14 +164,6 @@ class LaxBoundedSemaphore(_Semaphore):
                 if self._Semaphore__value < self._initial_value:
                     self._Semaphore__value += 1
                     cond.notifyAll()
-                    if __debug__:
-                        self._note("%s.release: success, value=%s",
-                                   self, self._Semaphore__value)
-                else:
-                    if __debug__:
-                        self._note(
-                            "%s.release: success, value=%s (unchanged)" % (
-                                self, self._Semaphore__value))
 
         def clear(self):  # noqa
             while self._Semaphore__value < self._initial_value:
