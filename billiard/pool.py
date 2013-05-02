@@ -949,7 +949,7 @@ class Pool(object):
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
-                            self.on_job_worker_lost(
+                            self.on_job_process_lost(
                                 job, worker_pid, exitcodes[worker_pid],
                             )
                         break
@@ -970,7 +970,7 @@ class Pool(object):
     def on_job_process_down(self, job):
         pass
 
-    def on_job_worker_lost(self, job, pid, exitcode):
+    def on_job_process_lost(self, job, pid, exitcode):
         job._worker_lost = (time.time(), exitcode)
 
     def mark_as_worker_lost(self, job, exitcode):
