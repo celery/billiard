@@ -220,7 +220,27 @@ class Worker(Process):
 
         super(Worker, self).__init__()
 
-    def run(self, debug=debug, now=time.time):
+    def run(self):
+        _exit = sys.exit
+        _exitcode = [None]
+
+        def exit(status=None):
+            _exitcode[0] = status
+            return _exit()
+        sys.exit = exit
+
+        try:
+            self.workloop()
+        except:
+            raise
+        finally:
+            # make sure finally: blocks from parent are not called.
+            os._exit(_exitcode[0] or 0)
+
+    def on_loop_start(self, pid):
+        pass
+
+    def workloop(self, debug=debug, now=time.time):
         self._make_child_methods()
         self.after_fork()
         pid = os.getpid()
@@ -228,6 +248,8 @@ class Worker(Process):
         poll = self.poll
         maxtasks = self.maxtasks
         should_shutdown = self._shutdown.is_set if self._shutdown else None
+
+        self.on_loop_start(pid=pid)
 
         exitcode = EX_OK
         completed = 0
@@ -634,7 +656,9 @@ class ResultHandler(PoolThread):
             except KeyError:
                 pass
 
-        state_handlers = {ACK: on_ack, READY: on_ready}
+        state_handlers = self.state_handlers = {
+            ACK: on_ack, READY: on_ready,
+        }
 
         def on_state_change(task):
             state, args = task
@@ -1312,7 +1336,7 @@ class Pool(object):
         stop_if_not_current(self._result_handler)
         debug('result handler joined')
         for i, p in enumerate(self._pool):
-            debug('joining worker %s/%s (%r)', i, len(self._pool), p)
+            debug('joining worker %s/%s (%r)', i+1, len(self._pool), p)
             p.join()
         debug('pool join complete')
 
