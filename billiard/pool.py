@@ -79,6 +79,7 @@ TERMINATE = 2
 
 ACK = 0
 READY = 1
+TASK = 2
 
 #
 # Exit code constants
@@ -206,7 +207,7 @@ def soft_timeout_sighandler(signum, frame):
 class Worker(Process):
 
     def __init__(self, pair, initializer=None, initargs=(),
-                 maxtasks=None, sentinel=None):
+                 maxtasks=None, sentinel=None, wait_for_ack=False):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
@@ -217,6 +218,7 @@ class Worker(Process):
         self.outqR_fd = self.outq._reader.fileno()
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
+        self.wait_for_ack = wait_for_ack
 
         super(Worker, self).__init__()
 
@@ -230,7 +232,7 @@ class Worker(Process):
         sys.exit = exit
 
         try:
-            self.workloop()
+            sys.exit(self.workloop())
         except:
             raise
         finally:
@@ -246,54 +248,68 @@ class Worker(Process):
         pid = os.getpid()
         put = self.outq.put
         poll = self.poll
+        wait_for_ack = self.wait_for_ack
         maxtasks = self.maxtasks
         should_shutdown = self._shutdown.is_set if self._shutdown else None
 
+        # Do additional initialization before loop start
         self.on_loop_start(pid=pid)
 
-        exitcode = EX_OK
-        completed = 0
-        while maxtasks is None or (maxtasks and completed < maxtasks):
+        def receive():
             if should_shutdown and should_shutdown():
                 debug('worker got sentinel -- exiting')
-                break
+                raise SystemExit(EX_OK)
             try:
-                ready, task = poll(1.0)
+                ready, req = poll(1.0)
                 if not ready:
-                    continue
+                    return None
             except (EOFError, IOError) as exc:
                 if get_errno(exc) == errno.EINTR:
-                    continue  # interrupted, maybe by gdb
+                    return None  # interrupted, maybe by gdb
                 debug('worker got %s -- exiting', type(exc).__name__)
-                exitcode = EX_FAILURE
-                break
-
-            if task is None:
+                raise SystemExit(EX_FAILURE)
+            if req is None:
                 debug('worker got sentinel -- exiting')
-                break
+                raise SystemExit(EX_FAILURE)
+            return req
 
-            job, i, fun, args, kwargs = task
-            put((ACK, (job, i, now(), pid)))
-            try:
-                result = (True, fun(*args, **kwargs))
-            except Exception:
-                result = (False, ExceptionInfo())
-            try:
-                put((READY, (job, i, result)))
-            except Exception, exc:
-                _, _, tb = sys.exc_info()
+        completed = 0
+        while maxtasks is None or (maxtasks and completed < maxtasks):
+            req = receive()
+            if req:
+                type_, args_ = req
+                assert type_ == TASK
+                job, i, fun, args, kwargs = args_
+                put((ACK, (job, i, now(), pid)))
+                if wait_for_ack:
+                    while 1:
+                        req = receive()
+                        if req:
+                            type_, args_ = req
+                            assert type_ == ACK
+                            print('RECEIVED ACK')
+                            break
                 try:
-                    wrapped = MaybeEncodingError(exc, result[1])
-                    einfo = ExceptionInfo((MaybeEncodingError, wrapped, tb))
-                    put((READY, (job, i, (False, einfo))))
-                finally:
-                    del(tb)
-
-            completed += 1
+                    result = (True, fun(*args, **kwargs))
+                except Exception:
+                    result = (False, ExceptionInfo())
+                try:
+                    put((READY, (job, i, result)))
+                except Exception, exc:
+                    _, _, tb = sys.exc_info()
+                    try:
+                        wrapped = MaybeEncodingError(exc, result[1])
+                        einfo = ExceptionInfo((
+                            MaybeEncodingError, wrapped, tb,
+                        ))
+                        put((READY, (job, i, (False, einfo))))
+                    finally:
+                        del(tb)
+                completed += 1
         debug('worker exiting after %d tasks', completed)
-        if exitcode is None and maxtasks:
-            exitcode = EX_RECYCLE if completed == maxtasks else EX_FAILURE
-        sys.exit(exitcode or EX_OK)
+        if maxtasks:
+            return EX_RECYCLE if completed == maxtasks else EX_FAILURE
+        return EX_OK
 
     def after_fork(self):
         if hasattr(self.inq, '_writer'):
@@ -795,7 +811,8 @@ class Pool(object):
                  threads=True,
                  semaphore=None,
                  putlocks=False,
-                 allow_restart=False):
+                 allow_restart=False,
+                 synack=False):
         self._setup_queues()
         self._taskqueue = Queue()
         self._cache = {}
@@ -813,6 +830,7 @@ class Pool(object):
         self.threads = threads
         self.readers = {}
         self.allow_restart = allow_restart
+        self.synack = synack
         # Contains processes that we have terminated,
         # and that the supervisor should not raise an error for.
         self.signalled = set()
@@ -825,7 +843,7 @@ class Pool(object):
             soft_timeout = None
 
         self._processes = self.cpu_count() if processes is None else processes
-        self.max_restarts = max_restarts or round(processes * 100)
+        self.max_restarts = max_restarts or round(self._processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
 
         if initializer is not None and \
@@ -836,7 +854,7 @@ class Pool(object):
         self._poolctrl = {}
         self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
-        for i in range(processes):
+        for i in range(self._processes):
             self._create_worker_process(i)
 
         self._worker_handler = self.Supervisor(self)
@@ -915,6 +933,7 @@ class Pool(object):
         w = self.Worker(
             pair, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel,
+            self.synack,
         )
         self._pool.append(w)
         self._process_register_queuepair(w, pair)
@@ -1149,7 +1168,7 @@ class Pool(object):
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
             self._taskqueue.put((
-                ((result._job, i, func, (x,), {})
+                ((TASK, (result._job, i, func, (x,), {}))
                  for i, x in enumerate(iterable)),
                 result._set_length,
             ))
@@ -1160,7 +1179,7 @@ class Pool(object):
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
             self._taskqueue.put((
-                ((result._job, i, mapstar, (x,), {})
+                ((TASK, (result._job, i, mapstar, (x,), {}))
                  for i, x in enumerate(task_batches)),
                 result._set_length,
             ))
@@ -1179,7 +1198,7 @@ class Pool(object):
                 self._cache, lost_worker_timeout=lost_worker_timeout,
             )
             self._taskqueue.put((
-                ((result._job, i, func, (x,), {})
+                ((TASK, (result._job, i, func, (x,), {}))
                  for i, x in enumerate(iterable)),
                 result._set_length,
             ))
@@ -1191,7 +1210,7 @@ class Pool(object):
                 self._cache, lost_worker_timeout=lost_worker_timeout,
             )
             self._taskqueue.put((
-                ((result._job, i, mapstar, (x,), {})
+                ((TASK, (result._job, i, mapstar, (x,), {}))
                  for i, x in enumerate(task_batches)),
                 result._set_length,
             ))
@@ -1239,16 +1258,20 @@ class Pool(object):
                 on_timeout_set=self.on_timeout_set,
                 on_timeout_cancel=self.on_timeout_cancel,
                 callbacks_propagate=callbacks_propagate,
+                send_ack=self.send_ack if self.synack else None,
             )
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
                 self._start_timeout_handler()
             if self.threads:
-                self._taskqueue.put(([(result._job, None,
-                                    func, args, kwds)], None))
+                self._taskqueue.put(([(TASK, (result._job, None,
+                                    func, args, kwds))], None))
             else:
-                self._quick_put((result._job, None, func, args, kwds))
+                self._quick_put((TASK, (result._job, None, func, args, kwds)))
             return result
+
+    def send_ack(self, job, i):
+        self._quick_put((ACK, (i, )))
 
     def terminate_job(self, pid, sig=None):
         try:
@@ -1288,7 +1311,7 @@ class Pool(object):
         task_batches = Pool._get_tasks(func, iterable, chunksize)
         result = MapResult(self._cache, chunksize, len(iterable), callback,
                            error_callback=error_callback)
-        self._taskqueue.put((((result._job, i, mapper, (x,), {})
+        self._taskqueue.put((((TASK, (result._job, i, mapper, (x,), {}))
                               for i, x in enumerate(task_batches)), None))
         return result
 
@@ -1423,7 +1446,7 @@ class ApplyResult(object):
                  timeout_callback=None, error_callback=None, soft_timeout=None,
                  timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
                  on_timeout_set=None, on_timeout_cancel=None,
-                 callbacks_propagate=()):
+                 callbacks_propagate=(), send_ack=None):
         self._mutex = threading.Lock()
         self._event = threading.Event()
         self._job = next(job_counter)
@@ -1438,11 +1461,17 @@ class ApplyResult(object):
         self._on_timeout_set = on_timeout_set
         self._on_timeout_cancel = on_timeout_cancel
         self._callbacks_propagate = callbacks_propagate or ()
+        self._send_ack = send_ack
 
         self._accepted = False
         self._worker_pid = None
         self._time_accepted = None
         cache[self._job] = self
+
+    def __repr__(self):
+        return '<Result: {id} ack:{ack} ready:{ready}>'.format(
+            id=self._job, ack=self._accepted, ready=self.ready(),
+        )
 
     def ready(self):
         return self._event.isSet()
@@ -1509,6 +1538,8 @@ class ApplyResult(object):
             if self._accept_callback:
                 self.safe_apply_callback(
                     self._accept_callback, pid, time_accepted)
+            if self._send_ack:
+                self._send_ack(pid, i)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
