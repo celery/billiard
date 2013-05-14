@@ -1284,8 +1284,8 @@ class Pool(object):
                 self._quick_put((TASK, (result._job, None, func, args, kwds)))
             return result
 
-    def send_ack(self, job, i):
-        self._quick_put((ACK, (i, )))
+    def send_ack(self, job, i, fd):
+        pass
 
     def terminate_job(self, pid, sig=None):
         try:
