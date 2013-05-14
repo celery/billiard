@@ -80,6 +80,7 @@ TERMINATE = 2
 ACK = 0
 READY = 1
 TASK = 2
+NACK = 3
 
 #
 # Exit code constants
@@ -258,7 +259,17 @@ class Worker(Process):
         self.on_loop_start(pid=pid)
 
         wait_for_job = self.wait_for_job
-        wait_for_syn = self.wait_for_syn
+        _wait_for_syn = self.wait_for_syn
+
+        def wait_for_syn():
+            while 1:
+                req = _wait_for_syn()
+                if req:
+                    type_, args = req
+                    if type_ == NACK:
+                        return False
+                    assert type_ == ACK
+                    return True
 
         completed = 0
         while maxtasks is None or (maxtasks and completed < maxtasks):
@@ -269,12 +280,9 @@ class Worker(Process):
                 job, i, fun, args, kwargs = args_
                 put((ACK, (job, i, now(), pid, synqW_fd)))
                 if wait_for_syn:
-                    while 1:
-                        req = wait_for_syn()
-                        if req:
-                            type_, args_ = req
-                            assert type_ == ACK
-                            break
+                    confirm = wait_for_syn()
+                    if not confirm:
+                        continue  # received NACK
                 try:
                     result = (True, fun(*args, **kwargs))
                 except Exception:
@@ -1284,7 +1292,7 @@ class Pool(object):
                 self._quick_put((TASK, (result._job, None, func, args, kwds)))
             return result
 
-    def send_ack(self, job, i, fd):
+    def send_ack(self, response, job, i, fd):
         pass
 
     def terminate_job(self, pid, sig=None):
@@ -1478,6 +1486,7 @@ class ApplyResult(object):
         self._send_ack = send_ack
 
         self._accepted = False
+        self._cancelled = False
         self._worker_pid = None
         self._time_accepted = None
         cache[self._job] = self
@@ -1496,6 +1505,10 @@ class ApplyResult(object):
     def successful(self):
         assert self.ready()
         return self._success
+
+    def _cancel(self):
+        """Only works if synack is used."""
+        self._cancelled = True
 
     def worker_pids(self):
         return [self._worker_pid] if self._worker_pid else []
@@ -1542,6 +1555,9 @@ class ApplyResult(object):
 
     def _ack(self, i, time_accepted, pid, synqW_fd):
         with self._mutex:
+            if self._cancelled and self._send_ack:
+                self._accepted = True
+                return self._send_ack(NACK, pid, i, synqW_fd)
             self._accepted = True
             self._time_accepted = time_accepted
             self._worker_pid = pid
@@ -1549,11 +1565,20 @@ class ApplyResult(object):
                 self._cache.pop(self._job, None)
             if self._on_timeout_set:
                 self._on_timeout_set(self, self._soft_timeout, self._timeout)
+            response = ACK
             if self._accept_callback:
-                self.safe_apply_callback(
-                    self._accept_callback, pid, time_accepted)
-            if self._send_ack:
-                self._send_ack(pid, i, synqW_fd)
+                try:
+                    self._accept_callback(pid, time_accepted)
+                except self._propagate_errors:
+                    response = NACK
+                    raise
+                except Exception:
+                    response = NACK
+                    # ignore other errors
+                finally:
+                    if self._send_ack:
+                        return self._send_ack(response, pid, i, synqW_fd)
+            return self._send_ack(response, pid, i, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
