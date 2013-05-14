@@ -206,19 +206,23 @@ def soft_timeout_sighandler(signum, frame):
 
 class Worker(Process):
 
-    def __init__(self, pair, initializer=None, initargs=(),
-                 maxtasks=None, sentinel=None, wait_for_ack=False):
+    def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
+                 maxtasks=None, sentinel=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
         self._shutdown = sentinel
-        self.inq, self.outq = pair
-        self.inqW_fd = self.inq._writer.fileno()
-        self.outqR_fd = self.outq._reader.fileno()
+        self.inq, self.outq, self.synq = inq, outq, synq
+        self.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
+        self.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
+        if self.synq:
+            self.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
+            self.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
+        else:
+            self.synqR_fd = self.synqW_fd = None
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
-        self.wait_for_ack = wait_for_ack
 
         super(Worker, self).__init__()
 
@@ -247,47 +251,29 @@ class Worker(Process):
         self.after_fork()
         pid = os.getpid()
         put = self.outq.put
-        poll = self.poll
-        wait_for_ack = self.wait_for_ack
+        synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
-        should_shutdown = self._shutdown.is_set if self._shutdown else None
 
         # Do additional initialization before loop start
         self.on_loop_start(pid=pid)
 
-        def receive():
-            if should_shutdown and should_shutdown():
-                debug('worker got sentinel -- exiting')
-                raise SystemExit(EX_OK)
-            try:
-                ready, req = poll(1.0)
-                if not ready:
-                    return None
-            except (EOFError, IOError) as exc:
-                if get_errno(exc) == errno.EINTR:
-                    return None  # interrupted, maybe by gdb
-                debug('worker got %s -- exiting', type(exc).__name__)
-                raise SystemExit(EX_FAILURE)
-            if req is None:
-                debug('worker got sentinel -- exiting')
-                raise SystemExit(EX_FAILURE)
-            return req
+        wait_for_job = self.wait_for_job
+        wait_for_syn = self.wait_for_syn
 
         completed = 0
         while maxtasks is None or (maxtasks and completed < maxtasks):
-            req = receive()
+            req = wait_for_job()
             if req:
                 type_, args_ = req
                 assert type_ == TASK
                 job, i, fun, args, kwargs = args_
-                put((ACK, (job, i, now(), pid)))
-                if wait_for_ack:
+                put((ACK, (job, i, now(), pid, synqW_fd)))
+                if wait_for_syn:
                     while 1:
-                        req = receive()
+                        req = wait_for_syn()
                         if req:
                             type_, args_ = req
                             assert type_ == ACK
-                            print('RECEIVED ACK')
                             break
                 try:
                     result = (True, fun(*args, **kwargs))
@@ -333,30 +319,59 @@ class Worker(Process):
         except AttributeError:
             pass
 
-    def _make_child_methods(self, loads=pickle_loads):
-        if hasattr(self.inq, '_reader'):
-            _poll = self.inq._reader.poll
-            if hasattr(self.inq, 'get_payload'):
-                get_payload = self.inq.get_payload
+    def _make_recv_method(self, conn):
+        get = conn.get
 
-                def poll(timeout):
+        if hasattr(conn, '_reader'):
+            _poll = conn._reader.poll
+            if hasattr(conn, 'get_payload'):
+                get_payload = conn.get_payload
+
+                def _recv(timeout, loads=pickle_loads):
                     if _poll(timeout):
                         return True, loads(get_payload())
                     return False, None
             else:
-                get = self.inq.get
-
-                def poll(timeout):  # noqa
+                def _recv_job(timeout):  # noqa
                     if _poll(timeout):
                         return True, get()
                     return False, None
         else:
-            def poll(timeout):  # noqa
+            def _recv(timeout):  # noqa
                 try:
                     return True, get(timeout=timeout)
                 except Queue.Empty:
                     return False, None
-        self.poll = poll
+        return _recv
+
+    def _make_child_methods(self, loads=pickle_loads):
+        self.wait_for_job = self._make_protected_receive(self.inq)
+        self.wait_for_syn = (self._make_protected_receive(self.synq)
+                             if self.synq else None)
+
+    def _make_protected_receive(self, conn):
+        _receive = self._make_recv_method(conn)
+        should_shutdown = self._shutdown.is_set if self._shutdown else None
+
+        def receive(debug=debug):
+            if should_shutdown and should_shutdown():
+                debug('worker got sentinel -- exiting')
+                raise SystemExit(EX_OK)
+            try:
+                ready, req = _receive(1.0)
+                if not ready:
+                    return None
+            except (EOFError, IOError) as exc:
+                if get_errno(exc) == errno.EINTR:
+                    return None  # interrupted, maybe by gdb
+                debug('worker got %s -- exiting', type(exc).__name__)
+                raise SystemExit(EX_FAILURE)
+            if req is None:
+                debug('worker got sentinel -- exiting')
+                raise SystemExit(EX_FAILURE)
+            return req
+
+        return receive
 
 
 #
@@ -651,9 +666,9 @@ class ResultHandler(PoolThread):
         putlock = self.putlock
         restart_state = self.restart_state
 
-        def on_ack(job, i, time_accepted, pid):
+        def on_ack(job, i, time_accepted, pid, synqW_fd):
             try:
-                cache[job]._ack(i, time_accepted, pid)
+                cache[job]._ack(i, time_accepted, pid, synqW_fd)
             except (KeyError, AttributeError):
                 # Object gone or doesn't support _ack (e.g. IMAPIterator).
                 pass
@@ -921,22 +936,21 @@ class Pool(object):
     def handle_result_event(self, *args):
         return self._result_handler.handle_event(*args)
 
-    def _process_register_queuepair(self, worker, pair):
+    def _process_register_queues(self, worker, queues):
         pass
 
-    def get_process_queuepair(self):
-        return self._inqueue, self._outqueue
+    def get_process_queues(self):
+        return self._inqueue, self._outqueue, None
 
     def _create_worker_process(self, i):
         sentinel = Event() if self.allow_restart else None
-        pair = self.get_process_queuepair()
+        inq, outq, synq = self.get_process_queues()
         w = self.Worker(
-            pair, self._initializer, self._initargs,
+            inq, outq, synq, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel,
-            self.synack,
         )
         self._pool.append(w)
-        self._process_register_queuepair(w, pair)
+        self._process_register_queues(w, (inq, outq, synq))
         w.name = w.name.replace('Process', 'PoolWorker')
         w.daemon = True
         w.index = i
@@ -999,7 +1013,7 @@ class Pool(object):
             for worker in values(cleaned):
                 if self.on_process_down:
                     if not shutdown:
-                        self._process_cleanup_queuepair(worker)
+                        self._process_cleanup_queues(worker)
                     self.on_process_down(worker)
             return list(exitcodes.values())
         return []
@@ -1007,7 +1021,7 @@ class Pool(object):
     def on_partial_read(self, job, worker):
         pass
 
-    def _process_cleanup_queuepair(self, worker):
+    def _process_cleanup_queues(self, worker):
         pass
 
     def on_job_process_down(self, job):
@@ -1526,7 +1540,7 @@ class ApplyResult(object):
                 self.safe_apply_callback(
                     self._error_callback, self._value)
 
-    def _ack(self, i, time_accepted, pid):
+    def _ack(self, i, time_accepted, pid, synqW_fd):
         with self._mutex:
             self._accepted = True
             self._time_accepted = time_accepted
@@ -1539,7 +1553,7 @@ class ApplyResult(object):
                 self.safe_apply_callback(
                     self._accept_callback, pid, time_accepted)
             if self._send_ack:
-                self._send_ack(pid, i)
+                self._send_ack(pid, i, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
