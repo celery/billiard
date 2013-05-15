@@ -1017,19 +1017,22 @@ class Pool(object):
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in list(self._cache.values()):
-                proc_gone = any(pid in cleaned for pid in job.worker_pids())
+                proc_gone = next(
+                    (pid for pid in job.worker_pids() if pid in cleaned),
+                    None
+                )
                 if proc_gone:
                     self.on_job_process_down(job)
                     if not job.ready():
-                        exitcode = exitcodes[worker_pid]
-                        if worker_pid in self.signalled:
+                        exitcode = exitcodes[proc_gone]
+                        if proc_gone in self.signalled:
                             try:
                                 raise Terminated(-exitcode)
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
                             self.on_job_process_lost(
-                                job, worker_pid, exitcode,
+                                job, proc_gone, exitcode,
                             )
                         break
             for worker in values(cleaned):
