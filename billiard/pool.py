@@ -236,13 +236,20 @@ class Worker(Process):
             return _exit()
         sys.exit = exit
 
+        thrown = False
+
         try:
             sys.exit(self.workloop())
-        except:
+        except Exception as exc:
+            error('Pool process error: %r', exc, exc_info=1)
+            error('outqW_fd: %r', self.outqW_fd)
+            thrown = True
             raise
         finally:
             # make sure finally: blocks from parent are not called.
-            os._exit(_exitcode[0] or 0)
+            if _exitcode[0] is None:
+                _exitcode[0] = EX_FAILURE if thrown else EX_OK
+            os._exit(_exitcode[0])
 
     def on_loop_start(self, pid):
         pass
@@ -261,8 +268,12 @@ class Worker(Process):
         wait_for_job = self.wait_for_job
         _wait_for_syn = self.wait_for_syn
 
-        def wait_for_syn():
+        def wait_for_syn(jid):
+            i = 0
             while 1:
+                if i > 60:
+                    error('!!!WAIT FOR ACK TIMEOUT: job:%r fd:%r!!!',
+                            jid, self.synq._reader.fileno())
                 req = _wait_for_syn()
                 if req:
                     type_, args = req
@@ -270,6 +281,7 @@ class Worker(Process):
                         return False
                     assert type_ == ACK
                     return True
+                i += 1
 
         completed = 0
         while maxtasks is None or (maxtasks and completed < maxtasks):
@@ -279,8 +291,8 @@ class Worker(Process):
                 assert type_ == TASK
                 job, i, fun, args, kwargs = args_
                 put((ACK, (job, i, now(), pid, synqW_fd)))
-                if wait_for_syn:
-                    confirm = wait_for_syn()
+                if _wait_for_syn:
+                    confirm = wait_for_syn(job)
                     if not confirm:
                         continue  # received NACK
                 try:
@@ -836,6 +848,7 @@ class Pool(object):
                  putlocks=False,
                  allow_restart=False,
                  synack=False):
+        self.synack = synack
         self._setup_queues()
         self._taskqueue = Queue()
         self._cache = {}
@@ -853,7 +866,6 @@ class Pool(object):
         self.threads = threads
         self.readers = {}
         self.allow_restart = allow_restart
-        self.synack = synack
         # Contains processes that we have terminated,
         # and that the supervisor should not raise an error for.
         self.signalled = set()
@@ -1005,17 +1017,19 @@ class Pool(object):
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in list(self._cache.values()):
-                self.on_job_process_down(job)
-                for worker_pid in job.worker_pids():
-                    if worker_pid in cleaned and not job.ready():
+                proc_gone = any(pid in cleaned for pid in job.worker_pids())
+                if proc_gone:
+                    self.on_job_process_down(job)
+                    if not job.ready():
+                        exitcode = exitcodes[worker_pid]
                         if worker_pid in self.signalled:
                             try:
-                                raise Terminated(-exitcodes[worker_pid])
+                                raise Terminated(-exitcode)
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
                             self.on_job_process_lost(
-                                job, worker_pid, exitcodes[worker_pid],
+                                job, worker_pid, exitcode,
                             )
                         break
             for worker in values(cleaned):
@@ -1557,7 +1571,7 @@ class ApplyResult(object):
         with self._mutex:
             if self._cancelled and self._send_ack:
                 self._accepted = True
-                return self._send_ack(NACK, pid, i, synqW_fd)
+                return self._send_ack(NACK, pid, self._job, synqW_fd)
             self._accepted = True
             self._time_accepted = time_accepted
             self._worker_pid = pid
@@ -1577,8 +1591,11 @@ class ApplyResult(object):
                     # ignore other errors
                 finally:
                     if self._send_ack:
-                        return self._send_ack(response, pid, i, synqW_fd)
-            return self._send_ack(response, pid, i, synqW_fd)
+                        return self._send_ack(
+                            response, pid, self._job, synqW_fd
+                        )
+            if self._send_ack:
+                self._send_ack(response, pid, self._job, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
