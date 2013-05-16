@@ -980,6 +980,9 @@ class Pool(object):
             self.on_process_up(w)
         return w
 
+    def process_flush_queues(self, worker):
+        pass
+
     def _join_exited_workers(self, shutdown=False):
         """Cleanup after any worker processes which have exited due to
         reaching their specified lifetime. Returns True if any workers were
@@ -1013,6 +1016,7 @@ class Pool(object):
                 if worker.exitcode not in (EX_OK, EX_RECYCLE):
                     error('Process %r pid:%r exited with exitcode %r' % (
                         worker.name, worker.pid, worker.exitcode))
+                self.process_flush_queues(worker)
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
@@ -1021,8 +1025,9 @@ class Pool(object):
                     (pid for pid in job.worker_pids() if pid in cleaned),
                     None
                 )
+                sched_for = job._scheduled_for
                 if proc_gone:
-                    self.on_job_process_down(job)
+                    self.on_job_process_down(job, proc_gone)
                     if not job.ready():
                         exitcode = exitcodes[proc_gone]
                         if proc_gone in self.signalled:
@@ -1034,7 +1039,10 @@ class Pool(object):
                             self.on_job_process_lost(
                                 job, proc_gone, exitcode,
                             )
-                        break
+                else:
+                    if not job._write_to and sched_for and sched_for.pid in cleaned:
+                        self.on_job_process_down(job, proc_gone)
+
             for worker in values(cleaned):
                 if self.on_process_down:
                     if not shutdown:
@@ -1049,7 +1057,7 @@ class Pool(object):
     def _process_cleanup_queues(self, worker):
         pass
 
-    def on_job_process_down(self, job):
+    def on_job_process_down(self, job, pid_gone):
         pass
 
     def on_job_process_lost(self, job, pid, exitcode):
@@ -1480,6 +1488,7 @@ class Pool(object):
 class ApplyResult(object):
     _worker_lost = None
     _write_to = None
+    _scheduled_for = None
 
     def __init__(self, cache, callback, accept_callback=None,
                  timeout_callback=None, error_callback=None, soft_timeout=None,
