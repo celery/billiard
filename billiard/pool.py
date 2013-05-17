@@ -273,7 +273,7 @@ class Worker(Process):
             while 1:
                 if i > 60:
                     error('!!!WAIT FOR ACK TIMEOUT: job:%r fd:%r!!!',
-                            jid, self.synq._reader.fileno())
+                          jid, self.synq._reader.fileno())
                 req = _wait_for_syn()
                 if req:
                     type_, args = req
@@ -1021,27 +1021,34 @@ class Pool(object):
                 del self._poolctrl[worker.pid]
         if cleaned:
             for job in list(self._cache.values()):
-                proc_gone = next(
+                acked_by_gone = next(
                     (pid for pid in job.worker_pids() if pid in cleaned),
                     None
                 )
-                sched_for = job._scheduled_for
-                if proc_gone:
-                    self.on_job_process_down(job, proc_gone)
+                # already accepted by process
+                if acked_by_gone:
+                    self.on_job_process_down(job, acked_by_gone)
                     if not job.ready():
-                        exitcode = exitcodes[proc_gone]
-                        if proc_gone in self.signalled:
+                        exitcode = exitcodes[acked_by_gone]
+                        if acked_by_gone in self.signalled:
                             try:
                                 raise Terminated(-exitcode)
                             except Terminated:
                                 job._set(None, (False, ExceptionInfo()))
                         else:
                             self.on_job_process_lost(
-                                job, proc_gone, exitcode,
+                                job, acked_by_gone, exitcode,
                             )
                 else:
-                    if not job._write_to and sched_for and sched_for.pid in cleaned:
-                        self.on_job_process_down(job, proc_gone)
+                    # started writing to
+                    write_to_gone = job._write_to
+                    # was scheduled to write to
+                    sched_for_gone = job._scheduled_for
+
+                    if write_to_gone and write_to_gone.pid in cleaned:
+                        self.on_job_process_down(job, write_to_gone.pid)
+                    elif sched_for_gone and sched_for_gone.pid in cleaned:
+                        self.on_job_process_down(job, sched_for_gone.pid)
 
             for worker in values(cleaned):
                 if self.on_process_down:
@@ -1079,21 +1086,29 @@ class Pool(object):
     def __exit__(self, *exc_info):
         return self.terminate()
 
+    def on_grow(self, n):
+        pass
+
+    def on_shrink(self, n):
+        pass
+
     def shrink(self, n=1):
         for i, worker in enumerate(self._iterinactive()):
             self._processes -= 1
             if self._putlock:
                 self._putlock.shrink()
             worker.terminate()
+            self.on_shrink(1)
             if i == n - 1:
                 return
-        raise ValueError("Can't shrink pool. All processes busy!")
+            raise ValueError("Can't shrink pool. All processes busy!")
 
     def grow(self, n=1):
         for i in range(n):
             self._processes += 1
             if self._putlock:
                 self._putlock.grow()
+        self.on_grow(n)
 
     def _iterinactive(self):
         for worker in self._pool:
