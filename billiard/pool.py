@@ -220,10 +220,14 @@ class Worker(Process):
         if self.synq:
             self.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
             self.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
+            self.send_syn_offset = getattr(
+                self.synq._writer, 'send_offset', None,
+            )
         else:
-            self.synqR_fd = self.synqW_fd = None
+            self.synqR_fd = self.synqW_fd = self._send_syn_offset = None
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
+        self.send_job_offset = getattr(self.inq._writer, 'send_offset', None)
 
         super(Worker, self).__init__()
 
@@ -1309,11 +1313,10 @@ class Pool(object):
                 "on this platform: It does not have the SIGUSR1 signal.",
             ))
             soft_timeout = None
-        if waitforslot is None:
-            waitforslot = self.putlocks
-        if waitforslot and self._putlock is not None and self._state == RUN:
-            self._putlock.acquire()
         if self._state == RUN:
+            waitforslot = self.putlocks if waitforslot is None else waitforslot
+            if waitforslot and self._putlock is not None:
+                self._putlock.acquire()
             result = ApplyResult(
                 self._cache, callback, accept_callback, timeout_callback,
                 error_callback, soft_timeout, timeout, lost_worker_timeout,
