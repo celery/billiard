@@ -107,7 +107,7 @@ EX_OK = getattr(os, "EX_OK", 0)
 job_counter = itertools.count()
 
 
-def human_status(self, status):
+def human_status(status):
     if status < 0:
         try:
             return 'signal {0} ({1})'.format(-status, SIGMAP[-status])
