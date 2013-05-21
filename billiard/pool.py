@@ -65,6 +65,10 @@ if PY3:
 else:
     _Semaphore = threading._Semaphore  # noqa
 
+SIGMAP = dict(
+    (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')
+)
+
 #
 # Constants representing the state of a pool
 #
@@ -101,6 +105,15 @@ LOST_WORKER_TIMEOUT = 10.0
 EX_OK = getattr(os, "EX_OK", 0)
 
 job_counter = itertools.count()
+
+
+def human_status(self, status):
+    if status < 0:
+        try:
+            return 'signal {0} ({1})'.format(-status, SIGMAP[-status])
+        except KeyError:
+            return 'signal {0}'.format(-status)
+    return 'exitcode {0}'.format(status)
 
 
 def mapstar(args):
@@ -1077,7 +1090,8 @@ class Pool(object):
     def mark_as_worker_lost(self, job, exitcode):
         try:
             raise WorkerLostError(
-                'Worker exited prematurely (exitcode: %r).' % (exitcode, )
+                'Worker exited prematurely: {0}.'.format(
+                    human_status(exitcode)),
             )
         except WorkerLostError:
             job._set(None, (False, ExceptionInfo()))
