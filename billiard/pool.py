@@ -1058,14 +1058,14 @@ class Pool(object):
                             )
                 else:
                     # started writing to
-                    write_to_gone = job._write_to
+                    write_to = job._write_to
                     # was scheduled to write to
-                    sched_for_gone = job._scheduled_for
+                    sched_for = job._scheduled_for
 
-                    if write_to_gone and write_to_gone.pid in cleaned:
-                        self.on_job_process_down(job, write_to_gone.pid)
-                    elif sched_for_gone and sched_for_gone.pid in cleaned:
-                        self.on_job_process_down(job, sched_for_gone.pid)
+                    if write_to and write_to.exitcode is not None:
+                        self.on_job_process_down(job, write_to.pid)
+                    elif sched_for and sched_for.exitcode is not None:
+                        self.on_job_process_down(job, sched_for.pid)
 
             for worker in values(cleaned):
                 if self.on_process_down:
@@ -1439,7 +1439,8 @@ class Pool(object):
         debug('result handler joined')
         for i, p in enumerate(self._pool):
             debug('joining worker %s/%s (%r)', i+1, len(self._pool), p)
-            p.join()
+            if p._popen is not None:  # process started?
+                p.join()
         debug('pool join complete')
 
     def restart(self):
@@ -1486,7 +1487,7 @@ class Pool(object):
         if pool and hasattr(pool[0], 'terminate'):
             debug('terminating workers')
             for p in pool:
-                if p.exitcode is None:
+                if p._popen is not None and p.exitcode is None:
                     p.terminate()
 
         debug('joining task handler')
