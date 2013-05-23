@@ -255,6 +255,12 @@ init_billiard(void)
     Py_INCREF(&BilliardConnectionType);
     PyModule_AddObject(module, "Connection", (PyObject*)&BilliardConnectionType);
 
+    /* Add MsgWriter type to module */
+    if (PyType_Ready(&Billiard_MsgWriterType) < 0)
+        return;
+    Py_INCREF(&Billiard_MsgWriterType);
+    PyModule_AddObject(module, "MsgWriter", (PyObject*)&Billiard_MsgWriterType);
+
 #if defined(MS_WINDOWS) ||                                              \
   (defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED))
     /* Add SemLock type to module */

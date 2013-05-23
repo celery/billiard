@@ -146,11 +146,13 @@ if sys.platform == 'win32':
                             'Modules/_billiard/semaphore.c',
                             'Modules/_billiard/pipe_connection.c',
                             'Modules/_billiard/socket_connection.c',
-                            'Modules/_billiard/win32_functions.c'
+                            'Modules/_billiard/win32_functions.c',
+                            'Modules/_billiard/writer.c',
                            ]
 else:
     multiprocessing_srcs = ['Modules/_billiard/multiprocessing.c',
-                            'Modules/_billiard/socket_connection.c'
+                            'Modules/_billiard/socket_connection.c',
+                            'Modules/_billiard/writer.c',
                            ]
 
     if macros.get('HAVE_SEM_OPEN', False):

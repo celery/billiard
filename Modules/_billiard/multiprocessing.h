@@ -137,6 +137,7 @@ extern PyObject *Billiard_BufferTooShort;
 extern PyTypeObject BilliardSemLockType;
 extern PyTypeObject BilliardConnectionType;
 extern PyTypeObject BilliardPipeConnectionType;
+extern PyTypeObject Billiard_MsgWriterType;
 extern HANDLE sigint_event;
 
 /*
