@@ -219,6 +219,8 @@ def soft_timeout_sighandler(signum, frame):
 
 
 class Worker(Process):
+    _controlled_termination = False
+    _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None):
@@ -270,6 +272,10 @@ class Worker(Process):
 
     def on_loop_start(self, pid):
         pass
+
+    def terminate_controlled(self):
+        self._controlled_termination = True
+        self.terminate()
 
     def workloop(self, debug=debug, now=time.time):
         self._make_child_methods()
@@ -567,10 +573,10 @@ class TimeoutHandler(PoolThread):
         super(TimeoutHandler, self).__init__()
 
     def _process_by_pid(self, pid):
-        for index, process in enumerate(self.processes):
-                if process.pid == pid:
-                    return process, index
-        return None, None
+        return next((
+            (proc, i) for i, proc in enumerate(self.processes)
+            if proc.pid == pid
+        ), (None, None))
 
     def on_soft_timeout(self, job):
         debug('soft time limit exceeded for %r', job)
@@ -883,9 +889,6 @@ class Pool(object):
         self.threads = threads
         self.readers = {}
         self.allow_restart = allow_restart
-        # Contains processes that we have terminated,
-        # and that the supervisor should not raise an error for.
-        self.signalled = set()
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning(
@@ -1030,7 +1033,8 @@ class Pool(object):
                 debug('Supervisor: worked %d joined', i)
                 cleaned[worker.pid] = worker
                 exitcodes[worker.pid] = worker.exitcode
-                if worker.exitcode not in (EX_OK, EX_RECYCLE):
+                if worker.exitcode not in (EX_OK, EX_RECYCLE) and \
+                        not getattr(worker, '_controlled_termination', False):
                     error('Process %r pid:%r exited with exitcode %r' % (
                         worker.name, worker.pid, worker.exitcode))
                 self.process_flush_queues(worker)
@@ -1047,7 +1051,8 @@ class Pool(object):
                     self.on_job_process_down(job, acked_by_gone)
                     if not job.ready():
                         exitcode = exitcodes[acked_by_gone]
-                        if acked_by_gone in self.signalled:
+                        if getattr(cleaned[acked_by_gone],
+                                   '_job_terminated', False):
                             try:
                                 raise Terminated(-exitcode)
                             except Terminated:
@@ -1115,7 +1120,7 @@ class Pool(object):
             self._processes -= 1
             if self._putlock:
                 self._putlock.shrink()
-            worker.terminate()
+            worker.terminate_controlled()
             self.on_shrink(1)
             if i == n - 1:
                 return
@@ -1353,13 +1358,16 @@ class Pool(object):
         pass
 
     def terminate_job(self, pid, sig=None):
-        try:
-            _kill(pid, sig or signal.SIGTERM)
-        except OSError, exc:
-            if get_errno(exc) != errno.ESRCH:
-                raise
-        else:
-            self.signalled.add(pid)
+        proc, _ = self._process_by_pid(pid)
+        if proc is not None:
+            try:
+                _kill(pid, sig or signal.SIGTERM)
+            except OSError, exc:
+                if get_errno(exc) != errno.ESRCH:
+                    raise
+            else:
+                proc._controlled_termination = True
+                proc._job_terminated = True
 
     def map_async(self, func, iterable, chunksize=None,
                   callback=None, error_callback=None):
