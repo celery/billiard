@@ -60,9 +60,10 @@ except AttributeError:  # pragma: no cover
     TIMEOUT_MAX = 1e10  # noqa
 
 
-if PY3:
+if sys.version_info >= (3, 3):
     _Semaphore = threading.Semaphore
 else:
+    # Semaphore is a factory function pointing to _Semaphore
     _Semaphore = threading._Semaphore  # noqa
 
 SIGMAP = dict(
@@ -324,7 +325,7 @@ class Worker(Process):
                     result = (False, ExceptionInfo())
                 try:
                     put((READY, (job, i, result)))
-                except Exception, exc:
+                except Exception as exc:
                     _, _, tb = sys.exc_info()
                     try:
                         wrapped = MaybeEncodingError(exc, result[1])
@@ -1362,7 +1363,7 @@ class Pool(object):
         if proc is not None:
             try:
                 _kill(pid, sig or signal.SIGTERM)
-            except OSError, exc:
+            except OSError as exc:
                 if get_errno(exc) != errno.ESRCH:
                     raise
             else:
