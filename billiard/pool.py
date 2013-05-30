@@ -980,6 +980,12 @@ class Pool(object):
     def _process_register_queues(self, worker, queues):
         pass
 
+    def _process_by_pid(self, pid):
+        return next((
+            (proc, i) for i, proc in enumerate(self._pool)
+            if proc.pid == pid
+        ), (None, None))
+
     def get_process_queues(self):
         return self._inqueue, self._outqueue, None
 
@@ -1578,6 +1584,9 @@ class ApplyResult(object):
         """Only works if synack is used."""
         self._cancelled = True
 
+    def discard(self):
+        self._cache.pop(self._job, None)
+
     def worker_pids(self):
         return [self._worker_pid] if self._worker_pid else []
 
@@ -1610,6 +1619,9 @@ class ApplyResult(object):
             self._success, self._value = obj
             self._event.set()
             if self._accepted:
+                # if not accepted yet, then the set message
+                # was received before the ack, which means
+                # the ack will remove the entry.
                 self._cache.pop(self._job, None)
 
             # apply callbacks last
@@ -1630,6 +1642,7 @@ class ApplyResult(object):
             self._time_accepted = time_accepted
             self._worker_pid = pid
             if self.ready():
+                # ack received after set()
                 self._cache.pop(self._job, None)
             if self._on_timeout_set:
                 self._on_timeout_set(self, self._soft_timeout, self._timeout)
