@@ -329,7 +329,10 @@ class _SimpleQueue(object):
 
     def _make_methods(self):
         recv = self._reader.recv
-        recv_payload = self._reader.recv_payload
+        try:
+            recv_payload = self._reader.recv_payload
+        except AttributeError:
+            recv_payload = None
         rlock = self._rlock
 
         if rlock is not None:
