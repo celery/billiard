@@ -8,16 +8,16 @@
 - Process now releases logging locks after fork.
 
     This previously happened in Pool, but it was done too late
-    since processes logs when it bootstraps.
+    as processes logs when they bootstrap.
 
-- Pool.terminate_job now ignores 'No such process' errors.
+- Pool.terminate_job now ignores `No such process` errors.
 
 - billiard.Pool entrypoint did not support new arguments
   to billiard.pool.Pool
 
-- Connection inbound buffer size increased to 128kb (was 1kb).
+- Connection inbound buffer size increased from 1kb to 128kb.
 
-- C extension cleaned up by properly namespacing symbols.
+- C extension cleaned up by properly adding a namespace to symbols.
 
 - _exit_function now works even if thread wakes up after gc collect.
 
