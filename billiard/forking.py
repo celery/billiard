@@ -273,7 +273,10 @@ else:
     except ImportError:
         import _thread as thread  # noqa
     import msvcrt
-    import _subprocess
+    try:
+        import _subprocess
+    except ImportError:
+        import _winapi as _subprocess
 
     #
     #
@@ -293,10 +296,13 @@ else:
     def duplicate(handle, target_process=None, inheritable=False):
         if target_process is None:
             target_process = _subprocess.GetCurrentProcess()
-        return _subprocess.DuplicateHandle(
+        h = _subprocess.DuplicateHandle(
             _subprocess.GetCurrentProcess(), handle, target_process,
             0, inheritable, _subprocess.DUPLICATE_SAME_ACCESS
-        ).Detach()
+        )
+        if sys.version_info[0] < 3 and sys.version_info[1] < 3:
+            h.Detach()
+        return h
 
     #
     # We define a Popen class similar to the one from subprocess, but
@@ -324,7 +330,10 @@ else:
             hp, ht, pid, tid = _subprocess.CreateProcess(
                 _python_exe, cmd, None, None, 1, 0, None, None, None
             )
-            ht.Close()
+            if sys.version_info[0] < 3 and sys.version_info[1] < 3:
+                ht.Close()
+            else:
+                close(ht)
             close(rhandle)
 
             # set attributes of self
