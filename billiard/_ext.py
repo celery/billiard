@@ -7,7 +7,7 @@ supports_exec = True
 try:
     import _winapi as win32
 except ImportError:  # pragma: no cover
-    pass
+    win32 = None
 
 if sys.platform.startswith("java"):
     _billiard = None
