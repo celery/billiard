@@ -5,6 +5,31 @@
 
 - No longer compatible with Python 2.5
 
+2.7.3.29 - 2013-06-28
+---------------------
+
+- Compilation: Fixed improper handling of HAVE_SEM_OPEN (Issue #55)
+
+    Fix contributed by Krzysztof Jagiello.
+
+- Process now releases logging locks after fork.
+
+    This previously happened in Pool, but it was done too late
+    since processes logs when it bootstraps.
+
+- Pool.terminate_job now ignores 'No such process' errors.
+
+- billiard.Pool entrypoint did not support new arguments
+  to billiard.pool.Pool
+
+- Connection inbound buffer size increased to 128kb (was 1kb).
+
+- C extension cleaned up by properly namespacing symbols.
+
+- _exit_function now works even if thread wakes up after gc collect.
+
+>>>>>>> cc4becb... win32 is _winapi on Py3.  Closes #46
+
 2.7.3.28 - 2013-04-16
 ---------------------
 
@@ -27,7 +52,6 @@
     Fix contributed by Nathan Wan.
 
 - Ignore OSError when setting up signal handlers.
->>>>>>> 2.7
 
 2.7.3.26 - 2013-04-09
 ---------------------
