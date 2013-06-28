@@ -120,7 +120,7 @@ elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
     libraries = []
 elif sys.platform in ('freebsd7', 'freebsd8', 'freebsd9', 'freebsd10'):
     macros = dict(                  # FreeBSD 7+
-            HAVE_SEM_OPEN=int(sysconfig.get_config_var('HAVE_SEM_OPEN') and not bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))),
+            HAVE_SEM_OPEN=bool(sysconfig.get_config_var('HAVE_SEM_OPEN') and not bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))),
             HAVE_SEM_TIMEDWAIT=1,
             HAVE_FD_TRANSFER=1,
         )
