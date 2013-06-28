@@ -1,3 +1,27 @@
+2.7.3.29 - 2013-06-28
+---------------------
+
+- Compilation: Fixed improper handling of HAVE_SEM_OPEN (Issue #55)
+
+    Fix contributed by Krzysztof Jagiello.
+
+- Process now releases logging locks after fork.
+
+    This previously happened in Pool, but it was done too late
+    since processes logs when it bootstraps.
+
+- Pool.terminate_job now ignores 'No such process' errors.
+
+- billiard.Pool entrypoint did not support new arguments
+  to billiard.pool.Pool
+
+- Connection inbound buffer size increased to 128kb (was 1kb).
+
+- C extension cleaned up by properly namespacing symbols.
+
+- _exit_function now works even if thread wakes up after gc collect.
+
+
 2.7.3.28 - 2013-04-16
 ---------------------
 
