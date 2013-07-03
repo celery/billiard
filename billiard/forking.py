@@ -14,7 +14,6 @@ import sys
 import signal
 import warnings
 
-from ._ext import Connection, PipeConnection, win32
 from pickle import load, HIGHEST_PROTOCOL
 from billiard import util, process
 
@@ -26,6 +25,15 @@ try:
 except NameError:
     class WindowsError(Exception):  # noqa
         pass
+
+try:
+    import _winapi as win32
+except ImportError:
+    try:
+        from _billiard import win32  # noqa
+    except ImportError:
+        if sys.platform == 'win32':
+            raise
 
 W_OLD_DJANGO_LAYOUT = """\
 Will add directory %r to path! This is necessary to accommodate \
@@ -59,13 +67,16 @@ def assert_spawning(self):
 from pickle import Pickler
 
 if sys.version_info[0] == 3:
+    import io
+    import pickle
+    from pickle import Pickler
     from copyreg import dispatch_table
 
     class ForkingPickler(Pickler):
         _extra_reducers = {}
 
-        def __init__(self, *args, **kwargs):
-            Pickler.__init__(self, *args, **kwargs)
+        def __init__(self, *args):
+            Pickler.__init__(self, *args)
             self.dispatch_table = dispatch_table.copy()
             self.dispatch_table.update(self._extra_reducers)
 
@@ -73,12 +84,20 @@ if sys.version_info[0] == 3:
         def register(cls, type, reduce):
             cls._extra_reducers[type] = reduce
 
+        @staticmethod
+        def dumps(obj):
+            buf = io.BytesIO()
+            ForkingPickler(buf, pickle.HIGHEST_PROTOCOL).dump(obj)
+            return buf.getbuffer()
+
+        loads = pickle.loads
+
+
     def _reduce_method(m):
         if m.__self__ is None:
             return getattr, (m.__class__, m.__func__.__name__)
         else:
             return getattr, (m.__self__, m.__func__.__name__)
-
     class _C:
         def f(self):
             pass
@@ -125,25 +144,6 @@ else:
 
 def dump(obj, file, protocol=None):
     ForkingPickler(file, protocol).dump(obj)
-
-#
-# Make (Pipe)Connection picklable
-#
-
-
-def reduce_connection(conn):
-    # XXX check not necessary since only registered with ForkingPickler
-    if not Popen.thread_is_spawning():
-        raise RuntimeError(
-            'By default %s objects can only be shared between processes\n'
-            'using inheritance' % type(conn).__name__
-        )
-    return type(conn), (Popen.duplicate_for_child(conn.fileno()),
-                        conn.readable, conn.writable)
-
-ForkingPickler.register(Connection, reduce_connection)
-if PipeConnection:
-    ForkingPickler.register(PipeConnection, reduce_connection)
 
 
 #
@@ -580,22 +580,6 @@ def get_preparation_data(name):
             d['main_path'] = os.path.normpath(main_path)
 
     return d
-
-    #
-    # Make (Pipe)Connection picklable
-    #
-
-    def reduce_connection(conn):
-        if not Popen.thread_is_spawning():
-            raise RuntimeError(
-                'By default %s objects can only be shared between processes\n'
-                'using inheritance' % type(conn).__name__
-            )
-        return type(conn), (Popen.duplicate_for_child(conn.fileno()),
-                            conn.readable, conn.writable)
-
-    ForkingPickler.register(Connection, reduce_connection)
-    ForkingPickler.register(PipeConnection, reduce_connection)
 
 #
 # Prepare current process

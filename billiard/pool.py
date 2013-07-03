@@ -368,7 +368,7 @@ class Worker(Process):
 
         if hasattr(conn, '_reader'):
             _poll = conn._reader.poll
-            if hasattr(conn, 'get_payload'):
+            if hasattr(conn, 'get_payload') and conn.get_payload:
                 get_payload = conn.get_payload
 
                 def _recv(timeout, loads=pickle_loads):
@@ -376,7 +376,7 @@ class Worker(Process):
                         return True, loads(get_payload())
                     return False, None
             else:
-                def _recv_job(timeout):  # noqa
+                def _recv(timeout):  # noqa
                     if _poll(timeout):
                         return True, get()
                     return False, None

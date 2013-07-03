@@ -53,10 +53,7 @@ from threading import Event
 
 from billiard.five import Queue
 
-if sys.version_info[0] == 3:
-    from multiprocessing.connection import Pipe
-else:
-    from billiard._connection import Pipe
+from billiard.connection import Pipe
 
 
 class DummyProcess(threading.Thread):

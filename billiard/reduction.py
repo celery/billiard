@@ -18,7 +18,7 @@ import socket
 import threading
 
 if sys.version_info[0] == 3:
-    from multiprocessing.connection import Client, Listener
+    from billiard.connection import Client, Listener
 else:
     from billiard._connection import Client, Listener  # noqa
 

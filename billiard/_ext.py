@@ -20,7 +20,7 @@ else:
     try:
         Connection = _billiard.Connection
     except AttributeError:  # Py3
-        from multiprocessing.connection import Connection  # noqa
+        from billiard.connection import Connection  # noqa
 
     PipeConnection = getattr(_billiard, "PipeConnection", None)
     if win32 is None:
