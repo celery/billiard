@@ -367,6 +367,5 @@ class SimpleQueue(_SimpleQueue):
     def __init__(self):
         self._reader, self._writer = Pipe(duplex=False)
         self._rlock = Lock()
-        if sys.platform != 'win32':
-            self._wlock = Lock()
+        self._wlock = Lock() if sys.platform != 'win32' else None
         self._make_methods()
