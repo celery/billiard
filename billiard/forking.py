@@ -69,7 +69,6 @@ from pickle import Pickler
 if sys.version_info[0] == 3:
     import io
     import pickle
-    from pickle import Pickler
     from copyreg import dispatch_table
 
     class ForkingPickler(Pickler):
@@ -92,13 +91,14 @@ if sys.version_info[0] == 3:
 
         loads = pickle.loads
 
-
     def _reduce_method(m):
         if m.__self__ is None:
             return getattr, (m.__class__, m.__func__.__name__)
         else:
             return getattr, (m.__self__, m.__func__.__name__)
+
     class _C:
+
         def f(self):
             pass
     ForkingPickler.register(type(_C().f), _reduce_method)
