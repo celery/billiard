@@ -241,7 +241,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
 
     if hasattr(inqueue, '_reader'):
 
-        if hasattr(inqueue, 'get_payload'):
+        if hasattr(inqueue, 'get_payload') and inqueue.get_payload:
             get_payload = inqueue.get_payload
 
             def poll(timeout):

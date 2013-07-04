@@ -334,7 +334,10 @@ class SimpleQueue(object):
 
     def _make_methods(self):
         recv = self._reader.recv
-        recv_payload = self._reader.recv_payload
+        try:
+            recv_payload = self._reader.recv_payload
+        except AttributeError:
+            recv_payload = None  # C extension not installed
         rlock = self._rlock
 
         def get():
@@ -342,10 +345,11 @@ class SimpleQueue(object):
                 return recv()
         self.get = get
 
-        def get_payload():
-            with rlock:
-                return recv_payload()
-        self.get_payload = get_payload
+        if recv_payload is not None:
+            def get_payload():
+                with rlock:
+                    return recv_payload()
+            self.get_payload = get_payload
 
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
