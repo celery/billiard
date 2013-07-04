@@ -1,3 +1,8 @@
+2.7.3.31 - 2012-07-04
+---------------------
+
+- Recent changes broke support for running without C extension (Issue #57).
+
 2.7.3.30 - 2012-06-28
 ---------------------
 
