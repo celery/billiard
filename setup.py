@@ -44,8 +44,6 @@ install a C compiler or fix the error(s) above.
 
 # -*- py3k -*-
 extras = {}
-if is_py3k:
-    extras['use_2to3'] = True
 
 # -*- Distribution Meta -*-
 
