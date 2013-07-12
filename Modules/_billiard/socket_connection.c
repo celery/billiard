@@ -26,7 +26,7 @@ void _Billiard_setblocking(int fd, int blocking)
 {
 #ifdef MS_WINDOWS
     unsigned long mode = blocking ? 0 : 1;
-    ioctlsocket(fd, FOINBIO, &mode);
+    ioctlsocket(fd, FIONBIO, &mode);
 #else
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags > 0) {
