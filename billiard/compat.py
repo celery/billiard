@@ -6,6 +6,14 @@ import sys
 
 from .five import builtins, range
 
+try:
+    import _winapi
+except ImportError:                            # pragma: no cover
+    try:
+        from billiard import win32 as _winapi  # noqa
+    except (ImportError, AttributeError):
+        _winapi = None                         # noqa
+
 if sys.version_info[0] == 3:
     bytes = bytes
 else:
@@ -47,3 +55,21 @@ def get_errno(exc):
         except AttributeError:
             pass
     return 0
+
+
+if _winapi:
+
+    def setblocking(handle, blocking):
+        raise NotImplementedError('setblocking not implemented on win32')
+
+else:
+    from os import O_NONBLOCK
+    from fcntl import fcntl, F_GETFL, F_SETFL
+
+    def setblocking(handle, blocking):
+        flags = fcntl(handle, F_GETFL, 0)
+        if flags > 0:
+            fcntl(
+                handle, F_SETFL,
+                flags & (~O_NONBLOCK) if blocking else flags | O_NONBLOCK,
+            )

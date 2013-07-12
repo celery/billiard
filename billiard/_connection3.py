@@ -6,6 +6,7 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
+from __future__ import absolute_import
 
 __all__ = ['Client', 'Listener', 'Pipe', 'wait']
 
@@ -41,9 +42,8 @@ except ImportError:
 #
 #
 
-if not _winapi:
-    from os import O_NONBLOCK
-    from fcntl import fcntl, F_GETFL, F_SETFL
+from .compat import setblocking
+
 
 BUFSIZE = 8192
 # A very generous timeout when it comes to local connections...
@@ -393,17 +393,8 @@ class Connection(_ConnectionBase):
                 break
             buf = buf[n:]
 
-    if _winapi:
-        pass
-    else:
-        def setblocking(self, blocking):
-            handle = self._handle
-            flags = fcntl(handle, F_GETFL, 0)
-            if flags > 0:
-                fcntl(
-                    handle, F_SETFL,
-                    flags & (~O_NONBLOCK) if blocking else flags | O_NONBLOCK,
-                )
+    def setblocking(self, blocking):
+        setblocking(self._handle, blocking)
 
     def _recv(self, size, read=_read):
         buf = io.BytesIO()
