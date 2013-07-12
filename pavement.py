@@ -81,7 +81,7 @@ def flake8(options):
 ])
 def flakeplus(options):
     noerror = getattr(options, "noerror", False)
-    sh("flakeplus billiard", ignore_error=noerror)
+    sh("flakeplus billiard --2.6", ignore_error=noerror)
 
 
 @task
