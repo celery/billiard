@@ -36,7 +36,7 @@ void _Billiard_sockblock(int fd, int blocking)
 #endif
 }
 
-static ssize_t
+ssize_t
 _Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t offset) {
     char *p = string;
     p += offset;
