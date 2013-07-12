@@ -30,6 +30,13 @@
     }
 
 /*
+ * Externally implemented functions
+ */
+
+extern void _Billiard_setblocking(int fd, int blocking);
+extern ssize_t _Billiard_conn_send_offset(HANDLE fd, char *string, Py_ssize_t len, Py_ssize_t offset);
+
+/*
  * Allocation and deallocation
  */
 
@@ -381,7 +388,7 @@ Billiard_connection_send_obj(BilliardConnectionObject *self, PyObject *obj)
 static PyObject *
 Billiard_connection_setblocking(BilliardConnectionObject *self, PyObject *arg)
 {
-    _Billiard_setblocking(self->handle, PyInt_AS_LONG(arg));
+    _Billiard_setblocking((int)self->handle, PyInt_AS_LONG(arg));
     Py_RETURN_NONE;
 }
 
