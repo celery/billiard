@@ -54,6 +54,13 @@ def _cleanup():
                 _current_process._children.discard(p)
 
 
+def _maybe_flush(f):
+    try:
+        f.flush()
+    except (AttributeError, EnvironmentError, NotImplementedError):
+        pass
+
+
 def active_children(_cleanup=_cleanup):
     '''
     Return list of process objects corresponding to live child processes
@@ -280,7 +287,7 @@ class Process(object):
                 exitcode = exc.args[0]
             else:
                 sys.stderr.write(str(exc.args[0]) + '\n')
-                sys.stderr.flush()
+                _maybe_flush(sys.stderr)
                 exitcode = 0 if isinstance(exc.args[0], str) else 1
         except:
             exitcode = 1
@@ -291,8 +298,8 @@ class Process(object):
         finally:
             util.info('process %s exiting with exitcode %d',
                       self.pid, exitcode)
-            sys.stdout.flush()
-            sys.stderr.flush()
+            _maybe_flush(sys.stdout)
+            _maybe_flush(sys.stderr)
         return exitcode
 
 #
