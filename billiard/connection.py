@@ -5,7 +5,7 @@ import sys
 
 is_pypy = hasattr(sys, 'pypy_version_info')
 
-if sys.version_info[0] == 3:
+if sys.version_info >= (2, 7, 0):
     from . import _connection3 as connection
 else:
     from . import _connection as connection  # noqa
