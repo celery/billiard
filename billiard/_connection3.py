@@ -7,10 +7,10 @@
 # Licensed to PSF under a Contributor Agreement.
 #
 from __future__ import absolute_import
+from __future__ import with_statement
 
 __all__ = ['Client', 'Listener', 'Pipe', 'wait']
 
-import io
 import os
 import sys
 import select
@@ -24,7 +24,13 @@ import itertools
 import _multiprocessing
 from .exceptions import AuthenticationError, BufferTooShort
 from .util import get_temp_dir, Finalize, sub_debug
-from .forking import ForkingPickler
+from .forking import ForkingPickler, duplicate
+from .compat import bytes
+from .common import BytesIO
+try:
+    WindowsError = WindowsError  # noqa
+except NameError:
+    WindowsError = None  # noqa
 try:
     import _winapi
     from _winapi import (
@@ -37,6 +43,8 @@ except ImportError:
     if sys.platform == 'win32':
         raise
     _winapi = None
+
+PY3 = sys.version_info >= (3, 0)
 
 #
 #
@@ -253,14 +261,23 @@ class _ConnectionBase:
             return size
 
     def recv_payload(self):
-        return self._recv_bytes().getbuffer()
+        buf = self._recv_bytes()
+        if PY3:
+            buf = buf.getbuffer()
+        else:
+            buf = buf.getvalue()
+        return buf
 
     def recv(self):
         """Receive a (picklable) object"""
         self._check_closed()
         self._check_readable()
         buf = self._recv_bytes()
-        return ForkingPickler.loads(buf.getbuffer())
+        if PY3:
+            buf = buf.getbuffer()
+        else:
+            buf = buf.getvalue()
+        return ForkingPickler.loads(buf)
 
     def poll(self, timeout=0.0):
         """Whether there is any input available to be read"""
@@ -306,7 +323,7 @@ if _winapi:
         def _recv_bytes(self, maxsize=None):
             if self._got_empty_message:
                 self._got_empty_message = False
-                return io.BytesIO()
+                return BytesIO()
             else:
                 bsize = 128 if maxsize is None else min(maxsize, 128)
                 try:
@@ -323,7 +340,7 @@ if _winapi:
                     finally:
                         nread, err = ov.GetOverlappedResult(True)
                         if err == 0:
-                            f = io.BytesIO()
+                            f = BytesIO()
                             f.write(ov.getbuffer())
                             return f
                         elif err == _winapi.ERROR_MORE_DATA:
@@ -345,7 +362,7 @@ if _winapi:
 
         def _get_more_data(self, ov, maxsize):
             buf = ov.getbuffer()
-            f = io.BytesIO()
+            f = BytesIO()
             f.write(buf)
             left = _winapi.PeekNamedPipe(self._handle)[1]
             assert left > 0
@@ -397,7 +414,7 @@ class Connection(_ConnectionBase):
         setblocking(self._handle, blocking)
 
     def _recv(self, size, read=_read):
-        buf = io.BytesIO()
+        buf = BytesIO()
         handle = self._handle
         remaining = size
         while remaining > 0:
@@ -528,8 +545,14 @@ if sys.platform != 'win32':
             s1, s2 = socket.socketpair()
             s1.setblocking(True)
             s2.setblocking(True)
-            c1 = Connection(s1.detach())
-            c2 = Connection(s2.detach())
+            if PY3:
+                c1 = Connection(s1.detach())
+                c2 = Connection(s2.detach())
+            else:
+                c1 = Connection(duplicate(s1.fileno()))
+                c2 = Connection(duplicate(s2.fileno()))
+                s1.close()
+                s2.close()
         else:
             fd1, fd2 = os.pipe()
             c1 = Connection(fd1, writable=False)
@@ -621,7 +644,12 @@ class SocketListener(object):
             else:
                 break
         s.setblocking(True)
-        return Connection(s.detach())
+        if PY3:
+            c = Connection(s.detach())
+        else:
+            c = Connection(duplicate(s.fileno()))
+            s.close()
+        return c
 
     def close(self):
         self._socket.close()
@@ -637,7 +665,12 @@ def SocketClient(address):
     with socket.socket(getattr(socket, family)) as s:
         s.setblocking(True)
         s.connect(address)
-        return Connection(s.detach())
+        if PY3:
+            c = Connection(s.detach())
+        else:
+            c = Connection(duplicate(s.fileno()))
+            s.close()
+        return c
 
 #
 # Definitions for connections based on named pipes
@@ -718,6 +751,9 @@ if sys.platform == 'win32':
             except OSError as e:
                 if e.winerror not in errors or _check_timeout(t):
                     raise
+            except WindowsError as e:
+                if e.args[0] not in errors or _check_timeout(t):
+                    raise
             else:
                 break
         else:
@@ -734,9 +770,9 @@ if sys.platform == 'win32':
 
 MESSAGE_LENGTH = 20
 
-CHALLENGE = b'#CHALLENGE#'
-WELCOME = b'#WELCOME#'
-FAILURE = b'#FAILURE#'
+CHALLENGE = bytes('#CHALLENGE#', 'ascii')
+WELCOME = bytes('#WELCOME#', 'ascii')
+FAILURE = bytes('#FAILURE#', 'ascii')
 
 
 def deliver_challenge(connection, authkey):
@@ -801,14 +837,20 @@ def _xml_loads(s):
 class XmlListener(Listener):
     def accept(self):
         global xmlrpclib
-        import xmlrpc.client as xmlrpclib  # noqa
+        try:
+            import xmlrpc.client as xmlrpclib  # noqa
+        except ImportError:
+            import xmlrpclib  # noqa
         obj = Listener.accept(self)
         return ConnectionWrapper(obj, _xml_dumps, _xml_loads)
 
 
 def XmlClient(*args, **kwds):
     global xmlrpclib
-    import xmlrpc.client as xmlrpclib  # noqa
+    try:
+        import xmlrpc.client as xmlrpclib  # noqa
+    except ImportError:
+        import xmlrpclib  # noqa
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)
 
 #
@@ -837,7 +879,7 @@ if sys.platform == 'win32':
             timeout = 0
         return ready
 
-    _ready_errors = {_winapi.ERROR_BROKEN_PIPE, _winapi.ERROR_NETNAME_DELETED}
+    _ready_errors = (_winapi.ERROR_BROKEN_PIPE, _winapi.ERROR_NETNAME_DELETED)
 
     def wait(object_list, timeout=None):
         '''
