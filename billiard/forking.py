@@ -16,9 +16,10 @@ import warnings
 
 from pickle import load, HIGHEST_PROTOCOL
 from billiard import util, process
+from .reduction import dump
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
-           'duplicate', 'close', 'ForkingPickler']
+           'duplicate', 'close']
 
 try:
     WindowsError = WindowsError  # noqa
@@ -60,90 +61,6 @@ def assert_spawning(self):
             '%s objects should only be shared between processes'
             ' through inheritance' % type(self).__name__
         )
-
-#
-# Try making some callable types picklable
-#
-from pickle import Pickler
-
-if sys.version_info[0] == 3:
-    import io
-    import pickle
-    from copyreg import dispatch_table
-
-    class ForkingPickler(Pickler):
-        _extra_reducers = {}
-
-        def __init__(self, *args):
-            Pickler.__init__(self, *args)
-            self.dispatch_table = dispatch_table.copy()
-            self.dispatch_table.update(self._extra_reducers)
-
-        @classmethod
-        def register(cls, type, reduce):
-            cls._extra_reducers[type] = reduce
-
-        @staticmethod
-        def dumps(obj):
-            buf = io.BytesIO()
-            ForkingPickler(buf, pickle.HIGHEST_PROTOCOL).dump(obj)
-            return buf.getbuffer()
-
-        loads = pickle.loads
-
-    def _reduce_method(m):
-        if m.__self__ is None:
-            return getattr, (m.__class__, m.__func__.__name__)
-        else:
-            return getattr, (m.__self__, m.__func__.__name__)
-
-    class _C:
-
-        def f(self):
-            pass
-    ForkingPickler.register(type(_C().f), _reduce_method)
-
-else:
-
-    class ForkingPickler(Pickler):  # noqa
-        dispatch = Pickler.dispatch.copy()
-
-        @classmethod
-        def register(cls, type, reduce):
-            def dispatcher(self, obj):
-                rv = reduce(obj)
-                self.save_reduce(obj=obj, *rv)
-            cls.dispatch[type] = dispatcher
-
-    def _reduce_method(m):  # noqa
-        if m.__self__ is None:
-            return getattr, (m.__self__.__class__, m.__func__.__name__)
-        else:
-            return getattr, (m.__self__, m.__func__.__name__)
-    ForkingPickler.register(type(ForkingPickler.save), _reduce_method)
-
-
-def _reduce_method_descriptor(m):
-    return getattr, (m.__objclass__, m.__name__)
-ForkingPickler.register(type(list.append), _reduce_method_descriptor)
-ForkingPickler.register(type(int.__add__), _reduce_method_descriptor)
-
-try:
-    from functools import partial
-except ImportError:
-    pass
-else:
-
-    def _reduce_partial(p):
-        return _rebuild_partial, (p.func, p.args, p.keywords or {})
-
-    def _rebuild_partial(func, args, keywords):
-        return partial(func, *args, **keywords)
-    ForkingPickler.register(partial, _reduce_partial)
-
-
-def dump(obj, file, protocol=None):
-    ForkingPickler(file, protocol).dump(obj)
 
 
 #

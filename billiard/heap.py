@@ -17,7 +17,8 @@ import itertools
 
 from ._ext import _billiard, win32
 from .util import Finalize, info, get_temp_dir
-from .forking import assert_spawning, ForkingPickler
+from .forking import assert_spawning
+from .reduction import ForkingPickler
 
 __all__ = ['BufferWrapper']
 

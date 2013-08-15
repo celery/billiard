@@ -13,7 +13,8 @@ import weakref
 
 from . import heap, RLock
 from .five import int_types
-from .forking import assert_spawning, ForkingPickler
+from .forking import assert_spawning
+from .reduction import ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
 

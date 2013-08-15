@@ -231,6 +231,17 @@ class Worker(Process):
         self.maxtasks = maxtasks
         self._shutdown = sentinel
         self.inq, self.outq, self.synq = inq, outq, synq
+        self._make_shortcuts()
+
+        super(Worker, self).__init__()
+
+    def __reduce__(self):
+        return self.__class__, (
+            self.inq, self.outq, self.synq, self.initializer,
+            self.initargs, self.maxtasks, self._shutdown,
+        )
+
+    def _make_shortcuts(self):
         self.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
         self.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
         if self.synq:
@@ -244,8 +255,6 @@ class Worker(Process):
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
         self.send_job_offset = getattr(self.inq._writer, 'send_offset', None)
-
-        super(Worker, self).__init__()
 
     def run(self):
         _exit = sys.exit

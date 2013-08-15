@@ -27,7 +27,8 @@ from time import time as _time
 from . import Process, current_process, active_children, Pool, util, connection
 from .five import Queue, items
 from .process import AuthenticationString
-from .forking import exit, Popen, ForkingPickler
+from .forking import exit, Popen
+from .reduction import ForkingPickler
 from .util import Finalize, error, info
 
 #

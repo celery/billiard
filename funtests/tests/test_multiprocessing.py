@@ -1093,8 +1093,8 @@ class _TestZZZNumberOfObjects(BaseTestCase):
         refs = self.manager._number_of_objects()
         debug_info = self.manager._debug_info()
         if refs != EXPECTED_NUMBER:
-            print self.manager._debug_info()
-            print debug_info
+            print(self.manager._debug_info())
+            print(debug_info)
 
         self.assertEqual(refs, EXPECTED_NUMBER)
 

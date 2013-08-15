@@ -21,10 +21,12 @@ import tempfile
 import itertools
 
 from . import AuthenticationError
+from . import reduction
 from ._ext import _billiard, win32
 from .compat import get_errno
 from .util import get_temp_dir, Finalize, sub_debug, debug
 from .forking import duplicate, close
+from .reduction import ForkingPickler
 from .compat import bytes
 
 try:
@@ -35,6 +37,9 @@ except NameError:
 
 # global set later
 xmlrpclib = None
+
+Connection = getattr(_billiard, 'Connection', None)
+PipeConnection = getattr(_billiard, 'PipeConnection', None)
 
 
 #
@@ -189,14 +194,14 @@ if sys.platform != 'win32':
         '''
         if duplex:
             s1, s2 = socket.socketpair()
-            c1 = _billiard.Connection(os.dup(s1.fileno()))
-            c2 = _billiard.Connection(os.dup(s2.fileno()))
+            c1 = Connection(os.dup(s1.fileno()))
+            c2 = Connection(os.dup(s2.fileno()))
             s1.close()
             s2.close()
         else:
             fd1, fd2 = os.pipe()
-            c1 = _billiard.Connection(fd1, writable=False)
-            c2 = _billiard.Connection(fd2, readable=False)
+            c1 = Connection(fd1, writable=False)
+            c2 = Connection(fd2, readable=False)
 
         return c1, c2
 
@@ -235,8 +240,8 @@ else:
             if exc.args[0] != win32.ERROR_PIPE_CONNECTED:
                 raise
 
-        c1 = _billiard.PipeConnection(h1, writable=duplex)
-        c2 = _billiard.PipeConnection(h2, readable=duplex)
+        c1 = PipeConnection(h1, writable=duplex)
+        c2 = PipeConnection(h2, readable=duplex)
 
         return c1, c2
 
@@ -275,7 +280,7 @@ class SocketListener(object):
     def accept(self):
         s, self._last_accepted = self._socket.accept()
         fd = duplicate(s.fileno())
-        conn = _billiard.Connection(fd)
+        conn = Connection(fd)
         s.close()
         return conn
 
@@ -307,7 +312,7 @@ def SocketClient(address):
         raise
 
     fd = duplicate(s.fileno())
-    conn = _billiard.Connection(fd)
+    conn = Connection(fd)
     s.close()
     return conn
 
@@ -355,7 +360,7 @@ if sys.platform == 'win32':
             except WindowsError as exc:
                 if exc.args[0] != win32.ERROR_PIPE_CONNECTED:
                     raise
-            return _billiard.PipeConnection(handle)
+            return PipeConnection(handle)
 
         @staticmethod
         def _finalize_pipe_listener(queue, address):
@@ -388,7 +393,7 @@ if sys.platform == 'win32':
         win32.SetNamedPipeHandleState(
             h, win32.PIPE_READMODE_MESSAGE, None, None
         )
-        return _billiard.PipeConnection(h)
+        return PipeConnection(h)
 
 #
 # Authentication stuff
@@ -471,3 +476,12 @@ def XmlClient(*args, **kwds):
     global xmlrpclib
     import xmlrpclib  # noqa
     return ConnectionWrapper(Client(*args, **kwds), _xml_dumps, _xml_loads)
+
+
+if sys.platform == 'win32':
+    ForkingPickler.register(socket.socket, reduction.reduce_socket)
+    ForkingPickler.register(Connection, reduction.reduce_connection)
+    ForkingPickler.register(PipeConnection, reduction.reduce_pipe_connection)
+else:
+    ForkingPickler.register(socket.socket, reduction.reduce_socket)
+    ForkingPickler.register(Connection, reduction.reduce_connection)

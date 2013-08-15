@@ -24,7 +24,7 @@ import itertools
 import _multiprocessing
 from .exceptions import AuthenticationError, BufferTooShort
 from .util import get_temp_dir, Finalize, sub_debug
-from .forking import ForkingPickler
+from .reduction import ForkingPickler
 try:
     import _winapi
     from _winapi import (
