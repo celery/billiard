@@ -8,5 +8,3 @@ else:
     from . import _reduction as reduction
 
 sys.modules[__name__] = reduction
-
-

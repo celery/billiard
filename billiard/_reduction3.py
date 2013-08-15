@@ -16,7 +16,6 @@ import socket
 import sys
 
 from . import popen
-from . import util
 
 __all__ = ['send_handle', 'recv_handle', 'ForkingPickler', 'register', 'dump']
 
@@ -29,6 +28,7 @@ HAVE_SEND_HANDLE = (sys.platform == 'win32' or
 #
 # Pickler subclass
 #
+
 
 class ForkingPickler(pickle.Pickler):
     '''Pickler subclass used by multiprocessing.'''
@@ -54,6 +54,7 @@ class ForkingPickler(pickle.Pickler):
     loads = pickle.loads
 
 register = ForkingPickler.register
+
 
 def dump(obj, file, protocol=None):
     '''Replacement for pickle.dump() using ForkingPickler.'''
@@ -150,18 +151,21 @@ else:
         '''Receive an array of fds over an AF_UNIX socket.'''
         a = array.array('i')
         bytes_size = a.itemsize * size
-        msg, ancdata, flags, addr = sock.recvmsg(1, socket.CMSG_LEN(bytes_size))
+        msg, ancdata, flags, addr = sock.recvmsg(
+            1, socket.CMSG_LEN(bytes_size),
+        )
         if not msg and not ancdata:
             raise EOFError
         try:
             if ACKNOWLEDGE:
                 sock.send(b'A')
             if len(ancdata) != 1:
-                raise RuntimeError('received %d items of ancdata' %
-                                   len(ancdata))
+                raise RuntimeError(
+                    'received %d items of ancdata' % len(ancdata),
+                )
             cmsg_level, cmsg_type, cmsg_data = ancdata[0]
             if (cmsg_level == socket.SOL_SOCKET and
-                cmsg_type == socket.SCM_RIGHTS):
+                    cmsg_type == socket.SCM_RIGHTS):
                 if len(cmsg_data) % a.itemsize != 0:
                     raise ValueError
                 a.frombytes(cmsg_data)
@@ -173,12 +177,14 @@ else:
 
     def send_handle(conn, handle, destination_pid):
         '''Send a handle over a local connection.'''
-        with socket.fromfd(conn.fileno(), socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        fd = conn.fileno()
+        with socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM) as s:
             sendfds(s, [handle])
 
     def recv_handle(conn):
         '''Receive a handle over a local connection.'''
-        with socket.fromfd(conn.fileno(), socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        fd = conn.fileno()
+        with socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM) as s:
             return recvfds(s, 1)[0]
 
     def DupFd(fd):
@@ -196,11 +202,14 @@ else:
 # Try making some callable types picklable
 #
 
+
 def _reduce_method(m):
     if m.__self__ is None:
         return getattr, (m.__class__, m.__func__.__name__)
     else:
         return getattr, (m.__self__, m.__func__.__name__)
+
+
 class _C:
     def f(self):
         pass
@@ -215,6 +224,8 @@ register(type(int.__add__), _reduce_method_descriptor)
 
 def _reduce_partial(p):
     return _rebuild_partial, (p.func, p.args, p.keywords or {})
+
+
 def _rebuild_partial(func, args, keywords):
     return functools.partial(func, *args, **keywords)
 register(functools.partial, _reduce_partial)
@@ -224,17 +235,21 @@ register(functools.partial, _reduce_partial)
 #
 
 if sys.platform == 'win32':
+
     def _reduce_socket(s):
         from .resource_sharer import DupSocket
         return _rebuild_socket, (DupSocket(s),)
+
     def _rebuild_socket(ds):
         return ds.detach()
     register(socket.socket, _reduce_socket)
 
 else:
+
     def _reduce_socket(s):
         df = DupFd(s.fileno())
         return _rebuild_socket, (df, s.family, s.type, s.proto)
+
     def _rebuild_socket(df, family, type, proto):
         fd = df.detach()
         return socket.socket(family, type, proto, fileno=fd)

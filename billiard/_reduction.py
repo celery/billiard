@@ -28,7 +28,6 @@ if not(sys.platform == 'win32' or hasattr(_billiard, 'recvfd')):
 
 close = win32.CloseHandle if sys.platform == 'win32' else os.close
 
-
 # globals set later
 _listener = None
 _lock = None
@@ -37,6 +36,7 @@ _cache = set()
 #
 # ForkingPickler
 #
+
 
 class ForkingPickler(Pickler):  # noqa
     dispatch = Pickler.dispatch.copy()
@@ -47,6 +47,7 @@ class ForkingPickler(Pickler):  # noqa
             rv = reduce(obj)
             self.save_reduce(obj=obj, *rv)
         cls.dispatch[type] = dispatcher
+
 
 def _reduce_method(m):  # noqa
     if m.__self__ is None:
@@ -77,9 +78,6 @@ else:
 
 def dump(obj, file, protocol=None):
     ForkingPickler(file, protocol).dump(obj)
-
-
-
 
 #
 # Platform specific definitions
