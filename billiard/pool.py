@@ -276,12 +276,15 @@ class Worker(Process):
             thrown = True
             raise
         finally:
+            self.on_loop_stop(os.getpid())
             # make sure finally: blocks from parent are not called.
             if _exitcode[0] is None:
                 _exitcode[0] = EX_FAILURE if thrown else EX_OK
             os._exit(_exitcode[0])
 
     def on_loop_start(self, pid):
+        pass
+    def on_loop_stop(self, pid):
         pass
 
     def terminate_controlled(self):
@@ -347,6 +350,7 @@ class Worker(Process):
                         del(tb)
                 completed += 1
         debug('worker exiting after %d tasks', completed)
+        self.on_loop_stop(pid=pid)
         if maxtasks:
             return EX_RECYCLE if completed == maxtasks else EX_FAILURE
         return EX_OK
