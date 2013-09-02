@@ -277,15 +277,17 @@ class Worker(Process):
             thrown = True
             raise
         finally:
-            self.on_loop_stop(pid=pid)
             # make sure finally: blocks from parent are not called.
             if _exitcode[0] is None:
                 _exitcode[0] = EX_FAILURE if thrown else EX_OK
+
+            # Do additional cleanup before exiting
+            self.on_loop_stop(pid=pid,exitcode=_exitcode[0])
             os._exit(_exitcode[0])
 
     def on_loop_start(self, pid):
         pass
-    def on_loop_stop(self, pid):
+    def on_loop_stop(self, pid, exitcode):
         pass
 
     def terminate_controlled(self):
