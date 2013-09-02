@@ -267,16 +267,17 @@ class Worker(Process):
         sys.exit = exit
 
         thrown = False
+        pid = os.getpid()
 
         try:
-            sys.exit(self.workloop())
+            sys.exit(self.workloop(pid=pid))
         except Exception as exc:
             error('Pool process error: %r', exc, exc_info=1)
             error('outqW_fd: %r', self.outqW_fd)
             thrown = True
             raise
         finally:
-            self.on_loop_stop(os.getpid())
+            self.on_loop_stop(pid=pid)
             # make sure finally: blocks from parent are not called.
             if _exitcode[0] is None:
                 _exitcode[0] = EX_FAILURE if thrown else EX_OK
@@ -291,10 +292,9 @@ class Worker(Process):
         self._controlled_termination = True
         self.terminate()
 
-    def workloop(self, debug=debug, now=monotonic):
+    def workloop(self, debug=debug, now=monotonic, pid = os.getpid()):
         self._make_child_methods()
         self.after_fork()
-        pid = os.getpid()
         put = self.outq.put
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
@@ -350,7 +350,6 @@ class Worker(Process):
                         del(tb)
                 completed += 1
         debug('worker exiting after %d tasks', completed)
-        self.on_loop_stop(pid=pid)
         if maxtasks:
             return EX_RECYCLE if completed == maxtasks else EX_FAILURE
         return EX_OK
