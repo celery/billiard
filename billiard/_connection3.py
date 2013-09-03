@@ -952,20 +952,3 @@ else:
             if timeout is not None:
                 timeout = deadline - time.time()
 
-#
-# Make connection and socket objects sharable if possible
-#
-
-if sys.platform == 'win32':
-    from . import reduction
-    ForkingPickler.register(socket.socket, reduction.reduce_socket)
-    ForkingPickler.register(Connection, reduction.reduce_connection)
-    ForkingPickler.register(PipeConnection, reduction.reduce_pipe_connection)
-else:
-    try:
-        from . import reduction
-    except ImportError:
-        pass
-    else:
-        ForkingPickler.register(socket.socket, reduction.reduce_socket)
-        ForkingPickler.register(Connection, reduction.reduce_connection)
