@@ -381,9 +381,7 @@ class Worker(Process):
                 get_payload = conn.get_payload
 
                 def _recv(timeout, loads=pickle_loads):
-                    if _poll(timeout):
-                        return True, loads(get_payload())
-                    return False, None
+                    return True, loads(get_payload())
             else:
                 def _recv(timeout):  # noqa
                     if _poll(timeout):
