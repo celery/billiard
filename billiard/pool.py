@@ -107,6 +107,8 @@ EX_OK = getattr(os, "EX_OK", 0)
 
 job_counter = itertools.count()
 
+Lock = threading.Lock
+
 
 def human_status(status):
     if status < 0:
@@ -936,7 +938,7 @@ class Pool(object):
             self._pool, self._cache,
             self.soft_timeout, self.timeout,
         )
-        self._timeout_handler_mutex = threading.Lock()
+        self._timeout_handler_mutex = Lock()
         self._timeout_handler_started = False
         if self.timeout is not None or self.soft_timeout is not None:
             self._start_timeout_handler()
@@ -1550,7 +1552,7 @@ class ApplyResult(object):
                  timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
                  on_timeout_set=None, on_timeout_cancel=None,
                  callbacks_propagate=(), send_ack=None):
-        self._mutex = threading.Lock()
+        self._mutex = Lock()
         self._event = threading.Event()
         self._job = next(job_counter)
         self._cache = cache
