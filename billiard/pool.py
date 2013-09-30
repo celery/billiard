@@ -1193,7 +1193,7 @@ class Pool(object):
             if self._putlock is not None:
                 self._putlock.release()
 
-    def maintain_pool(self, *args, **kwargs):
+    def maintain_pool(self):
         if self._worker_handler._state == RUN and self._state == RUN:
             try:
                 self._maintain_pool()
