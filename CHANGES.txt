@@ -1,16 +1,27 @@
-2.7.3.32 - 2012-08-16
+2.7.3.33 - 2013-09-04
+---------------------
+
+- Windows: Fixed compiliation warnings and errors on Microsoft Visual C.
+
+    Fix contributed by Oleg Anashkin.
+
+- Windows: Fixed typo in ioctlsocket parameter
+
+    Fix contributed by Oleg Anashkin.
+
+2.7.3.32 - 2013-08-16
 ---------------------
 
 - Fixed compatibility with Python 3.3
 
 - Process boostrap: Now ignores errors while flushing stdout (Issue #16).
 
-2.7.3.31 - 2012-07-04
+2.7.3.31 - 2013-07-04
 ---------------------
 
 - Recent changes broke support for running without C extension (Issue #57).
 
-2.7.3.30 - 2012-06-28
+2.7.3.30 - 2013-06-28
 ---------------------
 
 - Fixed ImportError in billiard._ext
