@@ -5,6 +5,8 @@
 
 - No longer compatible with Python 2.5
 
+- Includes many changes from multiprocessing in 3.4.
+
 2.7.3.30 - 2012-06-28
 ---------------------
 
