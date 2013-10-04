@@ -231,7 +231,7 @@ def worker(inqueue, outqueue, initializer=None, initargs=(),
                     return True, loads(get_payload())
                 return False, None
         else:
-            def poll(timeout):
+            def poll(timeout):  # noqa
                 if inqueue._reader.poll(timeout):
                     return True, get()
                 return False, None

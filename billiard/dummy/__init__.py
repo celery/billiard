@@ -55,7 +55,7 @@ from Queue import Queue
 if sys.version_info[0] == 3:
     from multiprocessing.connection import Pipe
 else:
-    from billiard._connection import Pipe
+    from billiard._connection import Pipe  # noqa
 
 
 class DummyProcess(threading.Thread):
