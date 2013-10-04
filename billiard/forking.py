@@ -193,7 +193,7 @@ else:
     try:
         import _subprocess
     except ImportError:
-        import _winapi as _subprocess
+        import _winapi as _subprocess  # noqa
 
     #
     #

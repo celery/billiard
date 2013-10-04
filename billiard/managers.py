@@ -8,7 +8,6 @@
 # Licensed to PSF under a Contributor Agreement.
 #
 from __future__ import absolute_import
-from __future__ import with_statement
 
 __all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 

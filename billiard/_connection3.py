@@ -371,7 +371,7 @@ class Connection(_ConnectionBase):
         _write = _multiprocessing.send
         _read = _multiprocessing.recv
     else:
-        def _close(self, _close=os.close):
+        def _close(self, _close=os.close):  # noqa
             _close(self._handle)
         _write = os.write
         _read = os.read
@@ -539,7 +539,7 @@ if sys.platform != 'win32':
 
 else:
 
-    def Pipe(duplex=True):
+    def Pipe(duplex=True):  # noqa
         '''
         Returns pair of connection objects at either end of a pipe
         '''
@@ -929,10 +929,10 @@ else:
                 ls.append(fd_map[fd])
             return ls
     else:
-        def _poll(fds, timeout):
+        def _poll(fds, timeout):  # noqa
             return select.select(fds, [], [], timeout)[0]
 
-    def wait(object_list, timeout=None):
+    def wait(object_list, timeout=None):  # noqa
         '''
         Wait till an object in object_list is ready/readable.
 
@@ -951,4 +951,3 @@ else:
                     raise
             if timeout is not None:
                 timeout = deadline - time.time()
-

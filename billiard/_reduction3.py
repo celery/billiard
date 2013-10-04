@@ -6,6 +6,7 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
+from __future__ import absolute_import
 
 import copyreg
 import functools
@@ -173,13 +174,13 @@ else:
             pass
         raise RuntimeError('Invalid data received')
 
-    def send_handle(conn, handle, destination_pid):
+    def send_handle(conn, handle, destination_pid):  # noqa
         '''Send a handle over a local connection.'''
         fd = conn.fileno()
         with socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM) as s:
             sendfds(s, [handle])
 
-    def recv_handle(conn):
+    def recv_handle(conn):  # noqa
         '''Receive a handle over a local connection.'''
         fd = conn.fileno()
         with socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM) as s:
@@ -238,11 +239,11 @@ if sys.platform == 'win32':
 
 else:
 
-    def _reduce_socket(s):
+    def _reduce_socket(s):  # noqa
         df = DupFd(s.fileno())
         return _rebuild_socket, (df, s.family, s.type, s.proto)
 
-    def _rebuild_socket(df, family, type, proto):
+    def _rebuild_socket(df, family, type, proto):  # noqa
         fd = df.detach()
         return socket.socket(family, type, proto, fileno=fd)
     register(socket.socket, _reduce_socket)

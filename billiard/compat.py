@@ -66,7 +66,7 @@ else:
     from os import O_NONBLOCK
     from fcntl import fcntl, F_GETFL, F_SETFL
 
-    def setblocking(handle, blocking):
+    def setblocking(handle, blocking):  # noqa
         flags = fcntl(handle, F_GETFL, 0)
         if flags > 0:
             fcntl(
