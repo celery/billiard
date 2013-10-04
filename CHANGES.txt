@@ -7,6 +7,17 @@
 
 - Includes many changes from multiprocessing in 3.4.
 
+- ``Finalize`` and ``register_after_fork`` is now aliases to multiprocessing.
+
+    It's better to import these from multiprocessing directly now
+    so that there aren't multiple registries.
+
+- New `billiard.queues._SimpleQueue` that does not use semaphores.
+
+- Pool: Can now be extended to support using multiple IPC queues.
+
+- Pool: Can now use async I/O to write to pool IPC queues.
+
 2.7.3.30 - 2012-06-28
 ---------------------
 
