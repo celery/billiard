@@ -39,7 +39,7 @@ from .exceptions import (
     TimeoutError,
     WorkerLostError,
 )
-from .five import Empty, Queue, range, values, reraise
+from .five import Empty, Queue, range, values, reraise, monotonic
 from .util import Finalize, debug
 
 PY3 = sys.version_info[0] == 3
@@ -288,7 +288,7 @@ class Worker(Process):
         self._controlled_termination = True
         self.terminate()
 
-    def workloop(self, debug=debug, now=time.time):
+    def workloop(self, debug=debug, now=monotonic):
         self._make_child_methods()
         self.after_fork()
         pid = os.getpid()
@@ -649,7 +649,7 @@ class TimeoutHandler(PoolThread):
         def _timed_out(start, timeout):
             if not start or not timeout:
                 return False
-            if time.time() >= start + timeout:
+            if monotonic() >= start + timeout:
                 return True
 
         # Inner-loop
@@ -828,7 +828,7 @@ class ResultHandler(PoolThread):
             try:
                 join_exited_workers(shutdown=True)
             except WorkersJoined:
-                now = time.time()
+                now = monotonic()
                 if not time_terminate:
                     time_terminate = now
                 else:
@@ -1030,7 +1030,7 @@ class Pool(object):
         # WorkerLostError.
         for job in [job for job in list(self._cache.values())
                     if not job.ready() and job._worker_lost]:
-            now = now or time.time()
+            now = now or monotonic()
             lost_time, lost_ret = job._worker_lost
             if now - lost_time > job._lost_worker_timeout:
                 self.mark_as_worker_lost(job, lost_ret)
@@ -1105,7 +1105,7 @@ class Pool(object):
         pass
 
     def on_job_process_lost(self, job, pid, exitcode):
-        job._worker_lost = (time.time(), exitcode)
+        job._worker_lost = (monotonic(), exitcode)
 
     def mark_as_worker_lost(self, job, exitcode):
         try:
