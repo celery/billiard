@@ -39,7 +39,7 @@ from .exceptions import (
     TimeoutError,
     WorkerLostError,
 )
-from .five import Empty, Queue, range, values
+from .five import Empty, Queue, range, values, reraise
 from .util import Finalize, debug
 
 PY3 = sys.version_info[0] == 3
@@ -1199,6 +1199,12 @@ class Pool(object):
             except RestartFreqExceeded:
                 self.close()
                 self.join()
+                raise
+            except OSError as exc:
+                if get_errno(exc) == errno.ENOMEM:
+                    reraise(MemoryError,
+                            MemoryError(str(exc)),
+                            sys.exc_info()[2])
                 raise
 
     def _setup_queues(self):
