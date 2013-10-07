@@ -29,6 +29,10 @@ try:
 except ImportError:                         # pragma: no cover
     from collections import UserDict        # noqa
 
+try:
+    from time import monotonic
+except ImportError:
+    from time import time as monotonic  # noqa
 
 if PY3:
     import builtins
