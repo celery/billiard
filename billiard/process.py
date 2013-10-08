@@ -264,7 +264,8 @@ class Process(object):
             logger_names = list(loggerDict.keys())
             logger_names.append(None)  # for root logger
             for name in logger_names:
-                if not name or not isinstance(loggerDict[name], logging.PlaceHolder):
+                if not name or not isinstance(loggerDict[name],
+                                              logging.PlaceHolder):
                     for handler in logging.getLogger(name).handlers:
                         handler.createLock()
             logging._lock = threading.RLock()
