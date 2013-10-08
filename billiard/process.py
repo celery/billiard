@@ -260,11 +260,13 @@ class Process(object):
             # Workaround for http://bugs.python.org/issue6721/#msg140215
             # Python logging module uses RLock() objects which are broken
             # after fork. This can result in a deadlock (Celery Issue #496).
-            logger_names = list(logging.Logger.manager.loggerDict.keys())
+            loggerDict = logging.Logger.manager.loggerDict
+            logger_names = list(loggerDict.keys())
             logger_names.append(None)  # for root logger
             for name in logger_names:
-                for handler in logging.getLogger(name).handlers:
-                    handler.createLock()
+                if not name or not isinstance(loggerDict[name], logging.PlaceHolder):
+                    for handler in logging.getLogger(name).handlers:
+                        handler.createLock()
             logging._lock = threading.RLock()
 
             try:
