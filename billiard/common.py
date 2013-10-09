@@ -39,13 +39,10 @@ else:
 TERMSIGS = (
     'SIGHUP',
     'SIGQUIT',
-    'SIGILL',
     'SIGTRAP',
     'SIGABRT',
     'SIGEMT',
-    'SIGFPE',
     'SIGBUS',
-    'SIGSEGV',
     'SIGSYS',
     'SIGPIPE',
     'SIGALRM',
