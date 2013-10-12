@@ -4,6 +4,7 @@ This module contains utilities added by billiard, to keep
 "non-core" functionality out of ``.util``."""
 from __future__ import absolute_import
 
+import os
 import signal
 import sys
 
@@ -36,6 +37,8 @@ else:
     except ImportError:
         from StringIO import StringIO as BytesIO  # noqa
 
+EX_SOFTWARE = 70
+
 TERMSIGS = (
     'SIGHUP',
     'SIGQUIT',
@@ -55,25 +58,42 @@ TERMSIGS = (
     'SIGUSR2',
 )
 
+#: set by signal handlers just before calling exit.
+#: if this is true after the sighandler returns it means that something
+#: went wrong while terminating the process, and :func:`os._exit`
+#: must be called ASAP.
+_should_have_exited = [False]
+
 
 def pickle_loads(s, load=pickle_load):
     # used to support buffer objects
     return load(BytesIO(s))
 
 
+def maybe_setsignal(signum, handler):
+    try:
+        signal.signal(signum, handler)
+    except (OSError, AttributeError, ValueError, RuntimeError):
+        pass
+
+
 def _shutdown_cleanup(signum, frame):
+    # we will exit here so if the signal is received a second time
+    # we can be sure that something is very wrong and we may be in
+    # a crashing loop.
+    if _should_have_exited[0]:
+        os._exit(EX_SOFTWARE)
+    maybe_setsignal(signum, signal.SIG_DFL)
+    _should_have_exited[0] = True
     sys.exit(-(256 - signum))
 
 
 def reset_signals(handler=_shutdown_cleanup):
     for sig in TERMSIGS:
-        try:
-            signum = getattr(signal, sig)
-            current = signal.getsignal(signum)
-            if current is not None and current != signal.SIG_IGN:
-                signal.signal(signum, handler)
-        except (OSError, AttributeError, ValueError, RuntimeError):
-            pass
+        signum = getattr(signal, sig)
+        current = signal.getsignal(signum)
+        if current is not None and current != signal.SIG_IGN:
+            maybe_setsignal(signum, handler)
 
 
 class restart_state(object):
