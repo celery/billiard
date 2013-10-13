@@ -90,10 +90,14 @@ def _shutdown_cleanup(signum, frame):
 
 def reset_signals(handler=_shutdown_cleanup):
     for sig in TERMSIGS:
-        signum = getattr(signal, sig)
-        current = signal.getsignal(signum)
-        if current is not None and current != signal.SIG_IGN:
-            maybe_setsignal(signum, handler)
+        try:
+            signum = getattr(signal, sig)
+        except AttributeError:
+            pass
+        else:
+            current = signal.getsignal(signum)
+            if current is not None and current != signal.SIG_IGN:
+                maybe_setsignal(signum, handler)
 
 
 class restart_state(object):
