@@ -1,5 +1,5 @@
-3.3.0.0 - XXXX-XX-XX
---------------------
+3.3.0.00 - 3013-10-14
+---------------------
 
 - Dual code base now runs on Python 2.6+ and Python 3.
 
@@ -33,7 +33,7 @@
 
     Contributed by dmtaub.
 
-2.7.3.30 - 2012-06-28
+2.7.3.30 - 2013-06-28
 ---------------------
 
 - Fixed ImportError in billiard._ext
