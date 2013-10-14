@@ -19,10 +19,8 @@ import sys
 import threading
 
 
-from time import time as _time
-
 from ._ext import _billiard, ensure_SemLock
-from .five import range
+from .five import range, monotonic
 from .process import current_process
 from .util import Finalize, register_after_fork, debug
 from .forking import assert_spawning, Popen
@@ -309,13 +307,13 @@ class Condition(object):
         if result:
             return result
         if timeout is not None:
-            endtime = _time() + timeout
+            endtime = monotonic() + timeout
         else:
             endtime = None
             waittime = None
         while not result:
             if endtime is not None:
-                waittime = endtime - _time()
+                waittime = endtime - monotonic()
                 if waittime <= 0:
                     break
             self.wait(waittime)

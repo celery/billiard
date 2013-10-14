@@ -14,13 +14,13 @@ import sys
 import os
 import threading
 import collections
-import time
 import weakref
 import errno
 
 from . import Pipe
 from ._ext import _billiard
 from .compat import get_errno
+from .five import monotonic
 from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 from .util import debug, error, info, Finalize, register_after_fork
 from .five import Empty, Full
@@ -94,12 +94,12 @@ class Queue(object):
 
         else:
             if block:
-                deadline = time.time() + timeout
+                deadline = monotonic() + timeout
             if not self._rlock.acquire(block, timeout):
                 raise Empty
             try:
                 if block:
-                    timeout = deadline - time.time()
+                    timeout = deadline - monotonic()
                     if timeout < 0 or not self._poll(timeout):
                         raise Empty
                 elif not self._poll():

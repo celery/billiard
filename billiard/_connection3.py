@@ -17,12 +17,12 @@ import select
 import socket
 import struct
 import errno
-import time
 import tempfile
 import itertools
 
 import _multiprocessing
 from .exceptions import AuthenticationError, BufferTooShort
+from .five import monotonic
 from .util import get_temp_dir, Finalize, sub_debug
 from .reduction import ForkingPickler
 try:
@@ -64,11 +64,11 @@ if sys.platform == 'win32':
 
 
 def _init_timeout(timeout=CONNECTION_TIMEOUT):
-    return time.time() + timeout
+    return monotonic() + timeout
 
 
 def _check_timeout(t):
-    return time.time() > t
+    return monotonic() > t
 
 
 def arbitrary_address(family):
@@ -942,7 +942,7 @@ else:
             if timeout <= 0:
                 return _poll(object_list, 0)
             else:
-                deadline = time.time() + timeout
+                deadline = monotonic() + timeout
         while True:
             try:
                 return _poll(object_list, timeout)
@@ -950,4 +950,4 @@ else:
                 if e.errno != errno.EINTR:
                     raise
             if timeout is not None:
-                timeout = deadline - time.time()
+                timeout = deadline - monotonic()

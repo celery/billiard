@@ -8,7 +8,6 @@ import os
 import signal
 import sys
 
-from time import time
 import pickle as pypickle
 try:
     import cPickle as cpickle
@@ -16,6 +15,7 @@ except ImportError:  # pragma: no cover
     cpickle = None   # noqa
 
 from .exceptions import RestartFreqExceeded
+from .five import monotonic
 
 if sys.version_info < (2, 6):  # pragma: no cover
     # cPickle does not use absolute_imports
@@ -108,7 +108,7 @@ class restart_state(object):
         self.R, self.T = 0, None
 
     def step(self, now=None):
-        now = time() if now is None else now
+        now = monotonic() if now is None else now
         R = self.R
         if self.T and now - self.T >= self.maxT:
             # maxT passed, reset counter and time passed.

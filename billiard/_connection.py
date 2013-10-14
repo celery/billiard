@@ -22,11 +22,11 @@ import itertools
 from . import AuthenticationError
 from . import reduction
 from ._ext import _billiard, win32
-from .compat import get_errno
-from .util import get_temp_dir, Finalize, sub_debug, debug
+from .compat import get_errno, bytes
+from .five import monotonic
 from .forking import duplicate, close
 from .reduction import ForkingPickler
-from .compat import bytes
+from .util import get_temp_dir, Finalize, sub_debug, debug
 
 try:
     WindowsError = WindowsError  # noqa
@@ -64,11 +64,11 @@ if sys.platform == 'win32':
 
 
 def _init_timeout(timeout=CONNECTION_TIMEOUT):
-    return time.time() + timeout
+    return monotonic() + timeout
 
 
 def _check_timeout(t):
-    return time.time() > t
+    return monotonic() > t
 
 #
 #

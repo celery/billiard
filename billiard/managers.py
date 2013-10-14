@@ -21,10 +21,9 @@ import array
 
 from collections import Callable
 from traceback import format_exc
-from time import time as _time
 
 from . import Process, current_process, active_children, Pool, util, connection
-from .five import Queue, items
+from .five import Queue, items, monotonic
 from .process import AuthenticationString
 from .forking import exit, Popen
 from .reduction import ForkingPickler
@@ -1028,13 +1027,13 @@ class ConditionProxy(AcquirerProxy):
         if result:
             return result
         if timeout is not None:
-            endtime = _time() + timeout
+            endtime = monotonic() + timeout
         else:
             endtime = None
             waittime = None
         while not result:
             if endtime is not None:
-                waittime = endtime - _time()
+                waittime = endtime - monotonic()
                 if waittime <= 0:
                     break
             self.wait(waittime)
