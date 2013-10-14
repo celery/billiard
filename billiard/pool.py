@@ -269,6 +269,10 @@ class Worker(Process):
         thrown = False
         pid = os.getpid()
 
+        self._make_child_methods()
+        self.after_fork()
+        # additional initialization before loop starts
+        self.on_loop_start(pid=pid)
         try:
             sys.exit(self.workloop(pid=pid))
         except Exception as exc:
@@ -281,28 +285,25 @@ class Worker(Process):
             if _exitcode[0] is None:
                 _exitcode[0] = EX_FAILURE if thrown else EX_OK
 
-            # Do additional cleanup before exiting
-            self.on_loop_stop(pid=pid,exitcode=_exitcode[0])
+            # additional cleanup before exiting
+            self.on_loop_stop(pid=pid, exitcode=_exitcode[0])
             os._exit(_exitcode[0])
 
     def on_loop_start(self, pid):
         pass
-    def on_loop_stop(self, pid, exitcode):
+
+    def on_loop_stop(self, pid=None, exitcode=None):
         pass
 
     def terminate_controlled(self):
         self._controlled_termination = True
         self.terminate()
 
-    def workloop(self, debug=debug, now=monotonic, pid = os.getpid()):
-        self._make_child_methods()
-        self.after_fork()
+    def workloop(self, debug=debug, now=monotonic, pid=None):
+        pid = pid or os.getpid()
         put = self.outq.put
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
-
-        # Do additional initialization before loop start
-        self.on_loop_start(pid=pid)
 
         wait_for_job = self.wait_for_job
         _wait_for_syn = self.wait_for_syn
