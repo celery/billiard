@@ -7,6 +7,13 @@
 
 - Includes many changes from multiprocessing in 3.4.
 
+- Now uses ``time.monotonic`` when available, also including
+  fallback implementations for Linux and OS X.
+
+- No longer cleans up after receiving SIGILL, SIGSEGV or SIGFPE
+
+    Contributed by Kevin Blackham
+
 - ``Finalize`` and ``register_after_fork`` is now aliases to multiprocessing.
 
     It's better to import these from multiprocessing directly now
@@ -17,6 +24,14 @@
 - Pool: Can now be extended to support using multiple IPC queues.
 
 - Pool: Can now use async I/O to write to pool IPC queues.
+
+- Pool: New ``Worker.on_loop_stop`` handler can be used to add actions
+  at pool worker process shutdown.
+
+    Note that, like all finalization handlers, there is no guarantee that
+    this will be executed.
+
+    Contributed by dmtaub.
 
 2.7.3.30 - 2012-06-28
 ---------------------
