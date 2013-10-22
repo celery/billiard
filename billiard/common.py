@@ -119,9 +119,8 @@ class restart_state(object):
             # the startup probably went fine (startup restart burst
             # protection)
             if self.R:  # pragma: no cover
-                pass
-            self.R = 0  # reset in case someone catches the error
-            raise self.RestartFreqExceeded("%r in %rs" % (R, self.maxT))
+                self.R = 0  # reset in case someone catches the error
+                raise self.RestartFreqExceeded("%r in %rs" % (R, self.maxT))
         # first run sets T
         if self.T is None:
             self.T = now

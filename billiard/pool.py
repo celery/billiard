@@ -725,6 +725,7 @@ class ResultHandler(PoolThread):
         restart_state = self.restart_state
 
         def on_ack(job, i, time_accepted, pid, synqW_fd):
+            restart_state.R = 0
             try:
                 cache[job]._ack(i, time_accepted, pid, synqW_fd)
             except (KeyError, AttributeError):
@@ -732,7 +733,6 @@ class ResultHandler(PoolThread):
                 pass
 
         def on_ready(job, i, obj):
-            restart_state.R = 0
             try:
                 item = cache[job]
             except KeyError:
