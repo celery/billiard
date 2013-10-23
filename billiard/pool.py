@@ -225,12 +225,14 @@ class Worker(Process):
     _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
-                 maxtasks=None, sentinel=None):
+                 maxtasks=None, sentinel=None, deinitializer=None, deinitargs=()):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
         self._shutdown = sentinel
+        self.deinitializer = deinitializer
+        self.deinitargs = deinitargs
         self.inq, self.outq, self.synq = inq, outq, synq
         self._make_shortcuts()
 
@@ -293,7 +295,9 @@ class Worker(Process):
         pass
 
     def on_loop_stop(self, pid=None, exitcode=None):
-        pass
+      if self.deinitializer is not None:
+        code = "FAIL" if exitcode is None else "OK"
+        self.deinitializer(*self.deinitargs,pid=pid,code=code)
 
     def terminate_controlled(self):
         self._controlled_termination = True
@@ -874,6 +878,7 @@ class Pool(object):
     SoftTimeLimitExceeded = SoftTimeLimitExceeded
 
     def __init__(self, processes=None, initializer=None, initargs=(),
+                 deinitializer = None, deinitargs = (),
                  maxtasksperchild=None, timeout=None, soft_timeout=None,
                  lost_worker_timeout=None,
                  max_restarts=None, max_restart_freq=1,
@@ -896,6 +901,8 @@ class Pool(object):
         self._maxtasksperchild = maxtasksperchild
         self._initializer = initializer
         self._initargs = initargs
+        self._deinitializer = deinitializer
+        self._deinitargs = deinitargs
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.on_process_up = on_process_up
         self.on_process_down = on_process_down
@@ -919,6 +926,10 @@ class Pool(object):
         if initializer is not None and \
                 not isinstance(initializer, Callable):
             raise TypeError('initializer must be a callable')
+
+        if deinitializer is not None and \
+                not isinstance(deinitializer, Callable):
+            raise TypeError('deinitializer must be a callable')
 
         self._pool = []
         self._poolctrl = {}
@@ -1008,7 +1019,7 @@ class Pool(object):
         inq, outq, synq = self.get_process_queues()
         w = self.Worker(
             inq, outq, synq, self._initializer, self._initargs,
-            self._maxtasksperchild, sentinel,
+            self._maxtasksperchild, sentinel, self._deinitializer, self._deinitargs,
         )
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
