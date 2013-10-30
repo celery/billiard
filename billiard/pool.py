@@ -890,7 +890,8 @@ class Pool(object):
                  semaphore=None,
                  putlocks=False,
                  allow_restart=False,
-                 synack=False):
+                 synack=False,
+                 **kwargs):
         self.synack = synack
         self._setup_queues()
         self._taskqueue = Queue()
