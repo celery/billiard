@@ -277,7 +277,6 @@ class Worker(Process):
             sys.exit(self.workloop(pid=pid))
         except Exception as exc:
             error('Pool process error: %r', exc, exc_info=1)
-            error('outqW_fd: %r', self.outqW_fd)
             thrown = True
             raise
         finally:
@@ -302,6 +301,7 @@ class Worker(Process):
     def workloop(self, debug=debug, now=monotonic, pid=None):
         pid = pid or os.getpid()
         put = self.outq.put
+        inqW_fd = self.inqW_fd
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
 
@@ -313,7 +313,7 @@ class Worker(Process):
             while 1:
                 if i > 60:
                     error('!!!WAIT FOR ACK TIMEOUT: job:%r fd:%r!!!',
-                          jid, self.synq._reader.fileno())
+                          jid, self.synq._reader.fileno(), exc_info=1)
                 req = _wait_for_syn()
                 if req:
                     type_, args = req
@@ -340,7 +340,7 @@ class Worker(Process):
                 except Exception:
                     result = (False, ExceptionInfo())
                 try:
-                    put((READY, (job, i, result)))
+                    put((READY, (job, i, result, inqW_fd)))
                 except Exception as exc:
                     _, _, tb = sys.exc_info()
                     try:
@@ -348,7 +348,7 @@ class Worker(Process):
                         einfo = ExceptionInfo((
                             MaybeEncodingError, wrapped, tb,
                         ))
-                        put((READY, (job, i, (False, einfo))))
+                        put((READY, (job, i, (False, einfo), inqW_fd)))
                     finally:
                         del(tb)
                 completed += 1
@@ -450,12 +450,12 @@ class PoolThread(threading.Thread):
             return self.body()
         except RestartFreqExceeded as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
-                  exc_info=True)
+                  exc_info=1)
             _kill(os.getpid(), signal.SIGTERM)
             sys.exit()
         except Exception as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
-                  exc_info=True)
+                  exc_info=1)
             os._exit(1)
 
     def start(self, *args, **kwargs):
@@ -547,7 +547,7 @@ class TaskHandler(PoolThread):
                     continue
                 break
             except Exception as exc:
-                print("Task Handler ERROR: %r" % (exc, ))
+                error('Task Handler ERROR: %r', exc, exc_info=1)
                 break
         else:
             debug('task handler got sentinel')
@@ -701,7 +701,8 @@ class TimeoutHandler(PoolThread):
 class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
-                 join_exited_workers, putlock, restart_state, check_timeouts):
+                 join_exited_workers, putlock, restart_state,
+                 check_timeouts, on_job_ready):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
@@ -712,6 +713,7 @@ class ResultHandler(PoolThread):
         self._it = None
         self._shutdown_complete = False
         self.check_timeouts = check_timeouts
+        self.on_job_ready = on_job_ready
         self._make_methods()
         super(ResultHandler, self).__init__()
 
@@ -723,6 +725,7 @@ class ResultHandler(PoolThread):
         cache = self.cache
         putlock = self.putlock
         restart_state = self.restart_state
+        on_job_ready = self.on_job_ready
 
         def on_ack(job, i, time_accepted, pid, synqW_fd):
             restart_state.R = 0
@@ -732,7 +735,9 @@ class ResultHandler(PoolThread):
                 # Object gone or doesn't support _ack (e.g. IMAPIterator).
                 pass
 
-        def on_ready(job, i, obj):
+        def on_ready(job, i, obj, inqW_fd):
+            if on_job_ready is not None:
+                on_job_ready(job, i, obj, inqW_fd)
             try:
                 item = cache[job]
             except KeyError:
@@ -976,8 +981,11 @@ class Pool(object):
             self._outqueue, self._quick_get, self._cache,
             self._poll_result, self._join_exited_workers,
             self._putlock, self.restart_state, self.check_timeouts,
-            **extra_kwargs
+            self.on_job_ready, **extra_kwargs
         )
+
+    def on_job_ready(self, job, i, obj, inqW_fd):
+        pass
 
     def _help_stuff_finish_args(self):
         return self._inqueue, self._task_handler, self._pool
@@ -1056,8 +1064,10 @@ class Pool(object):
                 exitcodes[worker.pid] = worker.exitcode
                 if worker.exitcode not in (EX_OK, EX_RECYCLE) and \
                         not getattr(worker, '_controlled_termination', False):
-                    error('Process %r pid:%r exited with exitcode %r' % (
-                        worker.name, worker.pid, worker.exitcode))
+                    error(
+                        'Process %r pid:%r exited with exitcode %r',
+                        worker.name, worker.pid, worker.exitcode, exc_info=1,
+                    )
                 self.process_flush_queues(worker)
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
@@ -1629,8 +1639,8 @@ class ApplyResult(object):
             except self._callbacks_propagate:
                 raise
             except Exception as exc:
-                error("Pool callback raised exception: %r", exc,
-                      exc_info=True)
+                error('Pool callback raised exception: %r', exc,
+                      exc_info=1)
 
     def _set(self, i, obj):
         with self._mutex:
