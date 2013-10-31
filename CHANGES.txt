@@ -1,5 +1,15 @@
-3.3.0.00 - 3013-10-14
----------------------
+3.3.0.1 - 2013-10-31
+--------------------
+
+- Pool: New callback `on_process_exit` is called when a pool
+  process exits, with signature ``(pid, exitcode)``.
+
+    Contributed by Daniel M. Taub.
+
+- Pool: Improved the too many restarts detection.
+
+3.3.0.0 - 2013-10-14
+--------------------
 
 - Dual code base now runs on Python 2.6+ and Python 3.
 
