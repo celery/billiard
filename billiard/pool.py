@@ -225,14 +225,13 @@ class Worker(Process):
     _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
-                 maxtasks=None, sentinel=None, deinitializer=None, deinitargs=()):
+                 maxtasks=None, sentinel=None, on_exit=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
         self._shutdown = sentinel
-        self.deinitializer = deinitializer
-        self.deinitargs = deinitargs
+        self.on_exit = on_exit
         self.inq, self.outq, self.synq = inq, outq, synq
         self._make_shortcuts()
 
@@ -268,35 +267,29 @@ class Worker(Process):
             return _exit()
         sys.exit = exit
 
-        thrown = False
         pid = os.getpid()
 
         self._make_child_methods()
         self.after_fork()
-        # additional initialization before loop starts
-        self.on_loop_start(pid=pid)
+        self.on_loop_start(pid=pid)  # callback on loop start
         try:
             sys.exit(self.workloop(pid=pid))
         except Exception as exc:
             error('Pool process error: %r', exc, exc_info=1)
-            thrown = True
-            raise
+            self._do_exit(pid, _exitcode[0], exc)
         finally:
-            # make sure finally: blocks from parent are not called.
-            if _exitcode[0] is None:
-                _exitcode[0] = EX_FAILURE if thrown else EX_OK
+            self._do_exit(pid, _exitcode[0], None)
 
-            # additional cleanup before exiting
-            self.on_loop_stop(pid=pid, exitcode=_exitcode[0])
-            os._exit(_exitcode[0])
+    def _do_exit(self, pid, exitcode, exc=None):
+        if exitcode is None:
+            exitcode = EX_FAILURE if exc else EX_OK
+
+        if self.on_exit is not None:
+            self.on_exit(pid, exitcode)
+        os._exit(exitcode)
 
     def on_loop_start(self, pid):
         pass
-
-    def on_loop_stop(self, pid=None, exitcode=None):
-      if self.deinitializer is not None:
-        code = "FAIL" if exitcode is None else "OK"
-        self.deinitializer(*self.deinitargs,pid=pid,code=code)
 
     def terminate_controlled(self):
         self._controlled_termination = True
@@ -883,7 +876,6 @@ class Pool(object):
     SoftTimeLimitExceeded = SoftTimeLimitExceeded
 
     def __init__(self, processes=None, initializer=None, initargs=(),
-                 deinitializer = None, deinitargs = (),
                  maxtasksperchild=None, timeout=None, soft_timeout=None,
                  lost_worker_timeout=None,
                  max_restarts=None, max_restart_freq=1,
@@ -896,6 +888,7 @@ class Pool(object):
                  putlocks=False,
                  allow_restart=False,
                  synack=False,
+                 on_process_exit=None,
                  **kwargs):
         self.synack = synack
         self._setup_queues()
@@ -907,8 +900,7 @@ class Pool(object):
         self._maxtasksperchild = maxtasksperchild
         self._initializer = initializer
         self._initargs = initargs
-        self._deinitializer = deinitializer
-        self._deinitargs = deinitargs
+        self._on_process_exit = on_process_exit
         self.lost_worker_timeout = lost_worker_timeout or LOST_WORKER_TIMEOUT
         self.on_process_up = on_process_up
         self.on_process_down = on_process_down
@@ -933,9 +925,9 @@ class Pool(object):
                 not isinstance(initializer, Callable):
             raise TypeError('initializer must be a callable')
 
-        if deinitializer is not None and \
-                not isinstance(deinitializer, Callable):
-            raise TypeError('deinitializer must be a callable')
+        if on_process_exit is not None and \
+                not isinstance(on_process_exit, Callable):
+            raise TypeError('on_process_exit must be callable')
 
         self._pool = []
         self._poolctrl = {}
@@ -1028,7 +1020,7 @@ class Pool(object):
         inq, outq, synq = self.get_process_queues()
         w = self.Worker(
             inq, outq, synq, self._initializer, self._initargs,
-            self._maxtasksperchild, sentinel, self._deinitializer, self._deinitargs,
+            self._maxtasksperchild, sentinel, self._on_process_exit,
         )
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
