@@ -1110,11 +1110,10 @@ class Pool(object):
                         self.on_job_process_down(job, sched_for.pid)
 
             for worker in values(cleaned):
-                if not worker.dead:
-                    if self.on_process_down:
-                        if not shutdown:
-                            self._process_cleanup_queues(worker)
-                        self.on_process_down(worker)
+                if self.on_process_down:
+                    if not shutdown:
+                        self._process_cleanup_queues(worker)
+                    self.on_process_down(worker)
             return list(exitcodes.values())
         return []
 
