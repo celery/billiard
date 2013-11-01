@@ -275,7 +275,7 @@ class Worker(Process):
         try:
             sys.exit(self.workloop(pid=pid))
         except Exception as exc:
-            error('Pool process error: %r', exc, exc_info=1)
+            error('Pool process %r error: %r', self, exc, exc_info=1)
             self._do_exit(pid, _exitcode[0], exc)
         finally:
             self._do_exit(pid, _exitcode[0], None)
@@ -1076,9 +1076,11 @@ class Pool(object):
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
         if cleaned:
+            all_pids = [w.pid for w in self._pool]
             for job in list(self._cache.values()):
                 acked_by_gone = next(
-                    (pid for pid in job.worker_pids() if pid in cleaned),
+                    (pid for pid in job.worker_pids()
+                     if pid in cleaned or pid not in all_pids),
                     None
                 )
                 # already accepted by process
@@ -1108,10 +1110,11 @@ class Pool(object):
                         self.on_job_process_down(job, sched_for.pid)
 
             for worker in values(cleaned):
-                if self.on_process_down:
-                    if not shutdown:
-                        self._process_cleanup_queues(worker)
-                    self.on_process_down(worker)
+                if not worker.dead:
+                    if self.on_process_down:
+                        if not shutdown:
+                            self._process_cleanup_queues(worker)
+                        self.on_process_down(worker)
             return list(exitcodes.values())
         return []
 
