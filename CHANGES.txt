@@ -1,5 +1,12 @@
-3.3.0.1 - 2013-10-31
+3.3.0.1 - 2013-11-04
 --------------------
+
+- Pool: New ``correlation_id`` argument to ``apply_async`` can be
+  used to set a related id for the ``ApplyResult`` object returned:
+
+    >>> r = pool.apply_async(target, args, kwargs, correlation_id='foo')
+    >>> r.correlation_id
+    'foo'
 
 - Pool: New callback `on_process_exit` is called when a pool
   process exits, with signature ``(pid, exitcode)``.
