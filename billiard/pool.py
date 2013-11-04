@@ -1348,7 +1348,8 @@ class Pool(object):
                     callback=None, error_callback=None, accept_callback=None,
                     timeout_callback=None, waitforslot=None,
                     soft_timeout=None, timeout=None, lost_worker_timeout=None,
-                    callbacks_propagate=()):
+                    callbacks_propagate=(),
+                    correlation_id=None):
         '''
         Asynchronous equivalent of `apply()` method.
 
@@ -1386,6 +1387,7 @@ class Pool(object):
                 on_timeout_cancel=self.on_timeout_cancel,
                 callbacks_propagate=callbacks_propagate,
                 send_ack=self.send_ack if self.synack else None,
+                correlation_id=correlation_id,
             )
             if timeout or soft_timeout:
                 # start the timeout handler thread when required.
@@ -1578,7 +1580,9 @@ class ApplyResult(object):
                  timeout_callback=None, error_callback=None, soft_timeout=None,
                  timeout=None, lost_worker_timeout=LOST_WORKER_TIMEOUT,
                  on_timeout_set=None, on_timeout_cancel=None,
-                 callbacks_propagate=(), send_ack=None):
+                 callbacks_propagate=(), send_ack=None,
+                 correlation_id=None):
+        self.correlation_id = correlation_id
         self._mutex = Lock()
         self._event = threading.Event()
         self._job = next(job_counter)
