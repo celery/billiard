@@ -1074,7 +1074,7 @@ class Pool(object):
                         not getattr(worker, '_controlled_termination', False):
                     error(
                         'Process %r pid:%r exited with exitcode %r',
-                        worker.name, worker.pid, worker.exitcode, exc_info=1,
+                        worker.name, worker.pid, worker.exitcode, exc_info=0,
                     )
                 self.process_flush_queues(worker)
                 del self._pool[i]
