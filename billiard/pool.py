@@ -295,12 +295,16 @@ class Worker(Process):
         self._controlled_termination = True
         self.terminate()
 
+    def prepare_result(self, result):
+        return result
+
     def workloop(self, debug=debug, now=monotonic, pid=None):
         pid = pid or os.getpid()
         put = self.outq.put
         inqW_fd = self.inqW_fd
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
+        prepare_result = self.prepare_result
 
         wait_for_job = self.wait_for_job
         _wait_for_syn = self.wait_for_syn
@@ -333,7 +337,7 @@ class Worker(Process):
                     if not confirm:
                         continue  # received NACK
                 try:
-                    result = (True, fun(*args, **kwargs))
+                    result = (True, prepare_result(fun(*args, **kwargs)))
                 except Exception:
                     result = (False, ExceptionInfo())
                 try:
