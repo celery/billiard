@@ -22,7 +22,7 @@ import itertools
 from . import AuthenticationError
 from . import reduction
 from ._ext import _billiard, win32
-from .compat import get_errno, bytes
+from .compat import get_errno, bytes, setblocking
 from .five import monotonic
 from .forking import duplicate, close
 from .reduction import ForkingPickler
@@ -187,18 +187,24 @@ def Client(address, family=None, authkey=None):
 
 if sys.platform != 'win32':
 
-    def Pipe(duplex=True):
+    def Pipe(duplex=True, rnonblock=False, wnonblock=False):
         '''
         Returns pair of connection objects at either end of a pipe
         '''
         if duplex:
             s1, s2 = socket.socketpair()
+            s1.setblocking(not rnonblock)
+            s2.setblocking(not wnonblock)
             c1 = Connection(os.dup(s1.fileno()))
             c2 = Connection(os.dup(s2.fileno()))
             s1.close()
             s2.close()
         else:
             fd1, fd2 = os.pipe()
+            if rnonblock:
+                setblocking(fd1, 0)
+            if wnonblock:
+                setblocking(fd2, 0)
             c1 = Connection(fd1, writable=False)
             c2 = Connection(fd2, readable=False)
 
@@ -206,7 +212,7 @@ if sys.platform != 'win32':
 
 else:
 
-    def Pipe(duplex=True):  # noqa
+    def Pipe(duplex=True, rnonblock=False, wnonblock=False):  # noqa
         '''
         Returns pair of connection objects at either end of a pipe
         '''

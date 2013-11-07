@@ -21,6 +21,7 @@ import tempfile
 import itertools
 
 import _multiprocessing
+from .compat import setblocking
 from .exceptions import AuthenticationError, BufferTooShort
 from .five import monotonic
 from .util import get_temp_dir, Finalize, sub_debug
@@ -41,9 +42,6 @@ except ImportError:
 #
 #
 #
-
-from .compat import setblocking
-
 
 BUFSIZE = 8192
 # A very generous timeout when it comes to local connections...
@@ -520,18 +518,22 @@ def Client(address, family=None, authkey=None):
 
 if sys.platform != 'win32':
 
-    def Pipe(duplex=True):
+    def Pipe(duplex=True, rnonblock=False, wnonblock=False):
         '''
         Returns pair of connection objects at either end of a pipe
         '''
         if duplex:
             s1, s2 = socket.socketpair()
-            s1.setblocking(True)
-            s2.setblocking(True)
+            s1.setblocking(not rnonblock)
+            s2.setblocking(not wnonblock)
             c1 = Connection(s1.detach())
             c2 = Connection(s2.detach())
         else:
             fd1, fd2 = os.pipe()
+            if rnonblock:
+                setblocking(fd1, 0)
+            if wnonblock:
+                setblocking(fd1, 0)
             c1 = Connection(fd1, writable=False)
             c2 = Connection(fd2, readable=False)
 
@@ -539,7 +541,7 @@ if sys.platform != 'win32':
 
 else:
 
-    def Pipe(duplex=True):  # noqa
+    def Pipe(duplex=True, rnonblock=False, wnonblock=False):  # noqa
         '''
         Returns pair of connection objects at either end of a pipe
         '''

@@ -62,14 +62,19 @@ if _winapi:
     def setblocking(handle, blocking):
         raise NotImplementedError('setblocking not implemented on win32')
 
+    def isblocking(handle):
+        raise NotImplementedError('isblocking not implemented on win32')
+
 else:
     from os import O_NONBLOCK
     from fcntl import fcntl, F_GETFL, F_SETFL
 
+    def isblocking(handle):  # noqa
+        return not (fcntl(handle, F_GETFL) & O_NONBLOCK)
+
     def setblocking(handle, blocking):  # noqa
         flags = fcntl(handle, F_GETFL, 0)
-        if flags > 0:
-            fcntl(
-                handle, F_SETFL,
-                flags & (~O_NONBLOCK) if blocking else flags | O_NONBLOCK,
-            )
+        fcntl(
+            handle, F_SETFL,
+            flags & (~O_NONBLOCK) if blocking else flags | O_NONBLOCK,
+        )

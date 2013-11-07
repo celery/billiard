@@ -89,12 +89,12 @@ def Manager():
     return m
 
 
-def Pipe(duplex=True):
+def Pipe(duplex=True, rnonblock=False, wnonblock=False):
     '''
     Returns two connection object connected by a pipe
     '''
     from billiard.connection import Pipe
-    return Pipe(duplex)
+    return Pipe(duplex, rnonblock, wnonblock)
 
 
 def cpu_count():

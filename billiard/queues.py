@@ -309,8 +309,10 @@ class _SimpleQueue(object):
     Simplified Queue type -- really just a locked pipe
     '''
 
-    def __init__(self):
-        self._reader, self._writer = Pipe(duplex=False)
+    def __init__(self, rnonblock=False, wnonblock=False):
+        self._reader, self._writer = Pipe(
+            duplex=False, rnonblock=rnonblock, wnonblock=wnonblock,
+        )
         self._poll = self._reader.poll
         self._rlock = self._wlock = None
         self._make_methods()
