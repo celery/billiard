@@ -1094,10 +1094,7 @@ class Pool(object):
                         exitcode = exitcodes[acked_by_gone]
                         if getattr(cleaned[acked_by_gone],
                                    '_job_terminated', False):
-                            try:
-                                raise Terminated(-exitcode)
-                            except Terminated:
-                                job._set(None, (False, ExceptionInfo()))
+                            job._set_terminated(exitcode)
                         else:
                             self.on_job_process_lost(
                                 job, acked_by_gone, exitcode,
@@ -1596,6 +1593,7 @@ class ApplyResult(object):
         self._error_callback = error_callback
         self._timeout_callback = timeout_callback
         self._timeout = timeout
+        self._terminated = False
         self._soft_timeout = soft_timeout
         self._lost_worker_timeout = lost_worker_timeout
         self._on_timeout_set = on_timeout_set
@@ -1630,6 +1628,15 @@ class ApplyResult(object):
 
     def discard(self):
         self._cache.pop(self._job, None)
+
+    def terminate(self, signum):
+        self._terminated = signum
+
+    def _set_terminated(self, signum=0):
+        try:
+            raise Terminated(-signum)
+        except Terminated:
+            self._set(None, (False, ExceptionInfo()))
 
     def worker_pids(self):
         return [self._worker_pid] if self._worker_pid else []
