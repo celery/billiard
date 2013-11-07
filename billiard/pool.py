@@ -1593,7 +1593,7 @@ class ApplyResult(object):
         self._error_callback = error_callback
         self._timeout_callback = timeout_callback
         self._timeout = timeout
-        self._terminated = False
+        self._terminated = None
         self._soft_timeout = soft_timeout
         self._lost_worker_timeout = lost_worker_timeout
         self._on_timeout_set = on_timeout_set
