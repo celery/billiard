@@ -1,3 +1,19 @@
+3.3.0.2 - 2013-11-08
+--------------------
+
+- ApplyResult.terminate() may be set to signify that the job
+  must not be executed.  It can be used in combination with
+  Pool.terminate_job.
+
+- Pipe/_SimpleQueue: Now supports rnonblock/wnonblock arguments
+  to set the read or write end of the pipe to be nonblocking.
+
+- Pool: Log message included exception info but exception happened
+  in another process so the resulting traceback was wrong.
+
+- Pool: Worker process can now prepare results before they are sent
+  back to the main process (using ``Worker.prepare_result``).
+
 3.3.0.1 - 2013-11-04
 --------------------
 
