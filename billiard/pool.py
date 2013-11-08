@@ -1688,7 +1688,9 @@ class ApplyResult(object):
         with self._mutex:
             if self._cancelled and self._send_ack:
                 self._accepted = True
-                return self._send_ack(NACK, pid, self._job, synqW_fd)
+                if synqW_fd:
+                    return self._send_ack(NACK, pid, self._job, synqW_fd)
+                return
             self._accepted = True
             self._time_accepted = time_accepted
             self._worker_pid = pid
@@ -1708,11 +1710,11 @@ class ApplyResult(object):
                     response = NACK
                     # ignore other errors
                 finally:
-                    if self._send_ack:
+                    if self._send_ack and synqW_fd:
                         return self._send_ack(
                             response, pid, self._job, synqW_fd
                         )
-            if self._send_ack:
+            if self._send_ack and synqW_fd:
                 self._send_ack(response, pid, self._job, synqW_fd)
 
 #
