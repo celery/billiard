@@ -17,6 +17,7 @@ import warnings
 from pickle import load, HIGHEST_PROTOCOL
 from billiard import util, process
 from .reduction import dump
+from .compat import _winapi as win32
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
            'duplicate', 'close']
@@ -26,15 +27,6 @@ try:
 except NameError:
     class WindowsError(Exception):  # noqa
         pass
-
-try:
-    import _winapi as win32
-except ImportError:
-    try:
-        from _billiard import win32  # noqa
-    except ImportError:
-        if sys.platform == 'win32':
-            raise
 
 W_OLD_DJANGO_LAYOUT = """\
 Will add directory %r to path! This is necessary to accommodate \

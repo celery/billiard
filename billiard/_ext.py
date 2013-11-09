@@ -4,10 +4,7 @@ import sys
 
 supports_exec = True
 
-try:
-    import _winapi as win32
-except ImportError:  # pragma: no cover
-    win32 = None   # noqa
+from .compat import _winapi as win32  # noqa
 
 if sys.platform.startswith("java"):
     _billiard = None
@@ -23,8 +20,6 @@ else:
         from billiard.connection import Connection  # noqa
 
     PipeConnection = getattr(_billiard, "PipeConnection", None)
-    if win32 is None:
-        win32 = getattr(_billiard, "win32", None)  # noqa
 
 
 def ensure_multiprocessing():
