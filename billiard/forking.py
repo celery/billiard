@@ -84,6 +84,7 @@ if sys.platform != 'win32':
         _tls = thread._local()
 
         def __init__(self, process_obj):
+            from billiard import connection  # register reducers
             _Django_old_layout_hack__save()
             sys.stdout.flush()
             sys.stderr.flush()
