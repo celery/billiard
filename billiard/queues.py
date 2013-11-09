@@ -333,7 +333,7 @@ class _SimpleQueue(object):
         try:
             recv_payload = self._reader.recv_payload
         except AttributeError:
-            recv_payload = None
+            recv_payload = self._reader.recv_bytes
         rlock = self._rlock
 
         if rlock is not None:
