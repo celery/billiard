@@ -225,6 +225,8 @@ def rebuild_socket(reduced_handle, family, type_, proto):
     close(fd)
     return _sock
 
+ForkingPickler.register(socket.socket, reduce_socket)
+
 #
 # Register `_billiard.PipeConnection` with `ForkingPickler`
 #
