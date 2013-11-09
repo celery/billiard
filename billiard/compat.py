@@ -57,7 +57,7 @@ def get_errno(exc):
     return 0
 
 
-if _winapi:
+if sys.platform == 'win32':
 
     def setblocking(handle, blocking):
         raise NotImplementedError('setblocking not implemented on win32')
