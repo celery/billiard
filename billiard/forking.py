@@ -15,7 +15,9 @@ import signal
 import warnings
 
 from pickle import load, HIGHEST_PROTOCOL
-from billiard import util, process
+from billiard import util
+from billiard import process
+from billiard.five import int_types
 from .reduction import dump
 from .compat import _winapi as win32
 
@@ -84,7 +86,8 @@ if sys.platform != 'win32':
         _tls = thread._local()
 
         def __init__(self, process_obj):
-            from billiard import connection  # register reducers
+            # register reducers
+            from billiard import connection  # noqa
             _Django_old_layout_hack__save()
             sys.stdout.flush()
             sys.stderr.flush()
@@ -241,8 +244,9 @@ else:
             hp, ht, pid, tid = _subprocess.CreateProcess(
                 _python_exe, cmd, None, None, 1, 0, None, None, None
             )
-            close(ht)
-            close(rhandle)
+            close(ht) if isinstance(ht, int_types) else ht.Close()
+            (close(rhandle) if isinstance(rhandle, int_types)
+             else rhandle.Close())
 
             # set attributes of self
             self.pid = pid
