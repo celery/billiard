@@ -212,7 +212,7 @@ else:
         )
         if sys.version_info[0] < 3 or (
                 sys.version_info[0] == 3 and sys.version_info[1] < 3):
-            h.Detach()
+            h = h.Detach()
         return h
 
     #
@@ -241,13 +241,8 @@ else:
             hp, ht, pid, tid = _subprocess.CreateProcess(
                 _python_exe, cmd, None, None, 1, 0, None, None, None
             )
-            if sys.version_info[0] < 3 or (
-                    sys.version_info[0] == 3 and sys.version_info[1] < 3):
-                ht.Close()
-                rhandle.Close()
-            else:
-                close(ht)
-                close(rhandle)
+            close(ht)
+            close(rhandle)
 
             # set attributes of self
             self.pid = pid
