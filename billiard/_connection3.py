@@ -533,7 +533,7 @@ if sys.platform != 'win32':
             if rnonblock:
                 setblocking(fd1, 0)
             if wnonblock:
-                setblocking(fd1, 0)
+                setblocking(fd2, 0)
             c1 = Connection(fd1, writable=False)
             c2 = Connection(fd2, readable=False)
 
