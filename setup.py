@@ -22,6 +22,7 @@ if sys.platform == 'win32' and sys.version_info >= (2, 6):
 is_jython = sys.platform.startswith('java')
 is_pypy = hasattr(sys, 'pypy_version_info')
 is_py3k = sys.version_info[0] == 3
+is_windows = sys.platform == 'win32'
 
 BUILD_WARNING = """
 
@@ -241,7 +242,13 @@ def run_setup(with_extensions=True):
 try:
     run_setup(not (is_jython or is_pypy or is_py3k))
 except BaseException:
-    if 'test' not in sys.argv:
+    if 'test' in sys.argv:
+        if not is_windows:
+            raise   # Only windows survives without C extension
         import traceback
-        sys.stderr.write(BUILD_WARNING % '\n'.join(traceback.format_stack(), ))
+        sys.stderr.write(
+            BUILD_WARNING % '\n'.join(traceback.format_stack(), ),
+        )
         run_setup(False)
+    else:
+        raise
