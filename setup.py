@@ -94,6 +94,7 @@ if sys.platform == 'win32':  # Windows
     libraries = ['ws2_32']
 elif sys.platform.startswith('darwin'):  # Mac OSX
     macros = dict(
+        HAVE_READV=1,
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
@@ -105,6 +106,7 @@ elif sys.platform.startswith('cygwin'):  # Cygwin
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=1,
         HAVE_FD_TRANSFER=0,
+        HAVE_READV=0,
         HAVE_BROKEN_SEM_UNLINK=1
         )
     libraries = []
@@ -115,6 +117,7 @@ elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
         HAVE_SEM_OPEN=0,
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
+        HAVE_READV=0,
         )
     libraries = []
 elif sys.platform in ('freebsd7', 'freebsd8', 'freebsd9', 'freebsd10'):
@@ -122,6 +125,7 @@ elif sys.platform in ('freebsd7', 'freebsd8', 'freebsd9', 'freebsd10'):
             HAVE_SEM_OPEN=bool(sysconfig.get_config_var('HAVE_SEM_OPEN') and not bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))),
             HAVE_SEM_TIMEDWAIT=1,
             HAVE_FD_TRANSFER=1,
+            HAVE_READV=1,
         )
     libraries = []
 elif sys.platform.startswith('openbsd'):
@@ -135,9 +139,13 @@ else:                                   # Linux and other unices
     macros = dict(
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=1,
-        HAVE_FD_TRANSFER=1
-        )
+        HAVE_FD_TRANSFER=1,
+        HAVE_READV=1,
+    )
     libraries = ['rt']
+
+if 'linux' in sys.platform.lower():
+    macros['HAVE_READV'] = 1
 
 
 if sys.platform == 'win32':
