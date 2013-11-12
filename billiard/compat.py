@@ -17,6 +17,31 @@ if sys.platform == 'win32':
 else:
     _winapi = None  # noqa
 
+
+try:
+    buf_t, is_new_buffer = memoryview, True  # noqa
+except NameError:  # Py2.6
+    buf_t, is_new_buffer = buffer, False  # noqa
+
+if hasattr(os, 'write'):
+    __write__ = os.write
+
+    if is_new_buffer:
+
+        def send_offset(fd, buf, offset):
+            return __write__(fd, buf[offset:])
+
+    else:  # Py2.6
+
+        def send_offset(fd, buf, offset):  # noqa
+            return __write__(fd, buf_t(buf, offset))
+
+else:  # non-posix platform
+
+    def send_offset(fd, buf, offset):  # noqa
+        raise NotImplementedError('send_offset')
+
+
 if sys.version_info[0] == 3:
     bytes = bytes
 else:

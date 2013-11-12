@@ -24,11 +24,12 @@ import time
 import warnings
 
 from collections import Callable, deque
+from functools import partial
 
 from . import Event, Process, cpu_count
 from . import util
 from .common import pickle_loads, reset_signals, restart_state
-from .compat import get_errno
+from .compat import get_errno, send_offset
 from .einfo import ExceptionInfo
 from .exceptions import (
     CoroStop,
@@ -107,6 +108,16 @@ EX_OK = getattr(os, "EX_OK", 0)
 job_counter = itertools.count()
 
 Lock = threading.Lock
+
+
+def _get_send_offset(connection):
+    try:
+        native = connection.send_offset
+    except AttributeError:
+        native = None
+    if native is None:
+        return partial(send_offset, connection.fileno())
+    return native
 
 
 def human_status(status):
@@ -249,14 +260,12 @@ class Worker(Process):
         if self.synq:
             self.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
             self.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
-            self.send_syn_offset = getattr(
-                self.synq._writer, 'send_offset', None,
-            )
+            self.send_syn_offset = _get_send_offset(self.synq._writer)
         else:
             self.synqR_fd = self.synqW_fd = self._send_syn_offset = None
         self._quick_put = self.inq._writer.send
         self._quick_get = self.outq._reader.recv
-        self.send_job_offset = getattr(self.inq._writer, 'send_offset', None)
+        self.send_job_offset = _get_send_offset(self.inq._writer)
 
     def run(self):
         _exit = sys.exit
