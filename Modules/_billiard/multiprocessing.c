@@ -278,16 +278,76 @@ Billiard_readv(PyObject *self, PyObject *args)
     if (!_Billiard_iov_setup(&iov, &buf, seq, cnt, PyBUF_WRITABLE))
         return NULL;
 
-    Py_BEGIN_ALLOW_THREADS;
+    Py_BEGIN_ALLOW_THREADS
     n = readv(fd, iov, cnt);
-    Py_END_ALLOW_THREADS;
+    Py_END_ALLOW_THREADS
 
     _Billiard_iov_cleanup(iov, buf, cnt);
+    if (n < 0)
+        return PyErr_SetFromErrno(PyExc_OSError);
     return PyLong_FromSsize_t(n);
 }
 
 
-# endif // HAVE_READV
+#endif /* HAVE_READV */
+
+
+#if !defined(MS_WINDOWS)
+
+static PyObject *
+Billiard_read(PyObject *self, PyObject *args)
+{
+    int fd;
+    Py_buffer view;
+    Py_ssize_t buflen, recvlen = 0;
+
+    char *buf = NULL;
+
+    Py_ssize_t n = 0;
+
+    if (!PyArg_ParseTuple(args, "iw*|n", &fd, &view, &recvlen))
+        return NULL;
+    buflen = view.len;
+    buf = view.buf;
+
+    if (recvlen < 0) {
+        PyBuffer_Release(&view);
+        PyErr_SetString(PyExc_ValueError, "negative len for read");
+        return NULL;
+    }
+
+    if (recvlen == 0) {
+        recvlen = buflen;
+    }
+
+    if (buflen < recvlen) {
+        PyBuffer_Release(&view);
+        PyErr_SetString(PyExc_ValueError,
+            "Buffer too small for requested bytes");
+        return NULL;
+
+    }
+
+    if (buflen < 0 || buflen == 0) {
+        errno = EINVAL;
+        goto bail;
+    }
+    // Requires Python 2.7
+    //if (!_PyVerify_fd(fd)) goto bail;
+
+    Py_BEGIN_ALLOW_THREADS
+    n = read(fd, buf, recvlen);
+    Py_END_ALLOW_THREADS
+    if (n < 0) goto bail;
+    PyBuffer_Release(&view);
+    return PyInt_FromSsize_t(n);
+
+bail:
+    PyBuffer_Release(&view);
+    return PyErr_SetFromErrno(PyExc_OSError);
+}
+
+# endif /* !MS_WINDOWS */
 
 
 
@@ -308,6 +368,11 @@ static PyMethodDef Billiard_module_methods[] = {
      "recvfd(sockfd) -> fd\n\n"
      "Receive a file descriptor over a unix domain socket\n"
      "whose file decriptor is sockfd"},
+#endif
+#if !defined(MS_WINDOWS)
+    {"read", Billiard_read, METH_VARARGS,
+     "read(fd, buffer) -> bytes\n\n"
+     "Read from file descriptor into buffer."},
 #endif
 #if HAVE_READV
     {"readv", Billiard_readv, METH_VARARGS,

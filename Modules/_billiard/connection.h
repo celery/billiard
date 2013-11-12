@@ -291,7 +291,7 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
             if ((self->flags & WRITABLE) == 0) {
                 Py_BEGIN_ALLOW_THREADS
                 CLOSE(self->handle);
-                Py_END_ALLOW_THREADS;
+                Py_END_ALLOW_THREADS
                 self->handle = INVALID_HANDLE_VALUE;
             } else {
                 self->flags = WRITABLE;
@@ -407,9 +407,9 @@ Billiard_connection_recv_payload(BilliardConnectionObject *self)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS;
+                Py_BEGIN_ALLOW_THREADS
                 CLOSE(self->handle);
-                Py_END_ALLOW_THREADS;
+                Py_END_ALLOW_THREADS
                 self->handle = INVALID_HANDLE_VALUE;
             } else {
                 self->flags = WRITABLE;
