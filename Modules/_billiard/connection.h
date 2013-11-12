@@ -332,23 +332,43 @@ _error:
 static PyObject *
 Billiard_connection_send_offset(BilliardConnectionObject *self, PyObject *args)
 {
-    char *buf = NULL;
+    Py_buffer view;
     Py_ssize_t len = 0;
     Py_ssize_t offset = 0;
     ssize_t written = 0;
 
-    if (!PyArg_ParseTuple(args, "s#n", &buf, &len, &offset))
+    char *buf = NULL;
+
+    if (!PyArg_ParseTuple(args, "s*n", &view, &offset))
         return NULL;
 
-    CHECK_WRITABLE(self);
+    len = view.len;
+    buf = view.buf;
+
+    // CHECK_WRITABLE(self);
+    if (!(self->flags & WRITABLE)) {
+        PyErr_SetString(PyExc_IOError, "connection is read-only"); \
+        goto bail;
+    }
+
+    if (len < 0 || len == 0) {
+        errno = EINVAL;
+        PyErr_SetFromErrno(PyExc_OSError);
+        goto bail;
+    }
 
     written = _Billiard_conn_send_offset(self->handle, buf, (size_t)len, offset);
     if (written < 0) {
         Billiard_SetError(NULL, MP_SOCKET_ERROR);
-        return NULL;
+        goto bail;
     }
 
+    PyBuffer_Release(&view);
     return PyInt_FromSsize_t((Py_ssize_t)written);
+
+bail:
+    PyBuffer_Release(&view);
+    return NULL;
 }
 
 static PyObject *
@@ -398,7 +418,6 @@ Billiard_connection_recv_payload(BilliardConnectionObject *self)
     char *freeme = NULL;
     Py_ssize_t res;
     PyObject *view = NULL;
-    PyObject *result = NULL;
 
     CHECK_READABLE(self);
 
