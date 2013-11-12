@@ -196,102 +196,6 @@ Billiard_multiprocessing_address_of_buffer(PyObject *self, PyObject *obj)
                          PyLong_FromVoidPtr(buffer), buffer_len);
 }
 
-/* readv() */
-
-#if defined(HAVE_READV)
-
-static Py_ssize_t
-_Billiard_iov_setup(struct iovec **iov, Py_buffer **buf, PyObject *seq,
-                    int cnt, int type)
-{
-    int i, j;
-    Py_ssize_t blen, total = 0;
-
-    *iov = PyMem_New(struct iovec, cnt);
-    if (*iov == NULL) {
-        PyErr_NoMemory();
-        return total;
-    }
-
-    *buf = PyMem_New(Py_buffer, cnt);
-    if (*buf == NULL) {
-        PyMem_Del(*iov);
-        PyErr_NoMemory();
-        return total;
-    }
-
-    for (i = 0; i < cnt; i++) {
-        PyObject *item = PySequence_GetItem(seq, i);
-        if (item == NULL)
-            goto fail;
-        if (PyObject_GetBuffer(item, &(*buf)[i], type) == -1) {
-            Py_DECREF(item);
-            goto fail;
-        }
-        Py_DECREF(item);
-        (*iov)[i].iov_base = (*buf)[i].buf;
-        blen = (*buf)[i].len;
-        (*iov)[i].iov_len = blen;
-        total += blen;
-    }
-    return total;
-
-fail:
-    PyMem_Del(*iov);
-    for (j = 0; j < i; j++) {
-        PyBuffer_Release(&(*buf)[j]);
-    }
-    PyMem_Del(*buf);
-    return 0;
-}
-
-static void
-_Billiard_iov_cleanup(struct iovec *iov, Py_buffer *buf, int cnt)
-{
-    int i;
-    PyMem_Del(iov);
-    for (i = 0; i < cnt; i++) {
-        PyBuffer_Release(&buf[i]);
-    }
-    PyMem_Del(buf);
-}
-
-
-static PyObject*
-Billiard_readv(PyObject *self, PyObject *args)
-{
-    int fd, cnt;
-    Py_ssize_t n;
-    PyObject *seq;
-    struct iovec *iov;
-    Py_buffer *buf;
-
-    if (!PyArg_ParseTuple(args, "iO", &fd, &seq))
-        return NULL;
-    if (!PySequence_Check(seq)) {
-        PyErr_SetString(PyExc_TypeError,
-            "readv() arg 2 must be a sequence");
-        return NULL;
-    }
-    cnt = PySequence_Size(seq);
-
-    if (!_Billiard_iov_setup(&iov, &buf, seq, cnt, PyBUF_WRITABLE))
-        return NULL;
-
-    Py_BEGIN_ALLOW_THREADS
-    n = readv(fd, iov, cnt);
-    Py_END_ALLOW_THREADS
-
-    _Billiard_iov_cleanup(iov, buf, cnt);
-    if (n < 0)
-        return PyErr_SetFromErrno(PyExc_OSError);
-    return PyLong_FromSsize_t(n);
-}
-
-
-#endif /* HAVE_READV */
-
-
 #if !defined(MS_WINDOWS)
 
 static PyObject *
@@ -373,13 +277,6 @@ static PyMethodDef Billiard_module_methods[] = {
     {"read", Billiard_read, METH_VARARGS,
      "read(fd, buffer) -> bytes\n\n"
      "Read from file descriptor into buffer."},
-#endif
-#if HAVE_READV
-    {"readv", Billiard_readv, METH_VARARGS,
-    "readv(fd, buffers) -> bytesread\n\n"
-    "Read from a file descriptor into a number of writable buffers.\n"
-    "buffers is an arbitrary sequence of writable buffers.\n\n"
-    "Returns the total number of bytes read."},
 #endif
     {NULL}
 };

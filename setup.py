@@ -95,7 +95,6 @@ if sys.platform == 'win32':  # Windows
     libraries = ['ws2_32']
 elif sys.platform.startswith('darwin'):  # Mac OSX
     macros = dict(
-        HAVE_READV=1,
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
@@ -107,7 +106,6 @@ elif sys.platform.startswith('cygwin'):  # Cygwin
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=1,
         HAVE_FD_TRANSFER=0,
-        HAVE_READV=0,
         HAVE_BROKEN_SEM_UNLINK=1
         )
     libraries = []
@@ -118,48 +116,46 @@ elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
         HAVE_SEM_OPEN=0,
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
-        HAVE_READV=0,
         )
     libraries = []
 elif sys.platform in ('freebsd7', 'freebsd8', 'freebsd9', 'freebsd10'):
     macros = dict(                  # FreeBSD 7+
-            HAVE_SEM_OPEN=bool(sysconfig.get_config_var('HAVE_SEM_OPEN') and not bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))),
-            HAVE_SEM_TIMEDWAIT=1,
-            HAVE_FD_TRANSFER=1,
-            HAVE_READV=1,
-        )
+        HAVE_SEM_OPEN=bool(
+            sysconfig.get_config_var('HAVE_SEM_OPEN') and not
+            bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))
+        ),
+        HAVE_SEM_TIMEDWAIT=1,
+        HAVE_FD_TRANSFER=1,
+    )
     libraries = []
 elif sys.platform.startswith('openbsd'):
     macros = dict(                  # OpenBSD
         HAVE_SEM_OPEN=0,            # Not implemented
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
-        )
+    )
     libraries = []
 else:                                   # Linux and other unices
     macros = dict(
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=1,
         HAVE_FD_TRANSFER=1,
-        HAVE_READV=1,
     )
     libraries = ['rt']
 
-if 'linux' in sys.platform.lower():
-    macros['HAVE_READV'] = 1
-
-
 if sys.platform == 'win32':
-    multiprocessing_srcs = ['Modules/_billiard/multiprocessing.c',
-                            'Modules/_billiard/semaphore.c',
-                            'Modules/_billiard/pipe_connection.c',
-                            'Modules/_billiard/socket_connection.c',
-                            'Modules/_billiard/win32_functions.c'
-                           ]
+    multiprocessing_srcs = [
+        'Modules/_billiard/multiprocessing.c',
+        'Modules/_billiard/semaphore.c',
+        'Modules/_billiard/pipe_connection.c',
+        'Modules/_billiard/socket_connection.c',
+        'Modules/_billiard/win32_functions.c',
+    ]
 else:
-    multiprocessing_srcs = ['Modules/_billiard/multiprocessing.c',
-                            'Modules/_billiard/socket_connection.c'
-                           ]
+    multiprocessing_srcs = [
+        'Modules/_billiard/multiprocessing.c',
+        'Modules/_billiard/socket_connection.c',
+    ]
 
     if macros.get('HAVE_SEM_OPEN', False):
         multiprocessing_srcs.append('Modules/_billiard/semaphore.c')
@@ -199,14 +195,14 @@ def run_setup(with_extensions=True):
     extensions = []
     if with_extensions:
         extensions = [
-        Extension('_billiard',
+            Extension(
+                '_billiard',
                 sources=multiprocessing_srcs,
                 define_macros=macros.items(),
                 libraries=libraries,
                 include_dirs=['Modules/_billiard'],
-                depends=(glob.glob('Modules/_billiard/*.h') +
-                        ['setup.py'])
-                ),
+                depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
+            ),
         ]
     setup(
         name='billiard',
