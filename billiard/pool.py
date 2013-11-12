@@ -1368,11 +1368,12 @@ class Pool(object):
 
         Simplified the flow is like this:
 
-            >>> if accept_callback:
-            ...     accept_callback()
-            >>> retval = func(*args, **kwds)
-            >>> if callback:
-            ...     callback(retval)
+            >>> def apply_async(func, args, kwds, callback, accept_callback):
+            ...     if accept_callback:
+            ...         accept_callback()
+            ...     retval = func(*args, **kwds)
+            ...     if callback:
+            ...         callback(retval)
 
         '''
         if self._state != RUN:
