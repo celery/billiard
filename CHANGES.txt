@@ -1,3 +1,13 @@
+3.3.0.6 - 2013-11-12
+--------------------
+
+- Now works without C extension again.
+
+- New ``_billiard.read(fd, buffer, [len, ])` function
+  implements os.read with buffer support (new buffer API)
+
+- New pure-python implementation of ``Connection.send_offset``.
+
 3.3.0.5 - 2013-11-11
 --------------------
 
