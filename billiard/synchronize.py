@@ -418,7 +418,7 @@ if sys.platform != 'win32':
             MAXFD = os.sysconf("SC_OPEN_MAX")
         except:
             MAXFD = 256
-        closerange(0, r)
+        closerange(0, r - 1)
         closerange(r + 1, MAXFD)
 
         # collect data written to pipe
