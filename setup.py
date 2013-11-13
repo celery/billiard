@@ -249,8 +249,8 @@ try:
 except BaseException:
     if 'test' not in sys.argv:
         import traceback
-        print(BUILD_WARNING % '\n'.join(traceback.format_stack(),
-              file=sys.stderr))
+        print(BUILD_WARNING % '\n'.join(traceback.format_stack()),
+              file=sys.stderr)
         run_setup(False)
     else:
         raise
