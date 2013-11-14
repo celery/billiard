@@ -18,8 +18,8 @@ from pickle import load, HIGHEST_PROTOCOL
 from billiard import util
 from billiard import process
 from billiard.five import int_types
-from .reduction import dump
-from .compat import _winapi as win32
+from billiard.reduction import dump
+from billiard.compat import _winapi as win32
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
            'duplicate', 'close']
@@ -427,7 +427,8 @@ def main():
 
     process.current_process()._inheriting = True
     preparation_data = load(from_parent)
-    prepare(preparation_data)
+    if not getattr(sys, 'frozen', False):
+        prepare(preparation_data)
     # Huge hack to make logging before Process.run work.
     try:
         os.environ["MP_MAIN_FILE"] = sys.modules["__main__"].__file__

@@ -10,7 +10,7 @@
 
 from __future__ import absolute_import
 
-__all__ = []
+# __all__ = []
 
 import os
 import sys
@@ -24,7 +24,11 @@ from ._ext import _billiard, win32
 from .util import register_after_fork, debug, sub_debug
 
 is_win32 = sys.platform == 'win32'
-is_pypy = getattr(sys, 'pypy_version_info')
+try:
+    is_pypy = getattr(sys, 'pypy_version_info')
+except:
+    is_pypy = False
+
 is_py3k = sys.version_info[0] == 3
 
 if not(is_win32 or is_pypy or is_py3k or hasattr(_billiard, 'recvfd')):
