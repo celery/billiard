@@ -507,7 +507,6 @@ def prepare(data):
     '''
     old_main_modules.append(sys.modules['__main__'])
 
-    print data['name']
     if 'name' in data:
         process.current_process().name = data['name']
 
