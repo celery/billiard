@@ -17,8 +17,9 @@ import itertools
 
 from ._ext import _billiard, win32
 from .util import Finalize, info, get_temp_dir
-from .forking import assert_spawning
-from .reduction import ForkingPickler
+from billiard.forking import assert_spawning
+from billiard.reduction import ForkingPickler
+
 
 __all__ = ['BufferWrapper']
 
@@ -61,6 +62,7 @@ else:
 
         def __init__(self, size, fileno=-1):
             from .forking import _forking_is_enabled
+
             self.size = size
             self.fileno = fileno
             if fileno == -1 and not _forking_is_enabled:
@@ -78,7 +80,6 @@ else:
             raise ValueError('Arena is unpicklable because'
                              'forking was enabled when it was created')
         return Arena, (a.size, a.fileno)
-
     ForkingPickler.register(Arena, reduce_arena)
 
 #

@@ -18,8 +18,8 @@ from pickle import load, HIGHEST_PROTOCOL
 from billiard import util
 from billiard import process
 from billiard.five import int_types
-from .reduction import dump
-from .compat import _winapi as win32
+from billiard.reduction import dump
+from billiard.compat import _winapi as win32
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
            'duplicate', 'close']
@@ -506,6 +506,7 @@ def prepare(data):
     '''
     old_main_modules.append(sys.modules['__main__'])
 
+    print data['name']
     if 'name' in data:
         process.current_process().name = data['name']
 

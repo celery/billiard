@@ -23,10 +23,10 @@ from . import AuthenticationError
 from . import reduction
 from ._ext import _billiard, win32
 from .compat import get_errno, bytes, setblocking
-from .five import monotonic
-from .forking import duplicate, close
-from .reduction import ForkingPickler
-from .util import get_temp_dir, Finalize, sub_debug, debug
+from billiard.five import monotonic
+from billiard.forking import duplicate, close
+from billiard.reduction import ForkingPickler
+from billiard.util import get_temp_dir, Finalize, sub_debug, debug
 
 try:
     WindowsError = WindowsError  # noqa

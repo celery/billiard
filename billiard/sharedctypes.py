@@ -12,9 +12,9 @@ import ctypes
 import weakref
 
 from . import heap, RLock
-from .five import int_types
-from .forking import assert_spawning
-from .reduction import ForkingPickler
+from billiard.five import int_types
+from billiard.forking import assert_spawning
+from billiard.reduction import ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
 
