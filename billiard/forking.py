@@ -427,7 +427,7 @@ def main():
 
     process.current_process()._inheriting = True
     preparation_data = load(from_parent)
-    prepare(preparation_data)
+    # prepare(preparation_data)
     # Huge hack to make logging before Process.run work.
     try:
         os.environ["MP_MAIN_FILE"] = sys.modules["__main__"].__file__
