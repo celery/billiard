@@ -31,3 +31,8 @@ Bug reporting
 Please report bugs related to multiprocessing at the
 `Python bug tracker <http://bugs.python.org/>`_. Issues related to billiard
 should be reported at http://github.com/celery/billiard/issues.
+
+
+.. image:: https://d2weczhvl823v0.cloudfront.net/celery/billiard/trend.png
+    :alt: Bitdeli badge
+    :target: https://bitdeli.com/free
