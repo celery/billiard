@@ -40,7 +40,8 @@ if sys.version_info < (3, 3):
         import ctypes
         from ctypes.util import find_library
         libSystem = ctypes.CDLL('libSystem.dylib')
-        CoreServices = ctypes.CDLL(find_library('CoreServices'),use_errno=True)
+        CoreServices = ctypes.CDLL(find_library('CoreServices'),
+                                   use_errno=True)
         mach_absolute_time = libSystem.mach_absolute_time
         mach_absolute_time.restype = ctypes.c_uint64
         absolute_to_nanoseconds = CoreServices.AbsoluteToNanoseconds
