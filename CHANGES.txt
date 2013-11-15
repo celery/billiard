@@ -1,3 +1,18 @@
+3.3.0.7 - 2013-11-15
+--------------------
+
+- Fixed compatibility with PyPy 2.1 + 2.2.
+
+- Fixed problem in pypy detection.
+
+    Fix contributed by Tin Tvrtkovic.
+
+- Now uses ``ctypes.find_library`` instead of hardcoded path to find
+  the OS X CoreServices framework.
+
+    Fix contributed by Moritz Kassner.
+
+
 3.3.0.6 - 2013-11-12
 --------------------
 
