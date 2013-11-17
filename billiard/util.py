@@ -63,29 +63,21 @@ def sub_debug(msg, *args, **kwargs):
 def debug(msg, *args, **kwargs):
     if _logger:
         _logger.log(DEBUG, msg, *args, **kwargs)
-        return True
-    return False
 
 
 def info(msg, *args, **kwargs):
     if _logger:
         _logger.log(INFO, msg, *args, **kwargs)
-        return True
-    return False
 
 
 def sub_warning(msg, *args, **kwargs):
     if _logger:
         _logger.log(SUBWARNING, msg, *args, **kwargs)
-        return True
-    return False
 
 
 def error(msg, *args, **kwargs):
     if _logger:
         _logger.log(ERROR, msg, *args, **kwargs)
-        return True
-    return False
 
 
 def get_logger():
