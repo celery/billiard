@@ -21,6 +21,7 @@ import itertools
 import binascii
 import logging
 import threading
+import multiprocessing
 
 from .compat import bytes
 try:
@@ -44,6 +45,11 @@ def current_process():
     Return process object representing the current process
     '''
     return _current_process
+
+
+def _set_current_process(process):
+    global _current_process
+    _current_process = multiprocessing._current_process = process
 
 
 def _cleanup():
@@ -254,7 +260,7 @@ class Process(object):
                 except (OSError, ValueError):
                     pass
             old_process = _current_process
-            _current_process = self
+            _set_current_process(self)
 
             # Re-init logging system.
             # Workaround for http://bugs.python.org/issue6721/#msg140215
