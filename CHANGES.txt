@@ -1,3 +1,9 @@
+3.3.0.8 - 2013-11-21
+--------------------
+
+- Now also sets ``multiprocessing.current_process`` for compatibility
+  with loggings ``processName`` field.
+
 3.3.0.7 - 2013-11-15
 --------------------
 
