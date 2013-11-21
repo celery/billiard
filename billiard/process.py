@@ -21,7 +21,8 @@ import itertools
 import binascii
 import logging
 import threading
-import multiprocessing
+
+from multiprocessing import process as _mproc
 
 from .compat import bytes
 try:
@@ -49,7 +50,7 @@ def current_process():
 
 def _set_current_process(process):
     global _current_process
-    _current_process = multiprocessing._current_process = process
+    _current_process = _mproc._current_process = process
 
 
 def _cleanup():
