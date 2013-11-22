@@ -23,7 +23,7 @@ import threading
 import time
 import warnings
 
-from collections import Callable, deque
+from collections import deque
 from functools import partial
 
 from . import Event, Process, cpu_count
@@ -934,12 +934,10 @@ class Pool(object):
         self.max_restarts = max_restarts or round(self._processes * 100)
         self.restart_state = restart_state(max_restarts, max_restart_freq or 1)
 
-        if initializer is not None and \
-                not isinstance(initializer, Callable):
+        if initializer is not None and not callable(initializer):
             raise TypeError('initializer must be a callable')
 
-        if on_process_exit is not None and \
-                not isinstance(on_process_exit, Callable):
+        if on_process_exit is not None and not callable(on_process_exit):
             raise TypeError('on_process_exit must be callable')
 
         self._pool = []
