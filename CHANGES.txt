@@ -1,3 +1,14 @@
+3.3.0.10 - 2013-12-02
+---------------------
+
+- Windows: Fixed problem with missing ``WAITABANDONED_0``
+
+    Fix contributed by Matthias Wagner
+
+- Windows: PipeConnection can now be inherited.
+
+    Fix contributed by Matthias Wagner
+
 3.3.0.9 - 2013-12-02
 --------------------
 
