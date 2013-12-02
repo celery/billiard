@@ -1,3 +1,10 @@
+3.3.0.9 - 2013-12-02
+--------------------
+
+- Temporary workaround for Celery maxtasksperchild issue.
+
+    Fix contributed by Ionel Cristian Mărieș.
+
 3.3.0.8 - 2013-11-21
 --------------------
 
