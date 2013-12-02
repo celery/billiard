@@ -86,6 +86,7 @@ ACK = 0
 READY = 1
 TASK = 2
 NACK = 3
+DEATH = 4
 
 #
 # Exit code constants
@@ -295,7 +296,15 @@ class Worker(Process):
 
         if self.on_exit is not None:
             self.on_exit(pid, exitcode)
-        os._exit(exitcode)
+
+        if sys.platform != 'win32':
+            self.outq.put((DEATH, (pid, exitcode)))
+            try:
+                time.sleep(1)
+            finally:
+                os._exit(exitcode)
+        else:
+            os._exit(exitcode)
 
     def on_loop_start(self, pid):
         pass
@@ -760,8 +769,15 @@ class ResultHandler(PoolThread):
             except KeyError:
                 pass
 
+        def on_death(pid, exitcode):
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError as exc:
+                if get_errno(exc) != errno.ESRCH:
+                    raise
+
         state_handlers = self.state_handlers = {
-            ACK: on_ack, READY: on_ready,
+            ACK: on_ack, READY: on_ready, DEATH: on_death
         }
 
         def on_state_change(task):
