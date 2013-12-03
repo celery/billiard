@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 
 VERSION = (3, 3, 0, 10)
-__version__ = ".".join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
+__version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
 __maintainer__ = 'Ask Solem',
