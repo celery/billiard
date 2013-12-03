@@ -160,7 +160,7 @@ else:
     if macros.get('HAVE_SEM_OPEN', False):
         multiprocessing_srcs.append('Modules/_billiard/semaphore.c')
 
-long_description = open(os.path.join(HERE, 'README.rst')).read()
+long_description = open(os.path.join(HERE, 'README.rst'), encoding='utf-8').read()
 long_description += """
 
 ===========
@@ -168,8 +168,9 @@ Changes
 ===========
 
 """
-long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
-long_description = long_description.encode('ascii', 'replace')
+long_description += open(os.path.join(HERE, 'CHANGES.txt'), encoding='utf-8').read()
+if not is_py3k:
+    long_description = long_description.encode('ascii', 'replace')
 
 # -*- Installation Requires -*-
 
