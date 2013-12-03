@@ -1086,18 +1086,20 @@ class Pool(object):
         cleaned, exitcodes = {}, {}
         for i in reversed(range(len(self._pool))):
             worker = self._pool[i]
-            if worker.exitcode is not None:
+            exitcode = worker.exitcode
+            popen = worker._popen
+            if popen is None or exitcode is not None:
                 # worker exited
                 debug('Supervisor: cleaning up worker %d', i)
                 worker.join()
                 debug('Supervisor: worked %d joined', i)
                 cleaned[worker.pid] = worker
-                exitcodes[worker.pid] = worker.exitcode
-                if worker.exitcode not in (EX_OK, EX_RECYCLE) and \
+                exitcodes[worker.pid] = exitcode
+                if exitcode not in (EX_OK, EX_RECYCLE) and \
                         not getattr(worker, '_controlled_termination', False):
                     error(
                         'Process %r pid:%r exited with exitcode %r',
-                        worker.name, worker.pid, worker.exitcode, exc_info=0,
+                        worker.name, worker.pid, exitcode, exc_info=0,
                     )
                 self.process_flush_queues(worker)
                 del self._pool[i]
@@ -1114,7 +1116,7 @@ class Pool(object):
                 if acked_by_gone:
                     self.on_job_process_down(job, acked_by_gone)
                     if not job.ready():
-                        exitcode = exitcodes[acked_by_gone]
+                        exitcode = exitcodes.get(acked_by_gone) or 0
                         if getattr(cleaned[acked_by_gone],
                                    '_job_terminated', False):
                             job._set_terminated(exitcode)
@@ -1128,9 +1130,9 @@ class Pool(object):
                     # was scheduled to write to
                     sched_for = job._scheduled_for
 
-                    if write_to and write_to.exitcode is not None:
+                    if write_to and not write_to._is_alive():
                         self.on_job_process_down(job, write_to.pid)
-                    elif sched_for and sched_for.exitcode is not None:
+                    elif sched_for and not sched_for._is_alive():
                         self.on_job_process_down(job, sched_for.pid)
 
             for worker in values(cleaned):
@@ -1565,7 +1567,7 @@ class Pool(object):
         if pool and hasattr(pool[0], 'terminate'):
             debug('terminating workers')
             for p in pool:
-                if p._popen is not None and p.exitcode is None:
+                if p._is_alive():
                     p.terminate()
 
         debug('joining task handler')
