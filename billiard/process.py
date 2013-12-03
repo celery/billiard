@@ -129,8 +129,6 @@ class Process(object):
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
             'can only start a process object created by current process'
-        assert not _current_process._daemonic, \
-            'daemonic processes are not allowed to have children'
         _cleanup()
         if self._Popen is not None:
             Popen = self._Popen
