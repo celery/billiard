@@ -142,6 +142,10 @@ def error(msg, *args, **kwargs):
     if util._logger:
         util._logger.error(msg, *args, **kwargs)
 
+def critical(msg, *args, **kwargs):
+    if util._logger:
+        util._logger.critical(msg, *args, **kwargs)
+
 
 def stop_if_not_current(thread, timeout=None):
     if thread is not threading.currentThread():
@@ -1116,10 +1120,16 @@ class Pool(object):
                 if acked_by_gone:
                     self.on_job_process_down(job, acked_by_gone)
                     if not job.ready():
+                        if acked_by_gone not in exitcodes:
+                            critical("Ghost acked_by_gone %r from job %s with worker pids %s", acked_by_gone, job, job.worker_pids())
+
                         exitcode = exitcodes[acked_by_gone]
                         if getattr(cleaned[acked_by_gone],
                                    '_job_terminated', False):
-                            job._set_terminated(exitcode)
+                            if exitcode:
+                                job._set_terminated(exitcode)
+                            else:
+                                job._set_terminated()
                         else:
                             self.on_job_process_lost(
                                 job, acked_by_gone, exitcode,
