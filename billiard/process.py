@@ -168,6 +168,11 @@ class Process(object):
         self._popen.poll()
         return self._popen.returncode is None
 
+    def _is_alive(self):
+        if self._popen is None:
+            return False
+        return self._popen.poll() is None
+
     def _get_name(self):
         return self._name
 
