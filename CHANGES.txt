@@ -14,7 +14,7 @@
 
 - Temporary workaround for Celery maxtasksperchild issue.
 
-    Fix contributed by Ionel Cristian Mărieș.
+    Fix contributed by Ionel Cristian Maries.
 
 3.3.0.8 - 2013-11-21
 --------------------
