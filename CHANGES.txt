@@ -1,3 +1,18 @@
+3.3.0.11 - 2013-12-03
+---------------------
+
+- Fixed Unicode error when installing the distribution (Issue #89).
+
+- Daemonic processes are now allowed to have children.
+
+    But note that it will not be possible to automatically
+    terminate them when the process exits.
+
+    See discussion at https://github.com/celery/celery/issues/1709
+
+- Pool:  Would not always be able to detect that a process exited.
+
+
 3.3.0.10 - 2013-12-02
 ---------------------
 
