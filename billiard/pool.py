@@ -1126,7 +1126,10 @@ class Pool(object):
                         exitcode = exitcodes[acked_by_gone]
                         if getattr(cleaned[acked_by_gone],
                                    '_job_terminated', False):
-                            job._set_terminated(exitcode)
+                            if exitcode:
+                                job._set_terminated(exitcode)
+                            else:
+                                job._set_terminated()
                         else:
                             self.on_job_process_lost(
                                 job, acked_by_gone, exitcode,
