@@ -298,8 +298,8 @@ class Worker(Process):
             self.on_exit(pid, exitcode)
 
         if sys.platform != 'win32':
-            self.outq.put((DEATH, (pid, exitcode)))
             try:
+                self.outq.put((DEATH, (pid, exitcode)))
                 time.sleep(1)
             finally:
                 os._exit(exitcode)
