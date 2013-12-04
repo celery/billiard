@@ -1658,9 +1658,9 @@ class ApplyResult(object):
     def terminate(self, signum):
         self._terminated = signum
 
-    def _set_terminated(self, signum=0):
+    def _set_terminated(self, signum=None):
         try:
-            raise Terminated(-signum)
+            raise Terminated(-signum or 0)
         except Terminated:
             self._set(None, (False, ExceptionInfo()))
 
