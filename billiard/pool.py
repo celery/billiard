@@ -1117,8 +1117,8 @@ class Pool(object):
                     self.on_job_process_down(job, acked_by_gone)
                     if not job.ready():
                         exitcode = exitcodes.get(acked_by_gone) or 0
-                        if getattr(cleaned[acked_by_gone],
-                                   '_job_terminated', False):
+                        proc = cleaned.get(acked_by_gone)
+                        if proc and getattr(proc, '_job_terminated', False):
                             job._set_terminated(exitcode)
                         else:
                             self.on_job_process_lost(
