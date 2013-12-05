@@ -1660,7 +1660,7 @@ class ApplyResult(object):
 
     def _set_terminated(self, signum=None):
         try:
-            raise Terminated(-signum or 0)
+            raise Terminated(-(signum or 0))
         except Terminated:
             self._set(None, (False, ExceptionInfo()))
 
