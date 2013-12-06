@@ -169,7 +169,8 @@ Changes
 
 """
 long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
-long_description = long_description.encode('ascii', 'replace')
+if not is_py3k:
+    long_description = long_description.encode('ascii', 'replace')
 
 # -*- Installation Requires -*-
 
