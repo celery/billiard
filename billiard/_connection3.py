@@ -33,11 +33,14 @@ try:
         WAIT_TIMEOUT,
         INFINITE,
     )
-    # if we got here, we seem to be running on Windows. Handle probably missing WAIT_ABANDONED_0 constant:
+    # if we got here, we seem to be running on Windows. Handle probably
+    # missing WAIT_ABANDONED_0 constant:
     try:
         from _winapi import WAIT_ABANDONED_0
     except ImportError:
-         WAIT_ABANDONED_0 = 128 # _winapi seems to be not exporting this constant, fallback solution until exported in _winapi
+        WAIT_ABANDONED_0 = 128  # _winapi seems to be not exporting
+                                # this constant, fallback solution until
+                                # exported in _winapi
 except ImportError:
     if sys.platform == 'win32':
         raise
