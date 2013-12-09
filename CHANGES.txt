@@ -1,3 +1,16 @@
+3.3.0.12 - 2013-12-09
+---------------------
+
+- Fixed installation for Python 3.
+
+    Contributed by Rickert Mulder.
+
+- Pool: Fixed bug with maxtasksperchild.
+
+    Fix contributed by Ionel Cristian Maries.
+
+- Pool: Fixed bug in maintain_pool.
+
 3.3.0.11 - 2013-12-03
 ---------------------
 
