@@ -193,6 +193,12 @@ else:
     tests_require = reqs('test.txt')
 
 
+def _is_build_command(argv=sys.argv, cmds=('install', 'build', 'bdist')):
+    for arg in argv:
+        if arg.startswith(cmds):
+            return arg
+
+
 def run_setup(with_extensions=True):
     extensions = []
     if with_extensions:
@@ -249,7 +255,7 @@ def run_setup(with_extensions=True):
 try:
     run_setup(not (is_jython or is_pypy or is_py3k))
 except BaseException:
-    if 'test' not in sys.argv:
+    if _is_build_command(sys.argv):
         import traceback
         print(BUILD_WARNING % '\n'.join(traceback.format_stack()),
               file=sys.stderr)
