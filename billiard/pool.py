@@ -237,13 +237,15 @@ class Worker(Process):
     _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
-                 maxtasks=None, sentinel=None, on_exit=None):
+                 maxtasks=None, sentinel=None, on_exit=None,
+                 sigprotection=True):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
         self._shutdown = sentinel
         self.on_exit = on_exit
+        self.sigprotection = sigprotection
         self.inq, self.outq, self.synq = inq, outq, synq
         self._make_shortcuts()
 
@@ -387,7 +389,7 @@ class Worker(Process):
 
         # Make sure all exiting signals call finally: blocks.
         # This is important for the semaphore to be released.
-        reset_signals()
+        reset_signals(full=self.sigprotection)
 
         # install signal handler for soft timeouts.
         if SIG_SOFT_TIMEOUT is not None:
@@ -1048,6 +1050,9 @@ class Pool(object):
         w = self.Worker(
             inq, outq, synq, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel, self._on_process_exit,
+            # Need to handle all signals if using the ipc semaphore,
+            # to make sure the semaphore is released.
+            sigprotection=self.threads,
         )
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
