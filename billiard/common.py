@@ -45,7 +45,6 @@ TERMSIGS = (
     'SIGTRAP',
     'SIGABRT',
     'SIGEMT',
-    'SIGBUS',
     'SIGSYS',
     'SIGPIPE',
     'SIGALRM',
