@@ -3,14 +3,14 @@
 
 - Fixes compatability with Python < 2.7.6
 
-- No longer attempts to handle :sig:`SIGBUS`
+- No longer attempts to handle ``SIGBUS``
 
     Contributed by Vishal Vatsa.
 
 - Non-thread based pool now only handles signals:
 
-    :sig:`SIGHUP`, sig:`SIGQUIT`, :sig:`SIGTERM`, :sig:`SIGUSR1`,
-    :sig:`SIGUSR2`.
+    ``SIGHUP``, ``SIGQUIT``, ``SIGTERM``, ``SIGUSR1``,
+    ``SIGUSR2``.
 
 - setup.py: Only show compilation warning for build related commands.
 
