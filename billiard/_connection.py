@@ -22,7 +22,7 @@ import itertools
 from . import AuthenticationError
 from . import reduction
 from ._ext import _billiard, win32
-from .compat import get_errno, bytes, setblocking
+from .compat import get_errno, setblocking, bytes as cbytes
 from .five import monotonic
 from .forking import duplicate, close
 from .reduction import ForkingPickler
@@ -406,9 +406,9 @@ if sys.platform == 'win32':
 
 MESSAGE_LENGTH = 20
 
-CHALLENGE = bytes('#CHALLENGE#', 'ascii')
-WELCOME = bytes('#WELCOME#', 'ascii')
-FAILURE = bytes('#FAILURE#', 'ascii')
+CHALLENGE = cbytes('#CHALLENGE#', 'ascii')
+WELCOME = cbytes('#WELCOME#', 'ascii')
+FAILURE = cbytes('#FAILURE#', 'ascii')
 
 
 def deliver_challenge(connection, authkey):
