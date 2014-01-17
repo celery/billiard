@@ -1,3 +1,14 @@
+3.3.0.14 - 2014-01-17
+---------------------
+
+- Fixed problem with our backwards compatible ``bytes`` wrapper
+  (Issue #103).
+
+- No longer expects frozen applications to have a valid ``__file__``
+  attribute.
+
+    Fix contributed by George Sibble.
+
 3.3.0.13 - 2013-12-13
 ---------------------
 
