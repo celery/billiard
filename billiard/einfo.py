@@ -148,6 +148,19 @@ class Traceback(object):
                 self.tb_next = _Truncated()
 
     def as_traceback(self):
+        """
+        Returns Traceback instance that is adequate for raising or None if there's no support in the python runtime.
+        """
+        try:
+            # perform few sanity checks, in case the objects are incomplete (eg: older billiard)
+            f_code = self.tb_frame.f_code
+            f_code.co_nlocals
+            f_code.co_stacksize
+            f_code.co_flags
+            f_code.co_firstlineno
+            f_code.co_lnotab
+        except AttributeError:
+            return
         if _tproxy:
             return _tproxy(TracebackType, self.__tproxy_handler)
         elif _tb_set_next:
