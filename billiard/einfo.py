@@ -164,7 +164,6 @@ class Traceback(object):
         if _tproxy:
             return _tproxy(TracebackType, self.__tproxy_handler)
         elif _tb_set_next:
-            f_code = self.tb_frame.f_code
             code = compile('\n' * (self.tb_lineno - 1) + 'raise __traceback_maker', self.tb_frame.f_code.co_filename, 'exec')
             if PY3:
                 code = CodeType(
