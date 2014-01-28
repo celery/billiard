@@ -19,14 +19,14 @@ import time
 import tempfile
 import itertools
 
-from . import AuthenticationError
-from . import reduction
-from ._ext import _billiard, win32
-from .compat import get_errno, setblocking, bytes as cbytes
-from .five import monotonic
-from .forking import duplicate, close
-from .reduction import ForkingPickler
-from .util import get_temp_dir, Finalize, sub_debug, debug
+from .. import AuthenticationError
+from .. import reduction
+from .._ext import _billiard, win32
+from ..compat import get_errno, setblocking, bytes as cbytes
+from ..five import monotonic
+from ..forking import duplicate, close
+from ..reduction import ForkingPickler
+from ..util import get_temp_dir, Finalize, sub_debug, debug
 
 try:
     WindowsError = WindowsError  # noqa

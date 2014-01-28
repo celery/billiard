@@ -188,7 +188,7 @@ else:
 
     def DupFd(fd):
         '''Return a wrapper for an fd.'''
-        from .forking import Popen
+        from ..forking import Popen
         return Popen.duplicate_for_child(fd)
 
 #
@@ -230,7 +230,7 @@ register(functools.partial, _reduce_partial)
 if sys.platform == 'win32':
 
     def _reduce_socket(s):
-        from .resource_sharer import DupSocket
+        from ..resource_sharer import DupSocket
         return _rebuild_socket, (DupSocket(s),)
 
     def _rebuild_socket(ds):

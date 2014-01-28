@@ -212,12 +212,16 @@ def run_setup(with_extensions=True):
                 depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
             ),
         ]
+    exclude = 'billiard.py2' if is_py3k else 'billiard.py3'
+    packages = find_packages(exclude=[
+        'ez_setup', 'tests', 'funtests.*', 'tests.*', exclude,
+    ])
     setup(
         name='billiard',
         version=meta['VERSION'],
         description=meta['doc'],
         long_description=long_description,
-        packages=find_packages(exclude=['ez_setup', 'tests', 'tests.*']),
+        packages=packages,
         ext_modules=extensions,
         author=meta['author'],
         author_email=meta['author_email'],

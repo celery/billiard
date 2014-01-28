@@ -21,11 +21,11 @@ import tempfile
 import itertools
 
 import _multiprocessing
-from .compat import setblocking
-from .exceptions import AuthenticationError, BufferTooShort
-from .five import monotonic
-from .util import get_temp_dir, Finalize, sub_debug
-from .reduction import ForkingPickler
+from ..compat import setblocking
+from ..exceptions import AuthenticationError, BufferTooShort
+from ..five import monotonic
+from ..util import get_temp_dir, Finalize, sub_debug
+from ..reduction import ForkingPickler
 try:
     import _winapi
     from _winapi import (

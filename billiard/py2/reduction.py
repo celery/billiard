@@ -19,9 +19,9 @@ import threading
 
 from pickle import Pickler
 
-from . import current_process
-from ._ext import _billiard, win32
-from .util import register_after_fork, debug, sub_debug
+from .. import current_process
+from .._ext import _billiard, win32
+from ..util import register_after_fork, debug, sub_debug
 
 is_win32 = sys.platform == 'win32'
 is_pypy = hasattr(sys, 'pypy_version_info')
@@ -92,7 +92,7 @@ if sys.platform == 'win32':
     import _subprocess  # noqa
 
     def send_handle(conn, handle, destination_pid):
-        from .forking import duplicate
+        from ..forking import duplicate
         process_handle = win32.OpenProcess(
             win32.PROCESS_ALL_ACCESS, False, destination_pid
         )
@@ -136,7 +136,7 @@ def _get_listener():
         _lock.acquire()
         try:
             if _listener is None:
-                from .connection import Listener
+                from ..connection import Listener
                 debug('starting listener and thread for sending handles')
                 _listener = Listener(authkey=current_process().authkey)
                 t = threading.Thread(target=_serve)
@@ -149,7 +149,7 @@ def _get_listener():
 
 
 def _serve():
-    from .util import is_exiting, sub_warning
+    from ..util import is_exiting, sub_warning
 
     while 1:
         try:
@@ -170,7 +170,7 @@ def _serve():
 
 
 def reduce_handle(handle):
-    from .forking import Popen, duplicate
+    from ..forking import Popen, duplicate
     if Popen.thread_is_spawning():
         return (None, Popen.duplicate_for_child(handle), True)
     dup_handle = duplicate(handle)
@@ -180,7 +180,7 @@ def reduce_handle(handle):
 
 
 def rebuild_handle(pickled_data):
-    from .connection import Client
+    from ..connection import Client
     address, handle, inherited = pickled_data
     if inherited:
         return handle
