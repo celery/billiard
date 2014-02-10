@@ -1,3 +1,14 @@
+3.3.0.15 - 2014-02-10
+---------------------
+
+- Pool: Fixed "cannot join process not started" error.
+
+- Now uses billiard.py2 and billiard.py3 specific packages that are installed
+  depending on the python version used.
+
+    This way the installation will not import version specific modules (and
+    possibly crash).
+
 3.3.0.14 - 2014-01-17
 ---------------------
 
