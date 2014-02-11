@@ -1,3 +1,9 @@
+3.3.0.16 - 2014-02-11
+---------------------
+
+- Previous release was missing the billiard.py3 package from MANIFEST
+  so the installation would not work on Python 3.
+
 3.3.0.15 - 2014-02-10
 ---------------------
 
