@@ -40,8 +40,12 @@ SEM_VALUE_MAX = _billiard.SemLock.SEM_VALUE_MAX
 
 try:
     sem_unlink = _billiard.SemLock.sem_unlink
-except AttributeError:
-    sem_unlink = None
+except AttributeError:  # pragma: no cover
+    try:
+        # Py3.4+ implements sem_unlink and the semaphore must be named
+        from _multiprocessing import sem_unlink  # noqa
+    except ImportError:
+        sem_unlink = None   # noqa
 
 #
 # Base class for semaphores and mutexes; wraps `_billiard.SemLock`
