@@ -62,8 +62,8 @@ class test_reset_signals(Case):
     def test_handles_errors(self, sigs=['SIGTERM']):
         for exc in (OSError(), AttributeError(),
                     ValueError(), RuntimeError()):
-            with self.assert_context(sigs, [], signal.SIG_DFL, exc) as (_, SET):
-                self.assertTrue(SET.called)
+            with self.assert_context(sigs, [], signal.SIG_DFL, exc) as (_, S):
+                self.assertTrue(S.called)
 
     @contextmanager
     def assert_context(self, default, full, get_returns=None, set_effect=None):
