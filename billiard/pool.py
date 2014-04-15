@@ -1104,8 +1104,9 @@ class Pool(object):
                 if exitcode not in (EX_OK, EX_RECYCLE) and \
                         not getattr(worker, '_controlled_termination', False):
                     error(
-                        'Process %r pid:%r exited with exitcode %r',
-                        worker.name, worker.pid, exitcode, exc_info=0,
+                        'Process %r pid:%r exited with %r',
+                        worker.name, worker.pid, human_status(exitcode),
+                        exc_info=0,
                     )
                 self.process_flush_queues(worker)
                 del self._pool[i]
