@@ -1,3 +1,11 @@
+3.3.0.17 - 2014-04-16
+---------------------
+
+- Fixes SemLock on Python 3.4 (Issue #107) when using
+  ``forking_enable(False)``.
+
+- Pool: Include more useful exitcode information when processes exit.
+
 3.3.0.16 - 2014-02-11
 ---------------------
 
@@ -114,7 +122,7 @@
 
 - Now works without C extension again.
 
-- New ``_billiard.read(fd, buffer, [len, ])` function
+- New ``_billiard.read(fd, buffer, [len, ])`` function
   implements os.read with buffer support (new buffer API)
 
 - New pure-python implementation of ``Connection.send_offset``.
