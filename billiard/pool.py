@@ -1192,8 +1192,9 @@ class Pool(object):
                 self._putlock.shrink()
             worker.terminate_controlled()
             self.on_shrink(1)
-            if i == n - 1:
-                return
+            if i >= n - 1:
+                break
+        else:
             raise ValueError("Can't shrink pool. All processes busy!")
 
     def grow(self, n=1):
