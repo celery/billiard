@@ -10,7 +10,7 @@
 """
 from __future__ import absolute_import
 
-############## py3k #########################################################
+# ############# py3k #########################################################
 import sys
 PY3 = sys.version_info[0] == 3
 
@@ -29,7 +29,7 @@ try:
 except ImportError:                         # pragma: no cover
     from collections import UserDict        # noqa
 
-############## time.monotonic ################################################
+# ############# time.monotonic ###############################################
 
 if sys.version_info < (3, 3):
 

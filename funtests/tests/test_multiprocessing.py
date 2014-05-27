@@ -48,10 +48,13 @@ latin = str
 LOG_LEVEL = util.SUBWARNING
 
 DELTA = 0.1
-CHECK_TIMINGS = False     # making true makes tests take a lot longer
-                          # and can sometimes cause some non-serious
-                          # failures because some calls block a bit
-                          # longer than expected
+
+# making true makes tests take a lot longer
+# and can sometimes cause some non-serious
+# failures because some calls block a bit
+# longer than expected
+CHECK_TIMINGS = False
+
 if CHECK_TIMINGS:
     TIMEOUT1, TIMEOUT2, TIMEOUT3 = 0.82, 0.35, 1.4
 else:
@@ -220,7 +223,7 @@ class _TestProcesses(BaseTestCase):
         p.join()
 
         # XXX sometimes get p.exitcode == 0 on Windows ...
-        #self.assertEqual(p.exitcode, -signal.SIGTERM)
+        # self.assertEqual(p.exitcode, -signal.SIGTERM)
 
     def test_cpu_count(self):
         try:
@@ -392,7 +395,6 @@ class _TestQueue(BaseTestCase):
 
     def _test_get(self, queue, child_can_start, parent_can_continue):
         child_can_start.wait()
-        #queue.put(1)
         queue.put(2)
         queue.put(3)
         queue.put(4)
@@ -419,8 +421,8 @@ class _TestQueue(BaseTestCase):
         time.sleep(DELTA)
         self.assertEqual(queue_empty(queue), False)
 
-        # Hangs unexpectedly, remove for now
-        #self.assertEqual(queue.get(), 1)
+        # ## Hangs unexpectedly, remove for now
+        # self.assertEqual(queue.get(), 1)
         self.assertEqual(queue.get(True, None), 2)
         self.assertEqual(queue.get(True), 3)
         self.assertEqual(queue.get(timeout=1), 4)
@@ -578,8 +580,8 @@ class _TestSemaphore(BaseTestCase):
     def test_bounded_semaphore(self):
         sem = self.BoundedSemaphore(2)
         self._test_semaphore(sem)
-        # Currently fails on OS/X
-        #if HAVE_GETVALUE:
+        # ## Currently fails on OS/X
+        # if HAVE_GETVALUE:
         #    self.assertRaises(ValueError, sem.release)
         #    self.assertReturnsIfImplemented(2, get_value, sem)
 
@@ -771,7 +773,7 @@ class _TestEvent(BaseTestCase):
 
         event.clear()
 
-        #self.assertEqual(event.is_set(), False)
+        # self.assertEqual(event.is_set(), False)
 
         self.Process(target=self._test_event, args=(event,)).start()
         self.assertEqual(wait(), True)

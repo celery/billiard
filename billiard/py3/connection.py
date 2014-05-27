@@ -38,9 +38,10 @@ try:
     try:
         from _winapi import WAIT_ABANDONED_0
     except ImportError:
-        WAIT_ABANDONED_0 = 128  # _winapi seems to be not exporting
-                                # this constant, fallback solution until
-                                # exported in _winapi
+        # _winapi seems to be not exporting
+        # this constant, fallback solution until
+        # exported in _winapio
+        WAIT_ABANDONED_0 = 128
 except ImportError:
     if sys.platform == 'win32':
         raise
@@ -917,7 +918,7 @@ if sys.platform == 'win32':
                             o._got_empty_message = True
 
         ready_objects.update(waithandle_to_obj[h] for h in ready_handles)
-        return [o for o in object_list if o in ready_objects]
+        return [oj for oj in object_list if oj in ready_objects]
 
 else:
 
