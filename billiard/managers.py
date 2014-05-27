@@ -380,9 +380,9 @@ class Server(object):
             if method_to_typeid is not None:
                 assert type(method_to_typeid) is dict
                 exposed = list(exposed) + list(method_to_typeid)
-
-            ident = '%x' % id(obj)  # convert to string because xmlrpclib
-                                    # only has 32 bit signed integers
+            # convert to string because xmlrpclib
+            # only has 32 bit signed integers
+            ident = '%x' % id(obj)
             util.debug('%r callable returned object with id %r', typeid, ident)
 
             self.id_to_obj[ident] = (obj, set(exposed), method_to_typeid)
