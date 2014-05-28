@@ -31,6 +31,7 @@ from . import util
 from .common import pickle_loads, reset_signals, restart_state
 from .compat import get_errno, send_offset
 from .einfo import ExceptionInfo
+from .dummy import DummyProcess
 from .exceptions import (
     CoroStop,
     RestartFreqExceeded,
@@ -458,10 +459,10 @@ class Worker(Process):
 #
 
 
-class PoolThread(threading.Thread):
+class PoolThread(DummyProcess):
 
     def __init__(self, *args, **kwargs):
-        threading.Thread.__init__(self)
+        DummyProcess.__init__(self)
         self._state = RUN
         self._was_started = False
         self.daemon = True
