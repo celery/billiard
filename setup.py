@@ -118,8 +118,8 @@ elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
         HAVE_FD_TRANSFER=1,
         )
     libraries = []
-elif sys.platform in ('freebsd7', 'freebsd8', 'freebsd9', 'freebsd10'):
-    macros = dict(                  # FreeBSD 7+
+elif re.match('^(gnukfreebsd(8|9|10|11)|freebsd(7|8|9|0))', sys.platform):
+    macros = dict(                  # FreeBSD 7+ and GNU/kFreeBSD 8+
         HAVE_SEM_OPEN=bool(
             sysconfig.get_config_var('HAVE_SEM_OPEN') and not
             bool(sysconfig.get_config_var('POSIX_SEMAPHORES_NOT_ENABLED'))
