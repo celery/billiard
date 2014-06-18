@@ -12,8 +12,10 @@ from __future__ import absolute_import
 __all__ = ['Client', 'Listener', 'Pipe']
 
 import os
+import random
 import sys
 import socket
+import string
 import errno
 import time
 import tempfile
@@ -84,8 +86,13 @@ def arbitrary_address(family):
     elif family == 'AF_UNIX':
         return tempfile.mktemp(prefix='listener-', dir=get_temp_dir())
     elif family == 'AF_PIPE':
-        return tempfile.mktemp(prefix=r'\\.\pipe\pyc-%d-%d-' %
-                               (os.getpid(), next(_mmap_counter)))
+        randomchars = ''.join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for i in range(6)
+        )
+        return r'\\.\pipe\pyc-%d-%d-%s' % (
+            os.getpid(), next(_mmap_counter), randomchars
+        )
     else:
         raise ValueError('unrecognized family')
 
