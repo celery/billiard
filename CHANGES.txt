@@ -1,3 +1,24 @@
+3.3.0.18 - 2014-06-20
+---------------------
+
+- Now compiles on GNU/kFreeBSD
+
+    Contributed by Michael Fladischer.
+
+- Pool: `AF_PIPE` address fixed so that it works on recent Windows versions
+  in combination with Python 2.7.7.
+
+    Fix contributed by Joshua Tacoma.
+
+- Pool: Fix for `Supervisor object has no attribute _children` error.
+
+    Fix contributed by Andres Riancho.
+
+- Pool: Fixed bug with human_status(None).
+
+- Pool: shrink did not work properly if asked to remove more than 1 process.
+
+
 3.3.0.17 - 2014-04-16
 ---------------------
 
