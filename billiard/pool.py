@@ -1798,9 +1798,9 @@ class MapResult(ApplyResult):
                 self._cache.pop(self._job, None)
             self._event.set()
 
-    def _ack(self, i, time_accepted, pid):
+    def _ack(self, i, time_accepted, pid, *args):
         start = i * self._chunksize
-        stop = (i + 1) * self._chunksize
+        stop = min((i + 1) * self._chunksize, self._length)
         for j in range(start, stop):
             self._accepted[j] = True
             self._worker_pid[j] = pid
@@ -1887,7 +1887,7 @@ class IMapIterator(object):
                 self._cond.notify()
                 del self._cache[self._job]
 
-    def _ack(self, i, time_accepted, pid):
+    def _ack(self, i, time_accepted, pid, *args):
         self._worker_pids.append(pid)
 
     def ready(self):
