@@ -123,7 +123,7 @@ def _get_send_offset(connection):
 
 
 def human_status(status):
-    if status or 0 < 0:
+    if (status or 0) < 0:
         try:
             return 'signal {0} ({1})'.format(-status, SIGMAP[-status])
         except KeyError:
