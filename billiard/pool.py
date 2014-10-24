@@ -623,7 +623,11 @@ class TimeoutHandler(PoolThread):
 
         # Run timeout callback
         if job._timeout_callback is not None:
-            job._timeout_callback(soft=True, timeout=job._soft_timeout)
+            try:
+                job._timeout_callback(soft=True, timeout=job._soft_timeout)
+            except Exception as exc:
+                error('Timeout callback raised exception: %r', exc,
+                      exc_info=1)
 
         try:
             _kill(job._worker_pid, SIG_SOFT_TIMEOUT)
@@ -648,7 +652,12 @@ class TimeoutHandler(PoolThread):
 
         # Run timeout callback
         if job._timeout_callback is not None:
-            job._timeout_callback(soft=False, timeout=job._timeout)
+            try:
+                job._timeout_callback(soft=False, timeout=job._timeout)
+            except Exception as exc:
+                error('Timeout callback raised exception: %r', exc,
+                      exc_info=1)
+
         if process:
             self._trywaitkill(process)
 
