@@ -622,12 +622,7 @@ class TimeoutHandler(PoolThread):
             return
 
         # Run timeout callback
-        if job._timeout_callback is not None:
-            try:
-                job._timeout_callback(soft=True, timeout=job._soft_timeout)
-            except Exception as exc:
-                error('Timeout callback raised exception: %r', exc,
-                      exc_info=1)
+        job.handle_timeout(soft=True)
 
         try:
             _kill(job._worker_pid, SIG_SOFT_TIMEOUT)
@@ -651,12 +646,7 @@ class TimeoutHandler(PoolThread):
         process, _index = self._process_by_pid(job._worker_pid)
 
         # Run timeout callback
-        if job._timeout_callback is not None:
-            try:
-                job._timeout_callback(soft=False, timeout=job._timeout)
-            except Exception as exc:
-                error('Timeout callback raised exception: %r', exc,
-                      exc_info=1)
+        job.handle_timeout(soft=False)
 
         if process:
             self._trywaitkill(process)
@@ -1638,7 +1628,6 @@ class ApplyResult(object):
         self._error_callback = error_callback
         self._timeout_callback = timeout_callback
         self._timeout = timeout
-        self._terminated = None
         self._soft_timeout = soft_timeout
         self._lost_worker_timeout = lost_worker_timeout
         self._on_timeout_set = on_timeout_set
@@ -1650,6 +1639,7 @@ class ApplyResult(object):
         self._cancelled = False
         self._worker_pid = None
         self._time_accepted = None
+        self._terminated = None
         cache[self._job] = self
 
     def __repr__(self):
@@ -1707,6 +1697,13 @@ class ApplyResult(object):
             except Exception as exc:
                 error('Pool callback raised exception: %r', exc,
                       exc_info=1)
+
+    def handle_timeout(self, soft=False):
+        if self._timeout_callback is not None:
+            self.safe_apply_callback(
+                self._timeout_callback, soft=soft,
+                timeout=self._soft_timeout if soft else self._timeout,
+            )
 
     def _set(self, i, obj):
         with self._mutex:
