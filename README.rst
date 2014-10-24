@@ -16,7 +16,7 @@ and will draw it's fixes/improvements from python-trunk.
   the current maintainers but all of the contributors to the original pyprocessing
   package listed `here <http://pyprocessing.berlios.de/doc/THANKS.html>`_
 
-- Also it is a fork of the multiprocessin backport package by Christian Heims.
+- Also it is a fork of the multiprocessing backport package by Christian Heims.
 
 - It includes the no-execv patch contributed by R. Oudkerk.
 
