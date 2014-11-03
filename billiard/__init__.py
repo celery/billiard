@@ -57,8 +57,6 @@ from .exceptions import (  # noqa
     SoftTimeLimitExceeded,
     WorkerLostError,
 )
-from .process import Process, current_process, active_children
-from .util import SUBDEBUG, SUBWARNING
 
 
 def ensure_multiprocessing():
@@ -74,6 +72,20 @@ is not installed\
 #
 # Definitions not depending on native semaphores
 #
+
+def Process(*args, **kwargs):
+    from .process import Process
+    return Process(*args, **kwargs)
+
+
+def current_process():
+    from .process import current_process
+    return current_process()
+
+
+def active_children():
+    from .process import active_children
+    return active_children()
 
 
 def Manager():
