@@ -21,9 +21,12 @@ import array
 
 from traceback import format_exc
 
-from . import Process, current_process, active_children, Pool, util, connection
+from . import util, connection
 from .five import Queue, items, monotonic
-from .process import AuthenticationString
+from .pool import Pool
+from .process import (
+    AuthenticationString, Process, current_process, active_children,
+)
 from .forking import exit, Popen
 from .reduction import ForkingPickler
 from .util import Finalize, error, info

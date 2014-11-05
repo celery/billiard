@@ -11,10 +11,11 @@ from __future__ import absolute_import
 import ctypes
 import weakref
 
-from . import heap, RLock
+from . import heap
 from .five import int_types
 from .forking import assert_spawning
 from .reduction import ForkingPickler
+from .synchronize import RLock
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
 

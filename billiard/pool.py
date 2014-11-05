@@ -26,7 +26,7 @@ import warnings
 from collections import deque
 from functools import partial
 
-from . import Event, Process, cpu_count
+from . import cpu_count
 from . import util
 from .common import pickle_loads, reset_signals, restart_state
 from .compat import get_errno, send_offset
@@ -42,6 +42,8 @@ from .exceptions import (
     WorkerLostError,
 )
 from .five import Empty, Queue, range, values, reraise, monotonic
+from .process import Process
+from .synchronize import Event
 from .util import Finalize, debug
 
 PY3 = sys.version_info[0] == 3
