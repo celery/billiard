@@ -241,11 +241,12 @@ class Worker(object):
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
-                 sigprotection=True, wrap_exception=True):
+                 sigprotection=True, wrap_exception=True, max_memory_per_child=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
         self.maxtasks = maxtasks
+        self.max_memory_per_child = max_memory_per_child
         self._shutdown = sentinel
         self.on_exit = on_exit
         self.sigprotection = sigprotection
@@ -329,6 +330,7 @@ class Worker(object):
         inqW_fd = self.inqW_fd
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
+        max_memory_per_child = self.max_memory_per_child
         prepare_result = self.prepare_result
 
         wait_for_job = self.wait_for_job
@@ -378,6 +380,16 @@ class Worker(object):
                     finally:
                         del(tb)
                 completed += 1
+                if max_memory_per_child > 0:
+                    import resource
+                    used_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                    if used_kb > 0:
+                        if used_kb > max_memory_per_child:
+                            error('child process exiting because it exceeded its maximum memory setting of %d KiB with %d KiB', max_memory_per_child, used_kb)
+                            return EX_RECYCLE
+                    else:
+                        error('worker unable to determine worker memory usage')
+
         debug('worker exiting after %d tasks', completed)
         if maxtasks:
             return EX_RECYCLE if completed == maxtasks else EX_FAILURE
@@ -926,6 +938,7 @@ class Pool(object):
                  synack=False,
                  on_process_exit=None,
                  context=None,
+                 max_memory_per_child=None,
                  **kwargs):
         self._ctx = context or get_context()
         self.synack = synack
@@ -936,6 +949,7 @@ class Pool(object):
         self.timeout = timeout
         self.soft_timeout = soft_timeout
         self._maxtasksperchild = maxtasksperchild
+        self._max_memory_per_child = max_memory_per_child
         self._initializer = initializer
         self._initargs = initargs
         self._on_process_exit = on_process_exit
@@ -1067,6 +1081,7 @@ class Pool(object):
             # to make sure the semaphore is released.
             sigprotection=self.threads,
             wrap_exception=self._wrap_exception,
+            max_memory_per_child=self._max_memory_per_child,
         ))
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
