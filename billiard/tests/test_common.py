@@ -18,7 +18,7 @@ from .utils import Case
 try:
     from unittest.mock import Mock, call, patch
 except ImportError:
-    from mock import Mock, call, patch
+    from mock import Mock, call, patch  # noqa
 
 
 def signo(name):
