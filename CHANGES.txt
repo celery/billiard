@@ -10,6 +10,10 @@
 
 - Pool: ``.map``. and ``.imap`` now working again.
 
+- Now builds on FreeBSD 10.
+
+    Contributed by Michael Fladischer.
+
 3.3.0.18 - 2014-06-20
 ---------------------
 
