@@ -15,6 +15,11 @@ from billiard.common import (
 
 from .utils import Case
 
+try:
+    from unittest.mock import Mock, call, patch
+except ImportError:
+    from mock import Mock, call, patch
+
 
 def signo(name):
     return getattr(signal, name)
