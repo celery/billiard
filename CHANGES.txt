@@ -1,3 +1,15 @@
+3.3.0.19 - 2014-10-13
+---------------------
+
+- Pool: Exceptions in user timeout callbacks are now logged instead of crashing
+ the pool.
+
+    Contributed by Pierre Fersing.
+
+- Pool: Exit codes in errors were improperly being represented as signals.
+
+- Pool: ``.map``. and ``.imap`` now working again.
+
 3.3.0.18 - 2014-06-20
 ---------------------
 
