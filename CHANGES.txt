@@ -1,8 +1,8 @@
 3.3.0.19 - 2014-10-13
 ---------------------
 
-- Pool: Exceptions in user timeout callbacks are now logged instead of crashing
- the pool.
+- Pool: Exceptions in user timeout callbacks are now logged instead
+  of crashing the pool.
 
     Contributed by Pierre Fersing.
 
