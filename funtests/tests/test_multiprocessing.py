@@ -18,6 +18,7 @@ import logging
 from nose import SkipTest
 from test import test_support
 from StringIO import StringIO
+
 try:
     from billiard._ext import _billiard
 except ImportError as exc:
@@ -131,7 +132,6 @@ def get_value(self):
 
 
 class _TestProcesses(BaseTestCase):
-
     ALLOWED_TYPES = ('processes', 'threads')
 
     def test_current(self):
@@ -277,10 +277,12 @@ class _TestProcesses(BaseTestCase):
         self.assertEqual(result, expected)
 
 
-class _UpperCaser(billiard.Process):
+from billiard.process import Process
 
+
+class _UpperCaser(Process):
     def __init__(self):
-        billiard.Process.__init__(self)
+        super(_UpperCaser, self).__init__()
         self.child_conn, self.parent_conn = billiard.Pipe()
 
     def run(self):
@@ -301,7 +303,6 @@ class _UpperCaser(billiard.Process):
 
 
 class _TestSubclassingProcess(BaseTestCase):
-
     ALLOWED_TYPES = ('processes',)
 
     def test_subclassing(self):
@@ -328,7 +329,6 @@ def queue_full(q, maxsize):
 
 
 class _TestQueue(BaseTestCase):
-
     def _test_put(self, queue, child_can_start, parent_can_continue):
         child_can_start.wait()
         for i in range(6):
@@ -456,9 +456,9 @@ class _TestQueue(BaseTestCase):
     def _test_fork(self, queue):
         for i in range(10, 20):
             queue.put(i)
-        # note that at this point the items may only be buffered, so the
-        # process cannot shutdown until the feeder thread has finished
-        # pushing items onto the pipe.
+            # note that at this point the items may only be buffered, so the
+            # process cannot shutdown until the feeder thread has finished
+            # pushing items onto the pipe.
 
     def test_fork(self):
         # Old versions of Queue would fail to create a new feeder
@@ -531,7 +531,6 @@ class _TestQueue(BaseTestCase):
 
 
 class _TestLock(BaseTestCase):
-
     def test_lock(self):
         lock = self.Lock()
         self.assertEqual(lock.acquire(), True)
@@ -555,7 +554,6 @@ class _TestLock(BaseTestCase):
 
 
 class _TestSemaphore(BaseTestCase):
-
     def _test_semaphore(self, sem):
         self.assertReturnsIfImplemented(2, get_value, sem)
         self.assertEqual(sem.acquire(), True)
@@ -582,8 +580,8 @@ class _TestSemaphore(BaseTestCase):
         self._test_semaphore(sem)
         # ## Currently fails on OS/X
         # if HAVE_GETVALUE:
-        #    self.assertRaises(ValueError, sem.release)
-        #    self.assertReturnsIfImplemented(2, get_value, sem)
+        # self.assertRaises(ValueError, sem.release)
+        # self.assertReturnsIfImplemented(2, get_value, sem)
 
     def test_timeout(self):
         if self.TYPE != 'processes':
@@ -609,7 +607,6 @@ class _TestSemaphore(BaseTestCase):
 
 
 class _TestCondition(BaseTestCase):
-
     def f(self, cond, sleeping, woken, timeout=None):
         cond.acquire()
         sleeping.release()
@@ -741,7 +738,6 @@ class _TestCondition(BaseTestCase):
 
 
 class _TestEvent(BaseTestCase):
-
     def _test_event(self, event):
         time.sleep(TIMEOUT2)
         event.set()
@@ -780,7 +776,6 @@ class _TestEvent(BaseTestCase):
 
 
 class _TestValue(BaseTestCase):
-
     ALLOWED_TYPES = ('processes',)
 
     codes_values = [
@@ -821,16 +816,16 @@ class _TestValue(BaseTestCase):
     def test_getobj_getlock(self):
         val1 = self.Value('i', 5)
         lock1 = val1.get_lock()  # noqa
-        obj1 = val1.get_obj()    # noqa
+        obj1 = val1.get_obj()  # noqa
 
         val2 = self.Value('i', 5, lock=None)
         lock2 = val2.get_lock()  # noqa
-        obj2 = val2.get_obj()    # noqa
+        obj2 = val2.get_obj()  # noqa
 
         lock = self.Lock()
         val3 = self.Value('i', 5, lock=lock)
         lock3 = val3.get_lock()  # noqa
-        obj3 = val3.get_obj()    # noqa
+        obj3 = val3.get_obj()  # noqa
         self.assertEqual(lock, lock3)
 
         arr4 = self.Value('i', 5, lock=False)
@@ -845,7 +840,6 @@ class _TestValue(BaseTestCase):
 
 
 class _TestArray(BaseTestCase):
-
     ALLOWED_TYPES = ('processes',)
 
     def f(self, seq):
@@ -884,16 +878,16 @@ class _TestArray(BaseTestCase):
     def test_getobj_getlock_obj(self):
         arr1 = self.Array('i', range(10))
         lock1 = arr1.get_lock()  # noqa
-        obj1 = arr1.get_obj()    # noqa
+        obj1 = arr1.get_obj()  # noqa
 
         arr2 = self.Array('i', range(10), lock=None)
         lock2 = arr2.get_lock()  # noqa
-        obj2 = arr2.get_obj()    # noqa
+        obj2 = arr2.get_obj()  # noqa
 
         lock = self.Lock()
         arr3 = self.Array('i', range(10), lock=lock)
         lock3 = arr3.get_lock()
-        obj3 = arr3.get_obj()    # noqa
+        obj3 = arr3.get_obj()  # noqa
         self.assertEqual(lock, lock3)
 
         arr4 = self.Array('i', range(10), lock=False)
@@ -908,7 +902,6 @@ class _TestArray(BaseTestCase):
 
 
 class _TestContainers(BaseTestCase):
-
     ALLOWED_TYPES = ('manager',)
 
     def test_list(self):
@@ -970,7 +963,6 @@ def sqr(x, wait=0.0):
 
 
 class _TestPool(BaseTestCase):
-
     def test_apply(self):
         papply = self.pool.apply
         self.assertEqual(papply(sqr, (5,)), sqr(5))
@@ -1088,9 +1080,9 @@ class _TestZZZNumberOfObjects(BaseTestCase):
     ALLOWED_TYPES = ('manager',)
 
     def test_number_of_objects(self):
-        EXPECTED_NUMBER = 1                # the pool object is still alive
-        billiard.active_children()         # discard dead process objs
-        gc.collect()                       # do garbage collection
+        EXPECTED_NUMBER = 1  # the pool object is still alive
+        billiard.active_children()  # discard dead process objs
+        gc.collect()  # do garbage collection
         refs = self.manager._number_of_objects()
         debug_info = self.manager._debug_info()
         if refs != EXPECTED_NUMBER:
@@ -1104,7 +1096,6 @@ from billiard.managers import BaseManager, BaseProxy, RemoteError
 
 
 class FooBar(object):
-
     def f(self):
         return 'f()'
 
@@ -1136,13 +1127,13 @@ class IteratorProxy(BaseProxy):
 class MyManager(BaseManager):
     pass
 
+
 MyManager.register('Foo', callable=FooBar)
 MyManager.register('Bar', callable=FooBar, exposed=('f', '_h'))
 MyManager.register('baz', callable=baz, proxytype=IteratorProxy)
 
 
 class _TestMyManager(BaseTestCase):
-
     ALLOWED_TYPES = ('manager',)
 
     def test_mymanager(self):
@@ -1173,6 +1164,7 @@ class _TestMyManager(BaseTestCase):
 
         manager.shutdown()
 
+
 _queue = Queue.Queue()
 
 
@@ -1183,19 +1175,21 @@ def get_queue():
 
 class QueueManager(BaseManager):
     '''manager class used by server process'''
+
+
 QueueManager.register('get_queue', callable=get_queue)
 
 
 class QueueManager2(BaseManager):
     '''manager class which specifies the same interface as QueueManager'''
-QueueManager2.register('get_queue')
 
+
+QueueManager2.register('get_queue')
 
 SERIALIZER = 'xmlrpclib'
 
 
 class _TestRemoteManager(BaseTestCase):
-
     ALLOWED_TYPES = ('manager',)
 
     def _putter(self, address, authkey):
@@ -1236,7 +1230,6 @@ class _TestRemoteManager(BaseTestCase):
 
 
 class _TestManagerRestart(BaseTestCase):
-
     def _putter(self, address, authkey):
         manager = QueueManager(
             address=address, authkey=authkey, serializer=SERIALIZER)
@@ -1262,11 +1255,11 @@ class _TestManagerRestart(BaseTestCase):
         manager.start()
         manager.shutdown()
 
+
 SENTINEL = latin('')
 
 
 class _TestConnection(BaseTestCase):
-
     ALLOWED_TYPES = ('processes', 'threads')
 
     def _echo(self, conn):
@@ -1334,11 +1327,11 @@ class _TestConnection(BaseTestCase):
 
         self.assertEqual(conn.recv(), None)
 
-        really_big_msg = latin('X') * (1024 * 1024 * 16)   # 16Mb
+        really_big_msg = latin('X') * (1024 * 1024 * 16)  # 16Mb
         conn.send_bytes(really_big_msg)
         self.assertEqual(conn.recv_bytes(), really_big_msg)
 
-        conn.send_bytes(SENTINEL)                          # tell child to quit
+        conn.send_bytes(SENTINEL)  # tell child to quit
         child_conn.close()
 
         if self.TYPE == 'processes':
@@ -1372,7 +1365,7 @@ class _TestConnection(BaseTestCase):
 
         p = self.Process(target=self._echo, args=(child_conn,))
         p.start()
-        child_conn.close()    # this might complete before child initializes
+        child_conn.close()  # this might complete before child initializes
 
         msg = latin('hello')
         conn.send_bytes(msg)
@@ -1412,7 +1405,6 @@ class _TestConnection(BaseTestCase):
 
 
 class _TestListenerClient(BaseTestCase):
-
     ALLOWED_TYPES = ('processes', 'threads')
 
     def _test(self, address):
@@ -1430,6 +1422,8 @@ class _TestListenerClient(BaseTestCase):
             self.assertEqual(conn.recv(), 'hello')
             p.join()
             l.close()
+
+
 '''
 class _TestPicklingConnections(BaseTestCase):
     """Test of sending connection and socket objects between processes"""
@@ -1518,7 +1512,6 @@ class _TestPicklingConnections(BaseTestCase):
 
 
 class _TestHeap(BaseTestCase):
-
     ALLOWED_TYPES = ('processes',)
 
     def test_heap(self):
@@ -1567,7 +1560,6 @@ class _Foo(Structure):
 
 
 class _TestSharedCTypes(BaseTestCase):
-
     ALLOWED_TYPES = ('processes', )
 
     def _double(self, x, y, foo, arr, string):
@@ -1615,7 +1607,6 @@ class _TestSharedCTypes(BaseTestCase):
 
 
 class _TestFinalize(BaseTestCase):
-
     ALLOWED_TYPES = ('processes',)
 
     def _test_finalize(self, conn):
@@ -1624,13 +1615,13 @@ class _TestFinalize(BaseTestCase):
 
         a = Foo()
         util.Finalize(a, conn.send, args=('a',))
-        del a           # triggers callback for a
+        del a  # triggers callback for a
 
         b = Foo()
         close_b = util.Finalize(b, conn.send, args=('b',))
-        close_b()       # triggers callback for b
-        close_b()       # does nothing because callback has already been called
-        del b           # does nothing because callback has already been called
+        close_b()  # triggers callback for b
+        close_b()  # does nothing because callback has already been called
+        del b  # does nothing because callback has already been called
 
         c = Foo()
         util.Finalize(c, conn.send, args=('c',))
@@ -1735,8 +1726,8 @@ class _TestLogging(BaseTestCase):
 
 # class _TestLoggingProcessName(BaseTestCase):
 #
-#     def handle(self, record):
-#         assert record.processName == billiard.current_process().name
+# def handle(self, record):
+# assert record.processName == billiard.current_process().name
 #         self.__handled = True
 #
 #     def test_logging(self):
@@ -1758,7 +1749,6 @@ class _TestLogging(BaseTestCase):
 
 
 class TestInvalidHandle(unittest.TestCase):
-
     @unittest.skipIf(WIN32, "skipped on Windows")
     def test_invalid_handles(self):
         conn = _billiard.Connection(44977608)
@@ -1806,6 +1796,7 @@ class ProcessesMixin(object):
         'connection', 'JoinableQueue'
     )))
 
+
 testcases_processes = create_test_cases(ProcessesMixin, type='processes')
 globals().update(testcases_processes)
 
@@ -1820,6 +1811,7 @@ class ManagerMixin(object):
         'Namespace', 'JoinableQueue'
     )))
 
+
 testcases_manager = create_test_cases(ManagerMixin, type='manager')
 globals().update(testcases_manager)
 
@@ -1830,9 +1822,10 @@ class ThreadsMixin(object):
     locals().update(get_attributes(billiard.dummy, (
         'Queue', 'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore',
         'Condition', 'Event', 'Value', 'Array', 'current_process',
-        'active_children', 'Pipe', 'connection', 'dict', 'list',
+        'active_children', 'Pipe', 'dict', 'list',
         'Namespace', 'JoinableQueue'
     )))
+
 
 testcases_threads = create_test_cases(ThreadsMixin, type='threads')
 globals().update(testcases_threads)
@@ -1843,12 +1836,12 @@ class OtherTest(unittest.TestCase):
     def test_deliver_challenge_auth_failure(self):
 
         class _FakeConnection(object):
-
             def recv_bytes(self, size):
                 return bytes('something bogus')
 
             def send_bytes(self, data):
                 pass
+
         self.assertRaises(billiard.AuthenticationError,
                           billiard.connection.deliver_challenge,
                           _FakeConnection(), bytes('abc'))
@@ -1870,6 +1863,7 @@ class OtherTest(unittest.TestCase):
 
             def send_bytes(self, data):
                 pass
+
         self.assertRaises(billiard.AuthenticationError,
                           billiard.connection.answer_challenge,
                           _FakeConnection(), bytes('abc'))
@@ -1885,6 +1879,7 @@ class TestInitializers(unittest.TestCase):
     - see issue 5585
 
     """
+
     def setUp(self):
         self.mgr = billiard.Manager()
         self.ns = self.mgr.Namespace()
@@ -1903,6 +1898,13 @@ class TestInitializers(unittest.TestCase):
     def test_pool_initializer(self):
         self.assertRaises(TypeError, billiard.Pool, initializer=1)
         p = billiard.Pool(1, initializer, (self.ns,))
+        p.close()
+        p.join()
+        self.assertEqual(self.ns.test, 1)
+
+    def test_thread_pool_initializer(self):
+        self.assertRaises(TypeError, billiard.Pool, initializer=1)
+        p = billiard.pool.ThreadPool(1, initializer, (self.ns,))
         p.close()
         p.join()
         self.assertEqual(self.ns.test, 1)
@@ -1936,6 +1938,11 @@ def pool_in_process():
     pool.map(_afunc, [1, 2, 3, 4, 5, 6, 7])
 
 
+def thread_pool_in_process():
+    pool = billiard.pool.ThreadPool(processes=4)
+    pool.map(_afunc, [1, 2, 3, 4, 5, 6, 7])
+
+
 class _file_like(object):
     def __init__(self, delegate):
         self._delegate = delegate
@@ -1959,7 +1966,6 @@ class _file_like(object):
 
 
 class TestStdinBadfiledescriptor(unittest.TestCase):
-
     def test_queue_in_process(self):
         queue = billiard.Queue()
         proc = billiard.Process(target=_TestProcess, args=(queue,))
@@ -1971,6 +1977,11 @@ class TestStdinBadfiledescriptor(unittest.TestCase):
         p.start()
         p.join()
 
+    def test_thread_pool_in_process(self):
+        p = billiard.Process(target=thread_pool_in_process)
+        p.start()
+        p.join()
+
     def test_flushing(self):
         sio = StringIO()
         flike = _file_like(sio)
@@ -1979,6 +1990,7 @@ class TestStdinBadfiledescriptor(unittest.TestCase):
         self.assertTrue(proc)
         flike.flush()
         assert sio.getvalue() == 'foo'
+
 
 testcases_other = [OtherTest, TestInvalidHandle, TestInitializers,
                    TestStdinBadfiledescriptor]
@@ -1994,7 +2006,7 @@ def test_main(run=None):
     if run is None:
         from test.test_support import run_unittest as run
 
-    util.get_temp_dir()     # creates temp directory for use by all processes
+    util.get_temp_dir()  # creates temp directory for use by all processes
 
     billiard.get_logger().setLevel(LOG_LEVEL)
 
@@ -2033,6 +2045,7 @@ def test_main(run=None):
 
 def main():
     test_main(unittest.TextTestRunner(verbosity=2).run)
+
 
 if __name__ == '__main__':
     main()

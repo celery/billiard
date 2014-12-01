@@ -1931,7 +1931,10 @@ class ThreadPool(Pool):
     Process = DummyProcess
 
     def __init__(self, processes=None, initializer=None, initargs=()):
-        Pool.__init__(self, processes, initializer, initargs)
+        super(ThreadPool, self).__init__(processes, initializer, initargs)
+
+    def _make_shortcuts(self):
+        pass
 
     def _setup_queues(self):
         self._inqueue = Queue()
