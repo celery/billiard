@@ -59,7 +59,7 @@ from billiard.connection import Pipe
 class DummyProcess(threading.Thread):
 
     def __init__(self, group=None, target=None, name=None, args=(), kwargs={}):
-        threading.Thread.__init__(self, group, target, name, args, kwargs)
+        super(DummyProcess, self).__init__(group, target, name, args, kwargs)
         self._pid = None
         self._children = weakref.WeakKeyDictionary()
         self._start_called = False
@@ -68,7 +68,6 @@ class DummyProcess(threading.Thread):
     def start(self):
         assert self._parent is current_process()
         self._start_called = True
-        self._parent._children[self] = None
         threading.Thread.start(self)
 
     @property
@@ -93,7 +92,7 @@ class Condition(_Condition):
 
 
 Process = DummyProcess
-current_process = threading.currentThread
+current_process = threading.current_thread()
 current_process()._children = weakref.WeakKeyDictionary()
 
 
