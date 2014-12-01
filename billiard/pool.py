@@ -468,7 +468,9 @@ class Worker(WorkerMixin, Process):
 
 
 class ThreadWorker(WorkerMixin, DummyProcess):
-    pass
+    @property
+    def pid(self):
+    	return self.ident
 
 
 #
