@@ -231,6 +231,7 @@ def run_setup(with_extensions=True):
         zip_safe=False,
         license='BSD',
         tests_require=tests_require,
+        extra_requires={'dill': ['dill']},
         test_suite='nose.collector',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
