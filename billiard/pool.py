@@ -261,17 +261,23 @@ class Worker(Process):
         )
 
     def _make_shortcuts(self):
-        self.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
-        self.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
+        inq_has_writer = hasattr(self.inq, '_writer')
+        outq_has_writier = hasattr(self.outq, '_writer')
+
+        if inq_has_writer:
+            self.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
+            self._quick_put = self.inq._writer.send
+        if outq_has_writier:
+            self.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
+            self._quick_get = self.outq._reader.recv
+            self.send_job_offset = _get_send_offset(self.inq._writer)
+
         if self.synq:
             self.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
             self.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
             self.send_syn_offset = _get_send_offset(self.synq._writer)
         else:
             self.synqR_fd = self.synqW_fd = self._send_syn_offset = None
-        self._quick_put = self.inq._writer.send
-        self._quick_get = self.outq._reader.recv
-        self.send_job_offset = _get_send_offset(self.inq._writer)
 
     def run(self):
         _exit = sys.exit
@@ -1932,9 +1938,6 @@ class ThreadPool(Pool):
 
     def __init__(self, processes=None, initializer=None, initargs=()):
         super(ThreadPool, self).__init__(processes, initializer, initargs)
-
-    def _make_shortcuts(self):
-        pass
 
     def _setup_queues(self):
         self._inqueue = Queue()
