@@ -1951,9 +1951,6 @@ class ThreadPool(Pool):
 
     Worker = ThreadWorker
 
-    def __init__(self, processes=None, initializer=None, initargs=()):
-        super(ThreadPool, self).__init__(processes, initializer, initargs)
-
     def _setup_queues(self):
         self._inqueue = Queue()
         self._outqueue = Queue()
