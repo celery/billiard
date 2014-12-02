@@ -8,30 +8,14 @@ import os
 import signal
 import sys
 
-import pickle as pypickle
-
-try:
-    import dill
-except ImportError:
-    dill = None
-
-try:
-    import cPickle as cpickle
-except ImportError:  # pragma: no cover
-    cpickle = None   # noqa
+import dill
 
 from .exceptions import RestartFreqExceeded
 from .five import monotonic
 
-if sys.version_info < (2, 6) and not dill:  # pragma: no cover
-    # cPickle does not use absolute_imports
-    pickle = pypickle
-    pickle_load = pypickle.load
-    pickle_loads = pypickle.loads
-else:
-    pickle = dill or cpickle or pypickle
-    pickle_load = pickle.load
-    pickle_loads = pickle.loads
+pickle = dill
+pickle_load = pickle.load
+pickle_loads = pickle.loads
 
 # cPickle.loads does not support buffer() objects,
 # but we can just create a StringIO and use load.

@@ -144,12 +144,12 @@ extern HANDLE sigint_event;
  */
 
 #if PY_VERSION_HEX >= 0x03000000
-#  define PICKLE_MODULE "pickle"
+#  define PICKLE_MODULE "dill"
 #  define FROM_FORMAT PyUnicode_FromFormat
 #  define PyInt_FromLong PyLong_FromLong
 #  define PyInt_FromSsize_t PyLong_FromSsize_t
 #else
-#  define PICKLE_MODULE "cPickle"
+#  define PICKLE_MODULE "dill"
 #  define FROM_FORMAT PyString_FromFormat
 #endif
 
