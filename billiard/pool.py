@@ -469,9 +469,17 @@ class Worker(WorkerMixin, Process):
 
 
 class ThreadWorker(WorkerMixin, DummyProcess):
+    def __init__(self, *args, **kwargs):
+        super(ThreadWorker, self).__init__(*args, **kwargs)
+
+        self.daemon = True
+
     @property
     def pid(self):
         return self.ident
+
+    def terminate_controlled(self):
+        self._controlled_termination = True
 
 
 #
