@@ -1,8 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
+from __future__ import absolute_import
 import sys
 
 if sys.version_info[0] == 3:
-    from billiard.py3.dummy.connection import *
+    from ..py3.dummy import connection
 else:
-    from billiard.py2.dummy.connection import *
+    from ..py2.dummy import connection
+
+sys.modules[__name__] = connection
