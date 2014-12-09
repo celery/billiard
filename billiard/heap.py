@@ -9,23 +9,22 @@
 from __future__ import absolute_import
 
 import bisect
+import errno
 import mmap
 import os
 import sys
 import threading
-import itertools
+import tempfile
+
+from . import context
+from . import reduction
+from . import util
 
 from ._ext import _billiard, win32
-from .util import Finalize, info, get_temp_dir
-from .forking import assert_spawning
-from .reduction import ForkingPickler
 
 __all__ = ['BufferWrapper']
 
-try:
-    maxsize = sys.maxsize
-except AttributeError:
-    maxsize = sys.maxint
+PY3 = sys.version_info[0] == 3
 
 #
 # Inheirtable class which wraps an mmap, and from which blocks can be allocated
@@ -35,17 +34,28 @@ if sys.platform == 'win32':
 
     class Arena(object):
 
-        _counter = itertools.count()
+        _rand = tempfile._RandomNameSequence()
 
         def __init__(self, size):
             self.size = size
-            self.name = 'pym-%d-%d' % (os.getpid(), next(Arena._counter))
-            self.buffer = mmap.mmap(-1, self.size, tagname=self.name)
-            assert win32.GetLastError() == 0, 'tagname already in use'
+            pid = os.getpid()
+            for i in range(100):
+                name = 'pym-%d-%s' % (pid, next(self._rand))
+                buf = mmap.mmap(-1, size, tagname=name)
+                if win32.GetLastError() == 0:
+                    break
+                # we have reopened a preexisting map
+                buf.close()
+            else:
+                exc = IOError('Cannot find name for new mmap')
+                exc.errno = errno.EEXIST
+                raise exc
+            self.name = name
+            self.buffer = buf
             self._state = (self.size, self.name)
 
         def __getstate__(self):
-            assert_spawning(self)
+            context.assert_spawning(self)
             return self._state
 
         def __setstate__(self, state):
@@ -57,29 +67,37 @@ else:
 
     class Arena(object):
 
-        _counter = itertools.count()
-
-        def __init__(self, size, fileno=-1):
-            from .forking import _forking_is_enabled
+        def __init__(self, size, fd=-1):
             self.size = size
-            self.fileno = fileno
-            if fileno == -1 and not _forking_is_enabled:
-                name = os.path.join(
-                    get_temp_dir(),
-                    'pym-%d-%d' % (os.getpid(), next(self._counter)))
-                self.fileno = os.open(
-                    name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
-                os.unlink(name)
-                os.ftruncate(self.fileno, size)
-            self.buffer = mmap.mmap(self.fileno, self.size)
+            self.fd = fd
+            if fd == -1:
+                self.fd, name = tempfile.mkstemp(
+                    prefix='pym-%d-' % (os.getpid(), ),
+                    dir=util.get_temp_dir(),
+                )
+                if PY3:
+                    util.Finalize(self, os.close, (self.fd, ))
+                    with open(self.fd, 'wb', closefd=False) as f:
+                        f.write(b'\0' * size)
+                else:
+                    self.fd = os.open(
+                        name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600,
+                    )
+                    util.Finalize(self, os.close, (self.fd, ))
+                    os.unlink(name)
+                    os.ftruncate(self.fd, size)
+            self.buffer = mmap.mmap(self.fd, self.size)
 
     def reduce_arena(a):
-        if a.fileno == -1:
+        if a.fd == -1:
             raise ValueError('Arena is unpicklable because'
                              'forking was enabled when it was created')
-        return Arena, (a.size, a.fileno)
+        return rebuild_arena, (a.size, reduction.DupFd(a.fd))
 
-    ForkingPickler.register(Arena, reduce_arena)
+    def rebuild_arena(size, dupfd):
+        return Arena(size, dupfd.detach())
+
+    reduction.register(Arena, reduce_arena)
 
 #
 # Class allowing allocation of chunks of memory from arenas
@@ -115,7 +133,7 @@ class Heap(object):
         if i == len(self._lengths):
             length = self._roundup(max(self._size, size), mmap.PAGESIZE)
             self._size *= 2
-            info('allocating a new mmap of length %d', length)
+            util.info('allocating a new mmap of length %d', length)
             arena = Arena(length)
             self._arenas.append(arena)
             return (arena, 0, length)
@@ -195,11 +213,11 @@ class Heap(object):
         # immediately, the block is added to a list of blocks to be freed
         # synchronously sometimes later from malloc() or free(), by calling
         # _free_pending_blocks() (appending and retrieving from a list is not
-        # strictly thread-safe but under cPython it's atomic thanks
-        # to the GIL).
+        # strictly thread-safe but under cPython it's atomic
+        # thanks to the GIL).
         assert os.getpid() == self._lastpid
         if not self._lock.acquire(False):
-            # can't aquire the lock right now, add the block to the list of
+            # can't acquire the lock right now, add the block to the list of
             # pending blocks to free
             self._pending_free_blocks.append(block)
         else:
@@ -213,12 +231,11 @@ class Heap(object):
 
     def malloc(self, size):
         # return a block of right size (possibly rounded up)
-        assert 0 <= size < maxsize
+        assert 0 <= size < sys.maxsize
         if os.getpid() != self._lastpid:
             self.__init__()                     # reinitialize after fork
-        self._lock.acquire()
-        self._free_pending_blocks()
-        try:
+        with self._lock:
+            self._free_pending_blocks()
             size = self._roundup(max(size, 1), self._alignment)
             (arena, start, stop) = self._malloc(size)
             new_stop = start + size
@@ -227,8 +244,6 @@ class Heap(object):
             block = (arena, start, new_stop)
             self._allocated_blocks.add(block)
             return block
-        finally:
-            self._lock.release()
 
 #
 # Class representing a chunk of an mmap -- can be inherited
@@ -240,10 +255,10 @@ class BufferWrapper(object):
     _heap = Heap()
 
     def __init__(self, size):
-        assert 0 <= size < maxsize
+        assert 0 <= size < sys.maxsize
         block = BufferWrapper._heap.malloc(size)
         self._state = (block, size)
-        Finalize(self, BufferWrapper._heap.free, args=(block,))
+        util.Finalize(self, BufferWrapper._heap.free, args=(block,))
 
     def get_address(self):
         (arena, start, stop), size = self._state
@@ -253,3 +268,7 @@ class BufferWrapper(object):
 
     def get_size(self):
         return self._state[1]
+
+    def create_memoryview(self):
+        (arena, start, stop), size = self._state
+        return memoryview(arena.buffer)[start:start + size]

@@ -1,7 +1,7 @@
 ========
 billiard
 ========
-:version: 3.4.0.0a1
+:version: 3.4.0.0b1
 
 About
 -----

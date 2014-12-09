@@ -147,14 +147,11 @@ if sys.platform == 'win32':
     multiprocessing_srcs = [
         'Modules/_billiard/multiprocessing.c',
         'Modules/_billiard/semaphore.c',
-        'Modules/_billiard/pipe_connection.c',
-        'Modules/_billiard/socket_connection.c',
         'Modules/_billiard/win32_functions.c',
     ]
 else:
     multiprocessing_srcs = [
         'Modules/_billiard/multiprocessing.c',
-        'Modules/_billiard/socket_connection.c',
     ]
 
     if macros.get('HAVE_SEM_OPEN', False):
@@ -212,9 +209,8 @@ def run_setup(with_extensions=True):
                 depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
             ),
         ]
-    exclude = 'billiard.py2' if is_py3k else 'billiard.py3'
     packages = find_packages(exclude=[
-        'ez_setup', 'tests', 'funtests.*', 'tests.*', exclude,
+        'ez_setup', 'tests', 'funtests.*', 'tests.*',
     ])
     setup(
         name='billiard',
@@ -238,12 +234,10 @@ def run_setup(with_extensions=True):
             'Programming Language :: Python',
             'Programming Language :: C',
             'Programming Language :: Python :: 2',
-            'Programming Language :: Python :: 2.5',
-            'Programming Language :: Python :: 2.6',
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.2',
             'Programming Language :: Python :: 3.3',
+            'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: Jython',
             'Programming Language :: Python :: Implementation :: PyPy',

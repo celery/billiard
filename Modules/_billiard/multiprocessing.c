@@ -17,11 +17,6 @@
 
 PyObject *create_win32_namespace(void);
 
-PyObject *Billiard_pickle_dumps;
-PyObject *Billiard_pickle_loads;
-PyObject *Billiard_pickle_protocol;
-PyObject *Billiard_BufferTooShort;
-
 /*
  * Function which raises exceptions based on error codes
  */
@@ -90,6 +85,74 @@ ProcessingCtrlHandler(DWORD dwCtrlType)
     SetEvent(sigint_event);
     return FALSE;
 }
+
+
+static PyObject *
+Billiard_closesocket(PyObject *self, PyObject *args)
+{
+    HANDLE handle;
+    int ret;
+
+    if (!PyArg_ParseTuple(args, F_HANDLE ":closesocket" , &handle))
+        return NULL;
+
+    Py_BEGIN_ALLOW_THREADS
+    ret = closesocket((SOCKET) handle);
+    Py_END_ALLOW_THREADS
+
+    if (ret)
+        return PyErr_SetExcFromWindowsErr(PyExc_IOError, WSAGetLastError());
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+Billiard_recv(PyObject *self, PyObject *args)
+{
+    HANDLE handle;
+    int size, nread;
+    PyObject *buf;
+
+    if (!PyArg_ParseTuple(args, F_HANDLE "i:recv" , &handle, &size))
+        return NULL;
+
+    buf = PyBytes_FromStringAndSize(NULL, size);
+    if (!buf)
+        return NULL;
+
+    Py_BEGIN_ALLOW_THREADS
+    nread = recv((SOCKET) handle, PyBytes_AS_STRING(buf), size, 0);
+    Py_END_ALLOW_THREADS
+
+    if (nread < 0) {
+        Py_DECREF(buf);
+        return PyErr_SetExcFromWindowsErr(PyExc_IOError, WSAGetLastError());
+    }
+    _PyBytes_Resize(&buf, nread);
+    return buf;
+}
+
+static PyObject *
+Billiard_send(PyObject *self, PyObject *args)
+{
+    HANDLE handle;
+    Py_buffer buf;
+    int ret, length;
+
+    if (!PyArg_ParseTuple(args, F_HANDLE "y*:send" , &handle, &buf))
+        return NULL;
+
+    length = (int)Py_MIN(buf.len, INT_MAX);
+
+    Py_BEGIN_ALLOW_THREADS
+    ret = send((SOCKET) handle, buf.buf, length, 0);
+    Py_END_ALLOW_THREADS
+
+    PyBuffer_Release(&buf);
+    if (ret < 0)
+        return PyErr_SetExcFromWindowsErr(PyExc_IOError, WSAGetLastError());
+    return PyLong_FromLong(ret);
+}
+
 
 /*
  * Unix only
@@ -278,6 +341,14 @@ static PyMethodDef Billiard_module_methods[] = {
      "read(fd, buffer) -> bytes\n\n"
      "Read from file descriptor into buffer."},
 #endif
+#ifdef MS_WINDOWS
+    {"closesocket", Billiard_closesocket, METH_VARARGS, ""},
+    {"recv", Billiard_recv, METH_VARARGS, ""},
+    {"send", Billiard_send, METH_VARARGS, ""},
+#endif
+#ifndef POSIX_SEMAPHORES_NOT_ENABLED
+    {"sem_unlink", Billiard_semlock_unlink, METH_VARARGS, ""},
+#endif
     {NULL}
 };
 
@@ -296,28 +367,6 @@ init_billiard(void)
     if (!module)
         return;
 
-    /* Get copy of objects from pickle */
-    temp = PyImport_ImportModule(PICKLE_MODULE);
-    if (!temp)
-        return;
-    Billiard_pickle_dumps = PyObject_GetAttrString(temp, "dumps");
-    Billiard_pickle_loads = PyObject_GetAttrString(temp, "loads");
-    Billiard_pickle_protocol = PyObject_GetAttrString(temp, "HIGHEST_PROTOCOL");
-    Py_XDECREF(temp);
-
-    /* Get copy of BufferTooShort */
-    temp = PyImport_ImportModule("billiard");
-    if (!temp)
-        return;
-    Billiard_BufferTooShort = PyObject_GetAttrString(temp, "BufferTooShort");
-    Py_XDECREF(temp);
-
-    /* Add connection type to module */
-    if (PyType_Ready(&BilliardConnectionType) < 0)
-        return;
-    Py_INCREF(&BilliardConnectionType);
-    PyModule_AddObject(module, "Connection", (PyObject*)&BilliardConnectionType);
-
 #if defined(MS_WINDOWS) ||                                              \
   (defined(HAVE_SEM_OPEN) && !defined(POSIX_SEMAPHORES_NOT_ENABLED))
     /* Add SemLock type to module */
@@ -330,13 +379,6 @@ init_billiard(void)
 #endif
 
 #ifdef MS_WINDOWS
-    /* Add PipeConnection to module */
-    if (PyType_Ready(&BilliardPipeConnectionType) < 0)
-        return;
-    Py_INCREF(&BilliardPipeConnectionType);
-    PyModule_AddObject(module, "PipeConnection",
-                       (PyObject*)&BilliardPipeConnectionType);
-
     /* Initialize win32 class and add to multiprocessing */
     temp = create_win32_namespace();
     if (!temp)

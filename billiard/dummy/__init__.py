@@ -93,7 +93,7 @@ class Condition(_Condition):
 
 
 Process = DummyProcess
-current_process = threading.currentThread
+current_process = threading.current_thread
 current_process()._children = weakref.WeakKeyDictionary()
 
 

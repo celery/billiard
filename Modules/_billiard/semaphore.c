@@ -557,7 +557,7 @@ Billiard_semlock_afterfork(BilliardSemLockObject *self)
     Py_RETURN_NONE;
 }
 
-static PyObject *
+PyObject *
 Billiard_semlock_unlink(PyObject *ignore, PyObject *args)
 {
     char *name;

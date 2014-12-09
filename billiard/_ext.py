@@ -14,12 +14,6 @@ else:
     except ImportError:
         import _multiprocessing as _billiard            # noqa
         supports_exec = False
-    try:
-        Connection = _billiard.Connection
-    except AttributeError:  # Py3
-        from billiard.connection import Connection  # noqa
-
-    PipeConnection = getattr(_billiard, "PipeConnection", None)
 
 
 def ensure_multiprocessing():

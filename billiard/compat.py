@@ -1,10 +1,11 @@
 from __future__ import absolute_import
 
 import errno
+import numbers
 import os
 import sys
 
-from .five import range
+from .five import range, zip_longest
 
 if sys.platform == 'win32':
     try:
@@ -16,6 +17,18 @@ if sys.platform == 'win32':
             from _multiprocessing import win32 as _winapi  # noqa
 else:
     _winapi = None  # noqa
+
+try:
+    import resource
+except ImportError:  # pragma: no cover
+    resource = None
+
+try:
+    from io import UnsupportedOperation
+    FILENO_ERRORS = (AttributeError, ValueError, UnsupportedOperation)
+except ImportError:  # pragma: no cover
+    # Py2
+    FILENO_ERRORS = (AttributeError, ValueError)  # noqa
 
 
 if sys.version_info > (2, 7, 5):
@@ -56,6 +69,43 @@ else:
                 return _bytes(args[0]).encode(*args[1:])
             return _bytes(*args)
 
+
+def maybe_fileno(f):
+    """Get object fileno, or :const:`None` if not defined."""
+    if isinstance(f, numbers.Integral):
+        return f
+    try:
+        return f.fileno()
+    except FILENO_ERRORS:
+        pass
+
+
+def get_fdmax(default=None):
+    """Return the maximum number of open file descriptors
+    on this system.
+
+    :keyword default: Value returned if there's no file
+                      descriptor limit.
+
+    """
+    try:
+        return os.sysconf('SC_OPEN_MAX')
+    except:
+        pass
+    if resource is None:  # Windows
+        return default
+    fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+    if fdmax == resource.RLIM_INFINITY:
+        return default
+    return fdmax
+
+
+def uniq(it):
+    """Return all unique elements in ``it``, preserving order."""
+    seen = set()
+    return (seen.add(obj) or obj for obj in it if obj not in seen)
+
+
 try:
     closerange = os.closerange
 except AttributeError:
@@ -67,6 +117,28 @@ except AttributeError:
             except OSError as exc:
                 if exc.errno != errno.EBADF:
                     raise
+
+    def close_open_fds(keep=None):
+        # must make sure this is 0-inclusive (Issue #celery/1882)
+        keep = list(uniq(sorted(
+            f for f in map(maybe_fileno, keep or []) if f is not None
+        )))
+        maxfd = get_fdmax(default=2048)
+        kL, kH = iter([-1] + keep), iter(keep + [maxfd])
+        for low, high in zip_longest(kL, kH):
+            if low + 1 != high:
+                closerange(low + 1, high)
+else:
+    def close_open_fds(keep=None):  # noqa
+        keep = [maybe_fileno(f)
+                for f in (keep or []) if maybe_fileno(f) is not None]
+        for fd in reversed(range(get_fdmax(default=2048))):
+            if fd not in keep:
+                try:
+                    os.close(fd)
+                except OSError as exc:
+                    if exc.errno != errno.EBADF:
+                        raise
 
 
 def get_errno(exc):
@@ -82,6 +154,26 @@ def get_errno(exc):
         except AttributeError:
             pass
     return 0
+
+try:
+    import _posixsubprocess
+except ImportError:
+    def spawnv_passfds(path, args, passfds):
+        if not os.fork():
+            close_open_fds(keep=sorted(passfds))
+            os.execv(os.fsencode(path), args)
+else:
+    def spawnv_passfds(path, args, passfds):
+        passfds = sorted(passfds)
+        errpipe_read, errpipe_write = os.pipe()
+        try:
+            return _posixsubprocess.fork_exec(
+                args, [os.fsencode(path)], True, passfds, None, None,
+                -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
+                False, False, None)
+        finally:
+            os.close(errpipe_read)
+            os.close(errpipe_write)
 
 
 if sys.platform == 'win32':

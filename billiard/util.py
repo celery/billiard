@@ -12,6 +12,8 @@ import errno
 import functools
 import atexit
 
+from subprocess import _args_from_interpreter_flags  # noqa
+
 from multiprocessing.util import (  # noqa
     _afterfork_registry,
     _afterfork_counter,

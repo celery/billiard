@@ -18,8 +18,8 @@ from pickle import load, HIGHEST_PROTOCOL
 from billiard import util
 from billiard import process
 from billiard.five import int_types
-from .reduction import dump
 from .compat import _winapi as win32
+from .reduction import dump
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
            'duplicate', 'close']

@@ -21,24 +21,30 @@ import array
 
 from traceback import format_exc
 
-from . import util, connection
+from . import connection
+from . import context
+from . import pool
+from . import process
+from . import reduction
+from . import util
+from . import get_context
+
 from .five import Queue, items, monotonic
-from .pool import Pool
-from .process import (
-    AuthenticationString, Process, current_process, active_children,
-)
-from .forking import exit, Popen
-from .reduction import ForkingPickler
-from .util import Finalize, error, info
+
+PY3 = sys.version_info[0] == 3
 
 #
 # Register some things for pickling
 #
 
 
-def reduce_array(a):
-    return array.array, (a.typecode, a.tostring())
-ForkingPickler.register(array.array, reduce_array)
+if PY3:
+    def reduce_array(a):
+        return array.array, (a.typecode, a.tobytes())
+else:
+    def reduce_array(a):  # noqa
+        return array.array, (a.typecode, a.tostring())
+reduction.register(array.array, reduce_array)
 
 view_types = [type(getattr({}, name)())
               for name in ('items', 'keys', 'values')]
@@ -47,13 +53,7 @@ if view_types[0] is not list:  # only needed in Py3.0
     def rebuild_as_list(obj):
         return list, (list(obj), )
     for view_type in view_types:
-        ForkingPickler.register(view_type, rebuild_as_list)
-        try:
-            import copyreg
-        except ImportError:
-            pass
-        else:
-            copyreg.pickle(view_type, rebuild_as_list)
+        reduction.register(view_type, rebuild_as_list)
 
 #
 # Type for identifying shared objects
@@ -76,8 +76,8 @@ class Token(object):
         (self.typeid, self.address, self.id) = state
 
     def __repr__(self):
-        return 'Token(typeid=%r, address=%r, id=%r)' % \
-               (self.typeid, self.address, self.id)
+        return '%s(typeid=%r, address=%r, id=%r)' % \
+            (self.__class__.__name__, self.typeid, self.address, self.id)
 
 #
 # Function for communication with a manager's server process
@@ -151,7 +151,7 @@ class Server(object):
     def __init__(self, registry, address, authkey, serializer):
         assert isinstance(authkey, bytes)
         self.registry = registry
-        self.authkey = AuthenticationString(authkey)
+        self.authkey = process.AuthenticationString(authkey)
         Listener, Client = listener_client[serializer]
 
         # do authentication later
@@ -161,28 +161,38 @@ class Server(object):
         self.id_to_obj = {'0': (None, ())}
         self.id_to_refcount = {}
         self.mutex = threading.RLock()
-        self.stop = 0
 
     def serve_forever(self):
         '''
         Run the server forever
         '''
-        current_process()._manager_server = self
+        self.stop_event = threading.Event()
+        process.current_process()._manager_server = self
         try:
+            accepter = threading.Thread(target=self.accepter)
+            accepter.daemon = True
+            accepter.start()
             try:
-                while 1:
-                    try:
-                        c = self.listener.accept()
-                    except (OSError, IOError):
-                        continue
-                    t = threading.Thread(target=self.handle_request, args=(c,))
-                    t.daemon = True
-                    t.start()
+                while not self.stop_event.is_set():
+                    self.stop_event.wait(1)
             except (KeyboardInterrupt, SystemExit):
                 pass
         finally:
-            self.stop = 999
-            self.listener.close()
+            if sys.stdout != sys.__stdout__:
+                util.debug('resetting stdout, stderr')
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+            sys.exit(0)
+
+    def accepter(self):
+        while True:
+            try:
+                c = self.listener.accept()
+            except OSError:
+                continue
+            t = threading.Thread(target=self.handle_request, args=(c, ))
+            t.daemon = True
+            t.start()
 
     def handle_request(self, c):
         '''
@@ -212,9 +222,9 @@ class Server(object):
                 c.send(('#TRACEBACK', format_exc()))
             except Exception:
                 pass
-            info('Failure to send message: %r', msg)
-            info(' ... request was %r', request)
-            info(' ... exception was %r', exc)
+            util.info('Failure to send message: %r', msg)
+            util.info(' ... request was %r', request)
+            util.info(' ... exception was %r', exc)
 
         c.close()
 
@@ -223,13 +233,13 @@ class Server(object):
         Handle requests from the proxies in a particular process/thread
         '''
         util.debug('starting server thread to service %r',
-                   threading.currentThread().name)
+                   threading.current_thread().name)
 
         recv = conn.recv
         send = conn.send
         id_to_obj = self.id_to_obj
 
-        while not self.stop:
+        while not self.stop_event.is_set():
 
             try:
                 methodname = obj = None
@@ -273,7 +283,7 @@ class Server(object):
 
             except EOFError:
                 util.debug('got EOF -- exiting thread serving %r',
-                           threading.currentThread().name)
+                           threading.current_thread().name)
                 sys.exit(0)
 
             except Exception:
@@ -285,10 +295,10 @@ class Server(object):
                 except Exception:
                     send(('#UNSERIALIZABLE', repr(msg)))
             except Exception as exc:
-                info('exception in thread serving %r',
-                     threading.currentThread().name)
-                info(' ... message was %r', msg)
-                info(' ... exception was %r', exc)
+                util.info('exception in thread serving %r',
+                          threading.current_thread().name)
+                util.info(' ... message was %r', msg)
+                util.info(' ... exception was %r', exc)
                 conn.close()
                 sys.exit(1)
 
@@ -336,33 +346,13 @@ class Server(object):
         Shutdown this process
         '''
         try:
-            try:
-                util.debug('manager received shutdown message')
-                c.send(('#RETURN', None))
-
-                if sys.stdout != sys.__stdout__:
-                    util.debug('resetting stdout, stderr')
-                    sys.stdout = sys.__stdout__
-                    sys.stderr = sys.__stderr__
-
-                util._run_finalizers(0)
-
-                for p in active_children():
-                    util.debug('terminating a child process of manager')
-                    p.terminate()
-
-                for p in active_children():
-                    util.debug('terminating a child process of manager')
-                    p.join()
-
-                util._run_finalizers()
-                info('manager exiting with exitcode 0')
-            except:
-                if not error("Error while manager shutdown", exc_info=True):
-                    import traceback
-                    traceback.print_exc()
+            util.debug('Manager received shutdown message')
+            c.send(('#RETURN', None))
+        except:
+            import traceback
+            traceback.print_exc()
         finally:
-            exit(0)
+            self.stop_event.set()
 
     def create(self, c, typeid, *args, **kwds):
         '''
@@ -409,7 +399,7 @@ class Server(object):
         '''
         Spawn a new thread to serve this connection
         '''
-        threading.currentThread().name = name
+        threading.current_thread().name = name
         c.send(('#RETURN', None))
         self.serve_client(c)
 
@@ -457,15 +447,17 @@ class BaseManager(object):
     _registry = {}
     _Server = Server
 
-    def __init__(self, address=None, authkey=None, serializer='pickle'):
+    def __init__(self, address=None, authkey=None, serializer='pickle',
+                 ctx=None):
         if authkey is None:
-            authkey = current_process().authkey
+            authkey = process.current_process().authkey
         self._address = address     # XXX not final address if eg ('', 0)
-        self._authkey = AuthenticationString(authkey)
+        self._authkey = process.AuthenticationString(authkey)
         self._state = State()
         self._state.value = State.INITIAL
         self._serializer = serializer
         self._Listener, self._Client = listener_client[serializer]
+        self._ctx = ctx or get_context()
 
     def __reduce__(self):
         return (type(self).from_address,
@@ -501,7 +493,7 @@ class BaseManager(object):
         reader, writer = connection.Pipe(duplex=False)
 
         # spawn process which runs a server
-        self._process = Process(
+        self._process = self._ctx.Process(
             target=type(self)._run_server,
             args=(self._registry, self._address, self._authkey,
                   self._serializer, writer, initializer, initargs),
@@ -517,7 +509,7 @@ class BaseManager(object):
 
         # register a finalizer
         self._state.value = State.STARTED
-        self.shutdown = Finalize(
+        self.shutdown = util.Finalize(
             self, type(self)._finalize_manager,
             args=(self._process, self._address, self._authkey,
                   self._state, self._Client),
@@ -541,7 +533,7 @@ class BaseManager(object):
         writer.close()
 
         # run the manager
-        info('manager serving at %r', server.address)
+        util.info('manager serving at %r', server.address)
         server.serve_forever()
 
     def _create(self, typeid, *args, **kwds):
@@ -561,7 +553,10 @@ class BaseManager(object):
         '''
         Join the manager process (if it has been spawned)
         '''
-        self._process.join(timeout)
+        if self._process is not None:
+            self._process.join(timeout)
+            if not self._process.is_alive():
+                self._process = None
 
     def _debug_info(self):
         '''
@@ -584,6 +579,9 @@ class BaseManager(object):
             conn.close()
 
     def __enter__(self):
+        if self._state.value == State.INITIAL:
+            self.start()
+        assert self._state.value == State.STARTED
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -595,7 +593,7 @@ class BaseManager(object):
         Shutdown the manager process; will be registered as a finalizer
         '''
         if process.is_alive():
-            info('sending shutdown message to manager')
+            util.info('sending shutdown message to manager')
             try:
                 conn = _Client(address, authkey=authkey)
                 try:
@@ -607,13 +605,13 @@ class BaseManager(object):
 
             process.join(timeout=0.2)
             if process.is_alive():
-                info('manager still alive')
+                util.info('manager still alive')
                 if hasattr(process, 'terminate'):
-                    info('trying to `terminate()` manager process')
+                    util.info('trying to `terminate()` manager process')
                     process.terminate()
                     process.join(timeout=0.1)
                     if process.is_alive():
-                        info('manager still alive after terminate')
+                        util.info('manager still alive after terminate')
 
         state.value = State.SHUTDOWN
         try:
@@ -692,14 +690,11 @@ class BaseProxy(object):
 
     def __init__(self, token, serializer, manager=None,
                  authkey=None, exposed=None, incref=True):
-        BaseProxy._mutex.acquire()
-        try:
+        with BaseProxy._mutex:
             tls_idset = BaseProxy._address_to_local.get(token.address, None)
             if tls_idset is None:
                 tls_idset = util.ForkAwareLocal(), ProcessLocalSet()
                 BaseProxy._address_to_local[token.address] = tls_idset
-        finally:
-            BaseProxy._mutex.release()
 
         # self._tls is used to record the connection used by this
         # thread to communicate with the manager at token.address
@@ -717,11 +712,11 @@ class BaseProxy(object):
         self._Client = listener_client[serializer][1]
 
         if authkey is not None:
-            self._authkey = AuthenticationString(authkey)
+            self._authkey = process.AuthenticationString(authkey)
         elif self._manager is not None:
             self._authkey = self._manager._authkey
         else:
-            self._authkey = current_process().authkey
+            self._authkey = process.current_process().authkey
 
         if incref:
             self._incref()
@@ -730,9 +725,9 @@ class BaseProxy(object):
 
     def _connect(self):
         util.debug('making connection to manager')
-        name = current_process().name
-        if threading.currentThread().name != 'MainThread':
-            name += '|' + threading.currentThread().name
+        name = process.current_process().name
+        if threading.current_thread().name != 'MainThread':
+            name += '|' + threading.current_thread().name
         conn = self._Client(self._token.address, authkey=self._authkey)
         dispatch(conn, None, 'accept_connection', (name,))
         self._tls.connection = conn
@@ -745,7 +740,7 @@ class BaseProxy(object):
             conn = self._tls.connection
         except AttributeError:
             util.debug('thread %r does not own a connection',
-                       threading.currentThread().name)
+                       threading.current_thread().name)
             self._connect()
             conn = self._tls.connection
 
@@ -781,7 +776,7 @@ class BaseProxy(object):
 
         state = self._manager and self._manager._state
 
-        self._close = Finalize(
+        self._close = util.Finalize(
             self, BaseProxy._decref,
             args=(self._token, self._authkey, state,
                   self._tls, self._idset, self._Client),
@@ -809,7 +804,7 @@ class BaseProxy(object):
         # the process owns no more references to objects for this manager
         if not idset and hasattr(tls, 'connection'):
             util.debug('thread %r has no more proxies so closing conn',
-                       threading.currentThread().name)
+                       threading.current_thread().name)
             tls.connection.close()
             del tls.connection
 
@@ -819,11 +814,11 @@ class BaseProxy(object):
             self._incref()
         except Exception as exc:
             # the proxy may just be for a manager which has shutdown
-            info('incref failed: %s', exc)
+            util.info('incref failed: %s', exc)
 
     def __reduce__(self):
         kwds = {}
-        if Popen.thread_is_spawning():
+        if context.get_spawning_popen() is not None:
             kwds['authkey'] = self._authkey
 
         if getattr(self, '_isauto', False):
@@ -838,8 +833,8 @@ class BaseProxy(object):
         return self._getvalue()
 
     def __repr__(self):
-        return '<%s object, typeid %r at %s>' % \
-               (type(self).__name__, self._token.typeid, '0x%x' % id(self))
+        return '<%s object, typeid %r at %#x>' % \
+               (type(self).__name__, self._token.typeid, id(self))
 
     def __str__(self):
         '''
@@ -861,14 +856,14 @@ def RebuildProxy(func, token, serializer, kwds):
 
     If possible the shared object is returned, or otherwise a proxy for it.
     '''
-    server = getattr(current_process(), '_manager_server', None)
+    server = getattr(process.current_process(), '_manager_server', None)
 
     if server and server.address == token.address:
         return server.id_to_obj[token.id][0]
     else:
         incref = (
             kwds.pop('incref', True) and
-            not getattr(current_process(), '_inheriting', False)
+            not getattr(process.current_process(), '_inheriting', False)
         )
         return func(token, serializer, incref=incref, **kwds)
 
@@ -916,7 +911,7 @@ def AutoProxy(token, serializer, manager=None, authkey=None,
     if authkey is None and manager is not None:
         authkey = manager._authkey
     if authkey is None:
-        authkey = current_process().authkey
+        authkey = process.current_process().authkey
 
     ProxyType = MakeProxyType('AutoProxy[%s]' % token.typeid, exposed)
     proxy = ProxyType(token, serializer, manager=manager, authkey=authkey,
@@ -941,7 +936,7 @@ class Namespace(object):
             if not name.startswith('_'):
                 temp.append('%s=%r' % (name, value))
         temp.sort()
-        return 'Namespace(%s)' % str.join(', ', temp)
+        return '%s(%s)' % (self.__class__.__name__, ', '.join(temp))
 
 
 class Value(object):
@@ -998,8 +993,9 @@ class IteratorProxy(BaseProxy):
 class AcquirerProxy(BaseProxy):
     _exposed_ = ('acquire', 'release')
 
-    def acquire(self, blocking=True):
-        return self._callmethod('acquire', (blocking,))
+    def acquire(self, blocking=True, timeout=None):
+        args = (blocking, ) if timeout is None else (blocking, timeout)
+        return self._callmethod('acquire', args)
 
     def release(self):
         return self._callmethod('release')
@@ -1058,6 +1054,31 @@ class EventProxy(BaseProxy):
         return self._callmethod('wait', (timeout,))
 
 
+class BarrierProxy(BaseProxy):
+    _exposed_ = ('__getattribute__', 'wait', 'abort', 'reset')
+
+    def wait(self, timeout=None):
+        return self._callmethod('wait', (timeout, ))
+
+    def abort(self):
+        return self._callmethod('abort')
+
+    def reset(self):
+        return self._callmethod('reset')
+
+    @property
+    def parties(self):
+        return self._callmethod('__getattribute__', ('parties', ))
+
+    @property
+    def n_waiting(self):
+        return self._callmethod('__getattribute__', ('n_waiting', ))
+
+    @property
+    def broken(self):
+        return self._callmethod('__getattribute__', ('broken', ))
+
+
 class NamespaceProxy(BaseProxy):
     _exposed_ = ('__getattribute__', '__setattr__', '__delattr__')
 
@@ -1091,13 +1112,15 @@ class ValueProxy(BaseProxy):
     value = property(get, set)
 
 
-BaseListProxy = MakeProxyType('BaseListProxy', (
-    '__add__', '__contains__', '__delitem__', '__delslice__',
-    '__getitem__', '__getslice__', '__len__', '__mul__',
-    '__reversed__', '__rmul__', '__setitem__', '__setslice__',
+_ListProxy_Attributes = (
+    '__add__', '__contains__', '__delitem__', '__getitem__', '__len__',
+    '__mul__', '__reversed__', '__rmul__', '__setitem__',
     'append', 'count', 'extend', 'index', 'insert', 'pop', 'remove',
     'reverse', 'sort', '__imul__',
-))  # XXX __getslice__ and __setslice__ unneeded in Py3.0
+)
+if not PY3:
+    _ListProxy_Attributes += ('__getslice__', '__setslice__', '__delslice__')
+BaseListProxy = MakeProxyType('BaseListProxy', _ListProxy_Attributes)
 
 
 class ListProxy(BaseListProxy):
@@ -1118,22 +1141,34 @@ DictProxy = MakeProxyType('DictProxy', (
 ))
 
 
-ArrayProxy = MakeProxyType('ArrayProxy', (
-    '__len__', '__getitem__', '__setitem__', '__getslice__', '__setslice__',
-))  # XXX __getslice__ and __setslice__ unneeded in Py3.0
+_ArrayProxy_Attributes = (
+    '__len__', '__getitem__', '__setitem__',
+)
+if not PY3:
+    _ArrayProxy_Attributes += ('__getslice__', '__setslice__')
+ArrayProxy = MakeProxyType('ArrayProxy', _ArrayProxy_Attributes)
 
 
-PoolProxy = MakeProxyType('PoolProxy', (
+BasePoolProxy = MakeProxyType('PoolProxy', (
     'apply', 'apply_async', 'close', 'imap', 'imap_unordered', 'join',
     'map', 'map_async', 'starmap', 'starmap_async', 'terminate',
 ))
-PoolProxy._method_to_typeid_ = {
+BasePoolProxy._method_to_typeid_ = {
     'apply_async': 'AsyncResult',
     'map_async': 'AsyncResult',
     'starmap_async': 'AsyncResult',
     'imap': 'Iterator',
     'imap_unordered': 'Iterator',
 }
+
+
+class PoolProxy(BasePoolProxy):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        self.terminate()
+
 
 #
 # Definition of SyncManager
@@ -1160,7 +1195,9 @@ SyncManager.register('Semaphore', threading.Semaphore, AcquirerProxy)
 SyncManager.register('BoundedSemaphore', threading.BoundedSemaphore,
                      AcquirerProxy)
 SyncManager.register('Condition', threading.Condition, ConditionProxy)
-SyncManager.register('Pool', Pool, PoolProxy)
+if hasattr(threading, 'Barrier'):  # PY3
+    SyncManager.register('Barrier', threading.Barrier, BarrierProxy)
+SyncManager.register('Pool', pool.Pool, PoolProxy)
 SyncManager.register('list', list, ListProxy)
 SyncManager.register('dict', dict, DictProxy)
 SyncManager.register('Value', Value, ValueProxy)

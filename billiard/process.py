@@ -8,7 +8,7 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['Process', 'current_process', 'active_children']
+__all__ = ['BaseProcess', 'Process', 'current_process', 'active_children']
 
 #
 # Imports
@@ -18,17 +18,12 @@ import os
 import sys
 import signal
 import itertools
-import binascii
 import logging
 import threading
+from _weakrefset import WeakSet
 
 from multiprocessing import process as _mproc
 
-from .compat import bytes
-try:
-    from _weakrefset import WeakSet
-except ImportError:
-    WeakSet = None  # noqa
 from .five import items, string_t
 
 try:
@@ -55,10 +50,9 @@ def _set_current_process(process):
 
 def _cleanup():
     # check for processes which have finished
-    if _current_process is not None:
-        for p in list(_current_process._children):
-            if p._popen.poll() is not None:
-                _current_process._children.discard(p)
+    for p in list(_children):
+        if p._popen.poll() is not None:
+            _children.discard(p)
 
 
 def _maybe_flush(f):
@@ -77,32 +71,25 @@ def active_children(_cleanup=_cleanup):
     except TypeError:
         # called after gc collect so _cleanup does not exist anymore
         return []
-    if _current_process is not None:
-        return list(_current_process._children)
-    return []
+    return list(_children)
 
 
-class Process(object):
+class BaseProcess(object):
     '''
     Process objects represent activity that is run in a separate process
 
     The class is analagous to `threading.Thread`
     '''
-    _Popen = None
+
+    def _Popen(self):
+        raise NotImplementedError()
 
     def __init__(self, group=None, target=None, name=None,
                  args=(), kwargs={}, daemon=None, **_kw):
         assert group is None, 'group argument must be None for now'
-        count = next(_current_process._counter)
-        self._identity = _current_process._identity + (count,)
-        self._authkey = _current_process._authkey
-        if daemon is not None:
-            self._daemonic = daemon
-        else:
-            self._daemonic = _current_process._daemonic
-        self._tempdir = _current_process._tempdir
-        self._semprefix = _current_process._semprefix
-        self._unlinkfd = _current_process._unlinkfd
+        count = next(_process_counter)
+        self._identity = _current_process._identity + (count, )
+        self._config = _current_process._config.copy()
         self._parent_pid = os.getpid()
         self._popen = None
         self._target = target
@@ -112,6 +99,8 @@ class Process(object):
             name or type(self).__name__ + '-' +
             ':'.join(str(i) for i in self._identity)
         )
+        if daemon is not None:
+            self.daemon = daemon
         if _dangling is not None:
             _dangling.add(self)
 
@@ -129,14 +118,12 @@ class Process(object):
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
             'can only start a process object created by current process'
+        assert not _current_process._config.get('daemon'), \
+            'daemonic processes are not allowed to have children'
         _cleanup()
-        if self._Popen is not None:
-            Popen = self._Popen
-        else:
-            from .forking import Popen
-        self._popen = Popen(self)
+        self._popen = self._Popen(self)
         self._sentinel = self._popen.sentinel
-        _current_process._children.add(self)
+        _children.add(self)
 
     def terminate(self):
         '''
@@ -152,7 +139,7 @@ class Process(object):
         assert self._popen is not None, 'can only join a started process'
         res = self._popen.wait(timeout)
         if res is not None:
-            _current_process._children.discard(self)
+            _children.discard(self)
 
     def is_alive(self):
         '''
@@ -171,28 +158,40 @@ class Process(object):
             return False
         return self._popen.poll() is None
 
-    def _get_name(self):
+    @property
+    def name(self):
         return self._name
 
-    def _set_name(self, value):
+    @name.setter
+    def name(self, name):   # noqa
         assert isinstance(name, string_t), 'name must be a string'
-        self._name = value
-    name = property(_get_name, _set_name)
+        self._name = name
 
-    def _get_daemon(self):
-        return self._daemonic
+    @property
+    def daemon(self):
+        '''
+        Return whether process is a daemon
+        '''
+        return self._config.get('daemon', False)
 
-    def _set_daemon(self, daemonic):
+    @daemon.setter  # noqa
+    def daemon(self, daemonic):
+        '''
+        Set whether process is a daemon
+        '''
         assert self._popen is None, 'process has already started'
-        self._daemonic = daemonic
-    daemon = property(_get_daemon, _set_daemon)
+        self._config['daemon'] = daemonic
 
-    def _get_authkey(self):
-        return self._authkey
+    @property
+    def authkey(self):
+        return self._config['authkey']
 
-    def _set_authkey(self, authkey):
-        self._authkey = AuthenticationString(authkey)
-    authkey = property(_get_authkey, _set_authkey)
+    @authkey.setter  # noqa
+    def authkey(self, authkey):
+        '''
+        Set authorization key of process
+        '''
+        self._config['authkey'] = AuthenticationString(authkey)
 
     @property
     def exitcode(self):
@@ -226,6 +225,11 @@ class Process(object):
         except AttributeError:
             raise ValueError("process not started")
 
+    @property
+    def _children(self):
+        # compat for 2.7
+        return _children
+
     def __repr__(self):
         if self is _current_process:
             status = 'started'
@@ -246,17 +250,19 @@ class Process(object):
                 status = 'stopped[%s]' % _exitcode_to_name.get(status, status)
 
         return '<%s(%s, %s%s)>' % (type(self).__name__, self._name,
-                                   status, self._daemonic and ' daemon' or '')
+                                   status, self.daemon and ' daemon' or '')
 
     ##
 
     def _bootstrap(self):
-        from . import util
-        global _current_process
+        from . import util, context
+        global _current_process, _process_counter, _children
 
         try:
-            self._children = set()
-            self._counter = itertools.count(1)
+            if self._start_method is not None:
+                context._force_start_method(self._start_method)
+            _process_counter = itertools.count(1)
+            _children = set()
             if sys.stdin is not None:
                 try:
                     sys.stdin.close()
@@ -313,6 +319,7 @@ class Process(object):
                       self.pid, exitcode)
             _maybe_flush(sys.stdout)
             _maybe_flush(sys.stderr)
+
         return exitcode
 
 #
@@ -323,9 +330,9 @@ class Process(object):
 class AuthenticationString(bytes):
 
     def __reduce__(self):
-        from .forking import Popen
+        from .context import get_spawning_popen
 
-        if not Popen.thread_is_spawning():
+        if get_spawning_popen() is None:
             raise TypeError(
                 'Pickling an AuthenticationString object is '
                 'disallowed for security reasons')
@@ -336,24 +343,23 @@ class AuthenticationString(bytes):
 #
 
 
-class _MainProcess(Process):
+class _MainProcess(BaseProcess):
 
     def __init__(self):
         self._identity = ()
-        self._daemonic = False
         self._name = 'MainProcess'
         self._parent_pid = None
         self._popen = None
-        self._counter = itertools.count(1)
-        self._children = set()
-        self._authkey = AuthenticationString(os.urandom(32))
-        self._tempdir = None
-        self._semprefix = 'mp-' + binascii.hexlify(
-            os.urandom(4)).decode('ascii')
-        self._unlinkfd = None
+        self._config = {'authkey': AuthenticationString(os.urandom(32)),
+                        'semprefix': '/mp'}
 
 _current_process = _MainProcess()
+_process_counter = itertools.count(1)
+_children = set()
 del _MainProcess
+
+
+Process = BaseProcess
 
 #
 # Give names to some return codes
@@ -365,4 +371,5 @@ for name, signum in items(signal.__dict__):
     if name[:3] == 'SIG' and '_' not in name:
         _exitcode_to_name[-signum] = name
 
-_dangling = WeakSet() if WeakSet is not None else None
+# For debug and leak testing
+_dangling = WeakSet()

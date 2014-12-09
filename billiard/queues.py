@@ -17,32 +17,38 @@ import collections
 import weakref
 import errno
 
-from . import Pipe
+from . import connection
+from . import context
+
 from ._ext import _billiard
 from .compat import get_errno
-from .five import monotonic
-from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
-from .util import debug, error, info, Finalize, register_after_fork
-from .five import Empty, Full
-from .forking import assert_spawning
+from .five import monotonic, Empty, Full
+from .util import (
+    debug, error, info, Finalize, register_after_fork, is_exiting,
+)
+from .reduction import ForkingPickler
 
 
 class Queue(object):
     '''
     Queue type using a pipe, buffer and thread
     '''
-    def __init__(self, maxsize=0):
+    def __init__(self, maxsize=0, *args, **kwargs):
+        try:
+            ctx = kwargs['ctx']
+        except KeyError:
+            raise TypeError('missing 1 required keyword-only argument: ctx')
         if maxsize <= 0:
             maxsize = _billiard.SemLock.SEM_VALUE_MAX
         self._maxsize = maxsize
-        self._reader, self._writer = Pipe(duplex=False)
-        self._rlock = Lock()
+        self._reader, self._writer = connection.Pipe(duplex=False)
+        self._rlock = ctx.Lock()
         self._opid = os.getpid()
         if sys.platform == 'win32':
             self._wlock = None
         else:
-            self._wlock = Lock()
-        self._sem = BoundedSemaphore(maxsize)
+            self._wlock = ctx.Lock()
+        self._sem = ctx.BoundedSemaphore(maxsize)
         # For use by concurrent.futures
         self._ignore_epipe = False
 
@@ -52,7 +58,7 @@ class Queue(object):
             register_after_fork(self, Queue._after_fork)
 
     def __getstate__(self):
-        assert_spawning(self)
+        context.assert_spawning(self)
         return (self._ignore_epipe, self._maxsize, self._reader, self._writer,
                 self._rlock, self._wlock, self._sem, self._opid)
 
@@ -72,6 +78,8 @@ class Queue(object):
         self._close = None
         self._send = self._writer.send
         self._recv = self._reader.recv
+        self._send_bytes = self._writer.send_bytes
+        self._recv_bytes = self._reader.recv_bytes
         self._poll = self._reader.poll
 
     def put(self, obj, block=True, timeout=None):
@@ -88,9 +96,8 @@ class Queue(object):
     def get(self, block=True, timeout=None):
         if block and timeout is None:
             with self._rlock:
-                res = self._recv()
-                self._sem.release()
-                return res
+                res = self._recv_bytes()
+            self._sem.release()
 
         else:
             if block:
@@ -104,11 +111,12 @@ class Queue(object):
                         raise Empty
                 elif not self._poll():
                     raise Empty
-                res = self._recv()
+                res = self._recv_bytes()
                 self._sem.release()
-                return res
             finally:
                 self._rlock.release()
+        # unserialize the data after having released the lock
+        return ForkingPickler.loads(res)
 
     def qsize(self):
         # Raises NotImplementedError on Mac OSX because
@@ -154,7 +162,7 @@ class Queue(object):
         self._buffer.clear()
         self._thread = threading.Thread(
             target=Queue._feed,
-            args=(self._buffer, self._notempty, self._send,
+            args=(self._buffer, self._notempty, self._send_bytes,
                   self._wlock, self._writer.close, self._ignore_epipe),
             name='QueueFeederThread'
         )
@@ -203,24 +211,28 @@ class Queue(object):
             notempty.notify()
 
     @staticmethod
-    def _feed(buffer, notempty, send, writelock, close, ignore_epipe):
+    def _feed(buffer, notempty, send_bytes, writelock, close, ignore_epipe):
         debug('starting thread to feed data to pipe')
-        from .util import is_exiting
 
-        ncond = notempty
+        nacquire = notempty.acquire
+        nrelease = notempty.release
         nwait = notempty.wait
         bpopleft = buffer.popleft
         sentinel = _sentinel
         if sys.platform != 'win32':
-            wlock = writelock
+            wacquire = writelock.acquire
+            wrelease = writelock.release
         else:
-            wlock = None
+            wacquire = None
 
         try:
             while 1:
-                with ncond:
+                nacquire()
+                try:
                     if not buffer:
                         nwait()
+                finally:
+                    nrelease()
                 try:
                     while 1:
                         obj = bpopleft()
@@ -229,11 +241,16 @@ class Queue(object):
                             close()
                             return
 
-                        if wlock is None:
-                            send(obj)
+                        # serialize the data before acquiring the lock
+                        obj = ForkingPickler.dumps(obj)
+                        if wacquire is None:
+                            send_bytes(obj)
                         else:
-                            with wlock:
-                                send(obj)
+                            wacquire()
+                            try:
+                                send_bytes(obj)
+                            finally:
+                                wrelease()
                 except IndexError:
                     pass
         except Exception as exc:
@@ -266,10 +283,14 @@ class JoinableQueue(Queue):
     to happen.
     '''
 
-    def __init__(self, maxsize=0):
-        Queue.__init__(self, maxsize)
-        self._unfinished_tasks = Semaphore(0)
-        self._cond = Condition()
+    def __init__(self, maxsize=0, *args, **kwargs):
+        try:
+            ctx = kwargs['ctx']
+        except KeyError:
+            raise TypeError('missing 1 required keyword argument: ctx')
+        Queue.__init__(self, maxsize, ctx=ctx)
+        self._unfinished_tasks = ctx.Semaphore(0)
+        self._cond = ctx.Condition()
 
     def __getstate__(self):
         return Queue.__getstate__(self) + (self._cond, self._unfinished_tasks)
@@ -309,64 +330,57 @@ class _SimpleQueue(object):
     Simplified Queue type -- really just a locked pipe
     '''
 
-    def __init__(self, rnonblock=False, wnonblock=False):
-        self._reader, self._writer = Pipe(
+    def __init__(self, rnonblock=False, wnonblock=False, ctx=None):
+        self._reader, self._writer = connection.Pipe(
             duplex=False, rnonblock=rnonblock, wnonblock=wnonblock,
         )
         self._poll = self._reader.poll
         self._rlock = self._wlock = None
-        self._make_methods()
 
     def empty(self):
         return not self._poll()
 
     def __getstate__(self):
-        assert_spawning(self)
+        context.assert_spawning(self)
         return (self._reader, self._writer, self._rlock, self._wlock)
 
     def __setstate__(self, state):
         (self._reader, self._writer, self._rlock, self._wlock) = state
-        self._make_methods()
 
-    def _make_methods(self):
-        recv = self._reader.recv
-        try:
-            recv_payload = self._reader.recv_payload
-        except AttributeError:
-            recv_payload = self._reader.recv_bytes
-        rlock = self._rlock
+    def get_payload(self):
+        return self._reader.recv_bytes()
 
-        if rlock is not None:
-            def get():
-                with rlock:
-                    return recv()
-            self.get = get
+    def send_payload(self, value):
+        self._writer.send_bytes(value)
 
-            def get_payload():
-                with rlock:
-                    return recv_payload()
-            self.get_payload = get_payload
-        else:
-            self.get = recv
-            self.get_payload = recv_payload
+    def get(self):
+        # unserialize the data after having released the lock
+        return ForkingPickler.loads(self.get_payload())
 
-        if self._wlock is None:
-            # writes to a message oriented win32 pipe are atomic
-            self.put = self._writer.send
-        else:
-            send = self._writer.send
-            wlock = self._wlock
-
-            def put(obj):
-                with wlock:
-                    return send(obj)
-            self.put = put
+    def put(self, obj):
+        # serialize the data before acquiring the lock
+        self.send_payload(ForkingPickler.dumps(obj))
 
 
 class SimpleQueue(_SimpleQueue):
 
-    def __init__(self):
-        self._reader, self._writer = Pipe(duplex=False)
-        self._rlock = Lock()
-        self._wlock = Lock() if sys.platform != 'win32' else None
-        self._make_methods()
+    def __init__(self, *args, **kwargs):
+        try:
+            ctx = kwargs['ctx']
+        except KeyError:
+            raise TypeError('missing required keyword argument: ctx')
+        self._reader, self._writer = connection.Pipe(duplex=False)
+        self._rlock = ctx.Lock()
+        self._wlock = ctx.Lock() if sys.platform != 'win32' else None
+
+    def get_payload(self):
+        with self._rlock:
+            return self._reader.recv_bytes()
+
+    def send_payload(self, value):
+        if self._wlock is None:
+            # writes to a message oriented win32 pipe are atomic
+            self._writer.send_bytes(value)
+        else:
+            with self._wlock:
+                self._writer.send_bytes(value)

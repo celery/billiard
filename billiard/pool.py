@@ -26,7 +26,7 @@ import warnings
 from collections import deque
 from functools import partial
 
-from . import cpu_count
+from . import cpu_count, get_context
 from . import util
 from .common import pickle_loads, reset_signals, restart_state
 from .compat import get_errno, send_offset
@@ -42,8 +42,6 @@ from .exceptions import (
     WorkerLostError,
 )
 from .five import Empty, Queue, range, values, reraise, monotonic
-from .process import Process
-from .synchronize import Event
 from .util import Finalize, debug
 
 PY3 = sys.version_info[0] == 3
@@ -147,7 +145,7 @@ def error(msg, *args, **kwargs):
 
 
 def stop_if_not_current(thread, timeout=None):
-    if thread is not threading.currentThread():
+    if thread is not threading.current_thread():
         thread.stop(timeout)
 
 
@@ -235,13 +233,13 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-class Worker(Process):
+class Worker(object):
     _controlled_termination = False
     _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
-                 sigprotection=True):
+                 sigprotection=True, wrap_exception=True):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
@@ -250,30 +248,32 @@ class Worker(Process):
         self.on_exit = on_exit
         self.sigprotection = sigprotection
         self.inq, self.outq, self.synq = inq, outq, synq
-        self._make_shortcuts()
+        self.wrap_exception = wrap_exception  # XXX cannot disable yet
+        self.contribute_to_object(self)
 
-        super(Worker, self).__init__()
+    def contribute_to_object(self, obj):
+        obj.inq, obj.outq, obj.synq = self.inq, self.outq, self.synq
+        obj.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
+        obj.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
+        if self.synq:
+            obj.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
+            obj.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
+            obj.send_syn_offset = _get_send_offset(self.synq._writer)
+        else:
+            obj.synqR_fd = obj.synqW_fd = obj._send_syn_offset = None
+        obj._quick_put = self.inq._writer.send
+        obj._quick_get = self.outq._reader.recv
+        obj.send_job_offset = _get_send_offset(self.inq._writer)
+        return obj
 
     def __reduce__(self):
         return self.__class__, (
             self.inq, self.outq, self.synq, self.initializer,
-            self.initargs, self.maxtasks, self._shutdown,
+            self.initargs, self.maxtasks, self._shutdown, self.on_exit,
+            self.sigprotection, self.wrap_exception,
         )
 
-    def _make_shortcuts(self):
-        self.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
-        self.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
-        if self.synq:
-            self.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
-            self.synqW_fd = self.synq._writer.fileno()  # synqueue write fd
-            self.send_syn_offset = _get_send_offset(self.synq._writer)
-        else:
-            self.synqR_fd = self.synqW_fd = self._send_syn_offset = None
-        self._quick_put = self.inq._writer.send
-        self._quick_get = self.outq._reader.recv
-        self.send_job_offset = _get_send_offset(self.inq._writer)
-
-    def run(self):
+    def __call__(self):
         _exit = sys.exit
         _exitcode = [None]
 
@@ -901,6 +901,7 @@ class Pool(object):
     '''
     Class which supports an async version of applying functions to arguments.
     '''
+    _wrap_exception = True
     Worker = Worker
     Supervisor = Supervisor
     TaskHandler = TaskHandler
@@ -922,7 +923,9 @@ class Pool(object):
                  allow_restart=False,
                  synack=False,
                  on_process_exit=None,
+                 context=None,
                  **kwargs):
+        self._ctx = context or get_context()
         self.synack = synack
         self._setup_queues()
         self._taskqueue = Queue()
@@ -1011,6 +1014,12 @@ class Pool(object):
             exitpriority=15,
         )
 
+    def Process(self, *args, **kwds):
+        return self._ctx.Process(*args, **kwds)
+
+    def WorkerProcess(self, worker):
+        return worker.contribute_to_object(self.Process(target=worker))
+
     def create_result_handler(self, **extra_kwargs):
         return self.ResultHandler(
             self._outqueue, self._quick_get, self._cache,
@@ -1047,15 +1056,16 @@ class Pool(object):
         return self._inqueue, self._outqueue, None
 
     def _create_worker_process(self, i):
-        sentinel = Event() if self.allow_restart else None
+        sentinel = self._ctx.Event() if self.allow_restart else None
         inq, outq, synq = self.get_process_queues()
-        w = self.Worker(
+        w = self.WorkerProcess(self.Worker(
             inq, outq, synq, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel, self._on_process_exit,
             # Need to handle all signals if using the ipc semaphore,
             # to make sure the semaphore is released.
             sigprotection=self.threads,
-        )
+            wrap_exception=self._wrap_exception,
+        ))
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
         w.name = w.name.replace('Process', 'PoolWorker')
@@ -1266,9 +1276,8 @@ class Pool(object):
                 raise
 
     def _setup_queues(self):
-        from billiard.queues import SimpleQueue
-        self._inqueue = SimpleQueue()
-        self._outqueue = SimpleQueue()
+        self._inqueue = self._ctx.SimpleQueue()
+        self._outqueue = self._ctx.SimpleQueue()
         self._quick_put = self._inqueue._writer.send
         self._quick_get = self._outqueue._reader.recv
 
