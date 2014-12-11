@@ -1241,7 +1241,7 @@ class Pool(object):
         raise StopIteration()
 
     def _worker_active(self, worker):
-        for job in values(self._cache):
+        for job in tuple(values(self._cache)):
             if worker.pid in job.worker_pids():
                 return True
         return False
