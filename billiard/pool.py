@@ -1126,7 +1126,7 @@ class Pool(object):
                 debug('Supervisor: cleaning up worker %d', i)
                 if popen is not None:
                     worker.join()
-                elif isinstance(worker, ThreadWorker) and worker._started.is_set():
+                elif isinstance(worker, ThreadWorker) and worker._start_called:
                     worker.join()
                 debug('Supervisor: worked %d joined', i)
                 cleaned[worker.pid] = worker
