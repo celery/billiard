@@ -12,7 +12,32 @@ import errno
 import functools
 import atexit
 
-from subprocess import _args_from_interpreter_flags  # noqa
+try:
+    from subprocess import _args_from_interpreter_flags  # noqa
+except ImportError:  # pragma: no cover
+    def _args_from_interpreter_flags():  # noqa
+        """Return a list of command-line arguments reproducing the current
+        settings in sys.flags and sys.warnoptions."""
+        flag_opt_map = {
+            'debug': 'd',
+            'optimize': 'O',
+            'dont_write_bytecode': 'B',
+            'no_user_site': 's',
+            'no_site': 'S',
+            'ignore_environment': 'E',
+            'verbose': 'v',
+            'bytes_warning': 'b',
+            'hash_randomization': 'R',
+            'py3k_warning': '3',
+        }
+        args = []
+        for flag, opt in flag_opt_map.items():
+            v = getattr(sys.flags, flag)
+            if v > 0:
+                args.append('-' + opt * v)
+        for opt in sys.warnoptions:
+            args.append('-W' + opt)
+        return args
 
 from multiprocessing.util import (  # noqa
     _afterfork_registry,
