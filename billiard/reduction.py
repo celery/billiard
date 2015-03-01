@@ -221,7 +221,7 @@ else:
 
     def DupFd(fd):
         '''Return a wrapper for an fd.'''
-        from ..forking import Popen
+        from .forking import Popen
         return Popen.duplicate_for_child(fd)
 
 #
