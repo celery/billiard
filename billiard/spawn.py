@@ -239,7 +239,7 @@ def get_preparation_data(name):
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
 
-    sys_path = sys.path.copy()
+    sys_path = sys.path[:]
     try:
         i = sys_path.index('')
     except ValueError:
