@@ -51,8 +51,10 @@ if platform.system() == 'Windows':  # pragma: no cover
     # handled by # any process, so this is needed to terminate the task
     # *and its children* (if any).
     from ._win import kill_processtree as _kill  # noqa
+    SIGKILL = signal.SIGTERM
 else:
     from os import kill as _kill                 # noqa
+    SIGKILL = signal.SIGKILL
 
 
 try:
@@ -664,7 +666,7 @@ class TimeoutHandler(PoolThread):
                 return
         debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
         try:
-            _kill(worker.pid, signal.SIGKILL)
+            _kill(worker.pid, SIGKILL)
         except OSError:
             pass
 
