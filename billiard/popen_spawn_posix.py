@@ -67,7 +67,7 @@ class Popen(popen_fork.Popen):
                 spawn.get_executable(), cmd, self._fds,
             )
             self.sentinel = parent_r
-            with open(parent_w, 'wb', closefd=False) as f:
+            with io.open(parent_w, 'wb', closefd=False) as f:
                 f.write(fp.getbuffer())
         finally:
             if parent_r is not None:
