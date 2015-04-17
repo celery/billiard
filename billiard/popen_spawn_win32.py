@@ -1,3 +1,4 @@
+import io
 import os
 import msvcrt
 import signal
@@ -45,7 +46,7 @@ class Popen(object):
                                      pipe_handle=rhandle)
         cmd = ' '.join('"%s"' % x for x in cmd)
 
-        with open(wfd, 'wb', closefd=True) as to_child:
+        with io.open(wfd, 'wb', closefd=True) as to_child:
             # start process
             try:
                 hp, ht, pid, tid = _winapi.CreateProcess(

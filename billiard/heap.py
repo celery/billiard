@@ -10,6 +10,7 @@ from __future__ import absolute_import
 
 import bisect
 import errno
+import io
 import mmap
 import os
 import sys
@@ -77,7 +78,7 @@ else:
                 )
                 if PY3:
                     util.Finalize(self, os.close, (self.fd, ))
-                    with open(self.fd, 'wb', closefd=False) as f:
+                    with io.open(self.fd, 'wb', closefd=False) as f:
                         f.write(b'\0' * size)
                 else:
                     self.fd = os.open(
