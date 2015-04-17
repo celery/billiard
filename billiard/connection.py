@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 #
 # A higher level module for using sockets (or Windows named pipes)
 #
