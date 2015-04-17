@@ -18,6 +18,7 @@ bundle_version.gen
 celeryd.log
 celeryd.pid
 nosetests.xml
+.coverage
 coverage.xml
 cover/
 *.so
