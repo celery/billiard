@@ -8,6 +8,7 @@
 #
 from __future__ import absolute_import
 
+import sys
 import errno
 import functools
 import atexit

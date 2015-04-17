@@ -239,7 +239,7 @@ def get_preparation_data(name):
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
 
-    sys_path = sys.path.copy()
+    sys_path = sys.path[:]
     try:
         i = sys_path.index('')
     except ValueError:
@@ -259,7 +259,10 @@ def get_preparation_data(name):
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)
     main_module = sys.modules['__main__']
-    main_mod_name = getattr(main_module.__spec__, "name", None)
+    try:
+        main_mod_name = main_module.__spec__.name
+    except AttributeError:
+        main_mod_name = main_module.__name__
     if main_mod_name is not None:
         d['init_main_from_name'] = main_mod_name
     elif sys.platform != 'win32' or (not WINEXE and not WINSERVICE):

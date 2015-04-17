@@ -68,7 +68,7 @@ class Popen(popen_fork.Popen):
             )
             self.sentinel = parent_r
             with io.open(parent_w, 'wb', closefd=False) as f:
-                f.write(fp.getbuffer())
+                f.write(fp.getvalue())
         finally:
             if parent_r is not None:
                 util.Finalize(self, os.close, (parent_r,))
