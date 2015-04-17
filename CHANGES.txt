@@ -1,3 +1,9 @@
+3.3.0.20 - 2015-04-17
+---------------------
+
+- Pool: Timeouts will attempt to send SIGKILL, but this signal
+  does not exist on Windows.  Replaced with SIGTERM.
+
 3.3.0.19 - 2014-10-13
 ---------------------
 
