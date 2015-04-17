@@ -4,7 +4,6 @@ import os
 import signal
 
 from contextlib import contextmanager
-from mock import call, patch, Mock
 from time import time
 
 from billiard.common import (
