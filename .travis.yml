@@ -1,7 +1,9 @@
 language: python
+sudo: false
 python:
     - 2.7
     - 3.4
+    - pypy
 install:
-    - pip install --use-mirrors tox
+    - travis_retry pip install tox
 script: TOXENV=py$(echo $TRAVIS_PYTHON_VERSION | tr -d .) tox
