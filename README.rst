@@ -2,6 +2,9 @@
 billiard
 ========
 :version: 3.4.0.0b1
+.. image:: https://travis-ci.org/celery/billiard.svg?branch=master
+    :target: https://travis-ci.org/celery/billiard
+    :alt: Travis-CI Status
 
 About
 -----
