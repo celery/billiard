@@ -1,3 +1,46 @@
+3.3.0.20 - 2015-04-17
+---------------------
+
+- Pool: Timeouts will attempt to send SIGKILL, but this signal
+  does not exist on Windows.  Replaced with SIGTERM.
+
+3.3.0.19 - 2014-10-13
+---------------------
+
+- Pool: Exceptions in user timeout callbacks are now logged instead
+  of crashing the pool.
+
+    Contributed by Pierre Fersing.
+
+- Pool: Exit codes in errors were improperly being represented as signals.
+
+- Pool: ``.map``. and ``.imap`` now working again.
+
+- Now builds on FreeBSD 10.
+
+    Contributed by Michael Fladischer.
+
+3.3.0.18 - 2014-06-20
+---------------------
+
+- Now compiles on GNU/kFreeBSD
+
+    Contributed by Michael Fladischer.
+
+- Pool: `AF_PIPE` address fixed so that it works on recent Windows versions
+  in combination with Python 2.7.7.
+
+    Fix contributed by Joshua Tacoma.
+
+- Pool: Fix for `Supervisor object has no attribute _children` error.
+
+    Fix contributed by Andres Riancho.
+
+- Pool: Fixed bug with human_status(None).
+
+- Pool: shrink did not work properly if asked to remove more than 1 process.
+
+
 3.3.0.17 - 2014-04-16
 ---------------------
 
