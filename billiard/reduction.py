@@ -56,7 +56,7 @@ if PY3:
 
         @classmethod
         def loadbuf(cls, buf, protocol=None):
-            return cls.loads(buf.getbuffer(), protocol)
+            return cls.loads(buf.getbuffer())
 
         loads = pickle.loads
 
@@ -82,7 +82,7 @@ else:
 
         @classmethod
         def loadbuf(cls, buf, protocol=None):
-            return cls.load(buf, protocol)
+            return cls.loads(buf)
 
         loads = pickle.loads
 register = ForkingPickler.register
