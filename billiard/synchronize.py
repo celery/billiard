@@ -8,10 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = [
-    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
-]
-
 import errno
 import sys
 import tempfile
@@ -23,6 +19,10 @@ from . import util
 
 from ._ext import _billiard, ensure_SemLock
 from .five import range, monotonic
+
+__all__ = [
+    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
+]
 
 # Try to import the mp.synchronize module cleanly, if it fails
 # raise ImportError for platforms lacking a working sem_open implementation.

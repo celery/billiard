@@ -8,8 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['BaseProcess', 'Process', 'current_process', 'active_children']
-
 #
 # Imports
 #
@@ -30,6 +28,8 @@ try:
     ORIGINAL_DIR = os.path.abspath(os.getcwd())
 except OSError:
     ORIGINAL_DIR = None
+
+__all__ = ['BaseProcess', 'Process', 'current_process', 'active_children']
 
 #
 # Public functions

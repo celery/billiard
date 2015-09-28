@@ -33,12 +33,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = [
-    'Process', 'current_process', 'active_children', 'freeze_support',
-    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition',
-    'Event', 'Queue', 'Manager', 'Pipe', 'Pool', 'JoinableQueue'
-]
-
 #
 # Imports
 #
@@ -54,6 +48,12 @@ from threading import Event
 from billiard.five import Queue
 
 from billiard.connection import Pipe
+
+__all__ = [
+    'Process', 'current_process', 'active_children', 'freeze_support',
+    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition',
+    'Event', 'Queue', 'Manager', 'Pipe', 'Pool', 'JoinableQueue'
+]
 
 
 class DummyProcess(threading.Thread):

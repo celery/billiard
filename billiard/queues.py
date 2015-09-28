@@ -8,8 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
-
 import sys
 import os
 import threading
@@ -27,6 +25,8 @@ from .util import (
     debug, error, info, Finalize, register_after_fork, is_exiting,
 )
 from .reduction import ForkingPickler
+
+__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
 
 class Queue(object):

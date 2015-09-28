@@ -19,6 +19,9 @@
 
 from __future__ import absolute_import
 
+import sys
+from . import context
+
 VERSION = (3, 4, 0, 0, 'b1')
 __version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
@@ -29,11 +32,6 @@ __homepage__ = "http://github.com/celery/billiard"
 __docformat__ = "restructuredtext"
 
 # -eof meta-
-
-import os
-import sys
-import warnings
-from . import context
 
 #
 # Copy stuff from default context

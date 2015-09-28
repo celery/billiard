@@ -10,13 +10,6 @@
 
 from __future__ import absolute_import
 
-
-import sys
-
-is_pypy = hasattr(sys, 'pypy_version_info')
-
-__all__ = ['Client', 'Listener', 'Pipe', 'wait']
-
 import errno
 import io
 import os
@@ -45,6 +38,10 @@ except ImportError:
     if sys.platform == 'win32':
         raise
     _winapi = None
+
+__all__ = ['Client', 'Listener', 'Pipe', 'wait']
+
+is_pypy = hasattr(sys, 'pypy_version_info')
 
 #
 #

@@ -9,8 +9,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
-
 #
 # Imports
 #
@@ -30,6 +28,8 @@ from . import util
 from . import get_context
 
 from .five import Queue, items, monotonic
+
+__all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
 PY3 = sys.version_info[0] == 3
 

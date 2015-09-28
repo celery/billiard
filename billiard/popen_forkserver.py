@@ -2,16 +2,16 @@ import io
 import os
 
 from . import reduction
-if not reduction.HAVE_SEND_HANDLE:
-    raise ImportError('No support for sending fds between processes')
 from . import context
 from . import forkserver
 from . import popen_fork
 from . import spawn
 from . import util
 
-
 __all__ = ['Popen']
+
+if not reduction.HAVE_SEND_HANDLE:
+    raise ImportError('No support for sending fds between processes')
 
 #
 # Wrapper for an fd used while launching a process
