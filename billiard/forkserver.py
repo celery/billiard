@@ -95,7 +95,7 @@ class ForkServer(object):
             if self._forkserver_alive_fd is not None:
                 return
 
-            cmd = ('from multiprocessing.forkserver import main; ' +
+            cmd = ('from billiard.forkserver import main; ' +
                    'main(%d, %d, %r, **%r)')
 
             if self._preload_modules:
