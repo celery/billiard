@@ -55,6 +55,53 @@ else:  # non-posix platform
         raise NotImplementedError('send_offset')
 
 
+try:
+    fsencode = os.fsencode
+    fsdecode = os.fsdecode
+except AttributeError:
+    def _fscodec():
+        encoding = sys.getfilesystemencoding()
+        if encoding == 'mbcs':
+            errors = 'strict'
+        else:
+            errors = 'surrogateescape'
+
+        def fsencode(filename):
+            """
+            Encode filename to the filesystem encoding with 'surrogateescape'
+            error handler, return bytes unchanged. On Windows, use 'strict'
+            error handler if the file system encoding is 'mbcs' (which is the
+            default encoding).
+            """
+            if isinstance(filename, bytes):
+                return filename
+            elif isinstance(filename, str):
+                return filename.encode(encoding, errors)
+            else:
+                raise TypeError("expect bytes or str, not %s"
+                                % type(filename).__name__)
+
+        def fsdecode(filename):
+            """
+            Decode filename from the filesystem encoding with 'surrogateescape'
+            error handler, return str unchanged. On Windows, use 'strict' error
+            handler if the file system encoding is 'mbcs' (which is the default
+            encoding).
+            """
+            if isinstance(filename, str):
+                return filename
+            elif isinstance(filename, bytes):
+                return filename.decode(encoding, errors)
+            else:
+                raise TypeError("expect bytes or str, not %s"
+                                % type(filename).__name__)
+
+        return fsencode, fsdecode
+
+    fsencode, fsdecode = _fscodec()
+    del _fscodec
+
+
 if sys.version_info[0] == 3:
     bytes = bytes
 else:
@@ -161,14 +208,14 @@ except ImportError:
     def spawnv_passfds(path, args, passfds):
         if not os.fork():
             close_open_fds(keep=sorted(passfds))
-            os.execv(os.fsencode(path), args)
+            os.execv(fsencode(path), args)
 else:
     def spawnv_passfds(path, args, passfds):
         passfds = sorted(passfds)
         errpipe_read, errpipe_write = os.pipe()
         try:
             return _posixsubprocess.fork_exec(
-                args, [os.fsencode(path)], True, passfds, None, None,
+                args, [fsencode(path)], True, passfds, None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
                 False, False, None)
         finally:
