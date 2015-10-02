@@ -84,7 +84,9 @@ else:
         def loadbuf(cls, buf, protocol=None):
             return cls.loads(buf)
 
-        loads = pickle.loads
+        @classmethod
+        def loads(self, buf, loads=pickle.loads):
+            return loads(buf.getvalue())
 register = ForkingPickler.register
 
 
