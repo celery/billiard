@@ -44,6 +44,15 @@ from .exceptions import (
 from .five import Empty, Queue, range, values, reraise, monotonic
 from .util import Finalize, debug
 
+MAXMEM_USED_FMT = """\
+child process exiting after exceeding memory limit ({0}KiB / {0}KiB)
+"""
+
+try:
+    import resource
+except ImportError:  # pragma: no cover
+    resource = None  # noqa
+
 PY3 = sys.version_info[0] == 3
 
 if platform.system() == 'Windows':  # pragma: no cover
@@ -241,7 +250,8 @@ class Worker(object):
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
-                 sigprotection=True, wrap_exception=True, max_memory_per_child=None):
+                 sigprotection=True, wrap_exception=True,
+                 max_memory_per_child=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
@@ -332,6 +342,8 @@ class Worker(object):
         maxtasks = self.maxtasks
         max_memory_per_child = self.max_memory_per_child
         prepare_result = self.prepare_result
+        getrusage = getattr(resource, 'getrusage', None)
+        rusage_self = getattr(resource, 'RUSAGE_SELF', None)
 
         wait_for_job = self.wait_for_job
         _wait_for_syn = self.wait_for_syn
@@ -381,12 +393,13 @@ class Worker(object):
                         del(tb)
                 completed += 1
                 if max_memory_per_child > 0:
-                    import resource
-                    used_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                    if used_kb > 0:
-                        if used_kb > max_memory_per_child:
-                            error('child process exiting because it exceeded its maximum memory setting of %d KiB with %d KiB', max_memory_per_child, used_kb)
-                            return EX_RECYCLE
+                    used_kb = getrusage(rusage_self).ru_maxrss
+                    if used_kb <= 0:
+                        error('worker unable to determine memory usage')
+                    if used_kb > 0 and used_kb > max_memory_per_child:
+                        error(MAXMEM_USED_FMT.format(
+                            used_kb, max_memory_per_child))
+                        return EX_RECYCLE
                     else:
                         error('worker unable to determine worker memory usage')
 
