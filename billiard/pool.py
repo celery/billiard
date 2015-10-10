@@ -164,28 +164,21 @@ class LaxBoundedSemaphore(_Semaphore):
     """Semaphore that checks that # release is <= # acquires,
     but ignores if # releases >= value."""
 
-    def __init__(self, value=1, verbose=None):
-        if PY3:
-            _Semaphore.__init__(self, value)
-        else:
-            _Semaphore.__init__(self, value, verbose)
-        self._initial_value = value
-
-    def grow(self):
-        if PY3:
-            cond = self._cond
-        else:
-            cond = self._Semaphore__cond
-        with cond:
-            self._initial_value += 1
-            self._Semaphore__value += 1
-            cond.notify()
-
     def shrink(self):
         self._initial_value -= 1
         self.acquire()
 
     if PY3:
+
+        def __init__(self, value=1, verbose=None):
+            _Semaphore.__init__(self, value)
+            self._initial_value = value
+
+        def grow(self):
+            with self._cond:
+                self._initial_value += 1
+                self._value += 1
+                self._cond.notify()
 
         def release(self):
             cond = self._cond
@@ -198,6 +191,17 @@ class LaxBoundedSemaphore(_Semaphore):
             while self._value < self._initial_value:
                 _Semaphore.release(self)
     else:
+
+        def __init__(self, value=1, verbose=None):
+            _Semaphore.__init__(self, value, verbose)
+            self._initial_value = value
+
+        def grow(self):
+            cond = self._Semaphore__cond
+            with cond:
+                self._initial_value += 1
+                self._Semaphore__value += 1
+                cond.notify()
 
         def release(self):  # noqa
             cond = self._Semaphore__cond
