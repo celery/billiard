@@ -49,7 +49,7 @@ class SemaphoreTracker(object):
                 fds_to_pass.append(sys.stderr.fileno())
             except Exception:
                 pass
-            cmd = 'from multiprocessing.semaphore_tracker import main;main(%d)'
+            cmd = 'from billiard.semaphore_tracker import main;main(%d)'
             r, w = os.pipe()
             try:
                 fds_to_pass.append(r)
@@ -107,7 +107,7 @@ def main(fd):
     cache = set()
     try:
         # keep track of registered/unregistered semaphores
-        with open(fd, 'rb') as f:
+        with os.fdopen(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, name = line.strip().split(b':')
