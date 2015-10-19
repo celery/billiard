@@ -340,7 +340,7 @@ class Worker(object):
         inqW_fd = self.inqW_fd
         synqW_fd = self.synqW_fd
         maxtasks = self.maxtasks
-        max_memory_per_child = self.max_memory_per_child
+        max_memory_per_child = self.max_memory_per_child or 0
         prepare_result = self.prepare_result
         getrusage = getattr(resource, 'getrusage', None)
         rusage_self = getattr(resource, 'RUSAGE_SELF', None)
