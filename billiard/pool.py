@@ -245,8 +245,6 @@ def soft_timeout_sighandler(signum, frame):
 
 
 class Worker(object):
-    _controlled_termination = False
-    _job_terminated = False
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
@@ -326,10 +324,6 @@ class Worker(object):
 
     def on_loop_start(self, pid):
         pass
-
-    def terminate_controlled(self):
-        self._controlled_termination = True
-        self.terminate()
 
     def prepare_result(self, result):
         return result
@@ -992,6 +986,14 @@ class Pool(object):
         if on_process_exit is not None and not callable(on_process_exit):
             raise TypeError('on_process_exit must be callable')
 
+        class Process(self._ctx.Process):
+            _controlled_termination = False
+
+            def terminate_controlled(self):
+                self._controlled_termination = True
+                self.terminate()
+        self._Process = Process
+
         self._pool = []
         self._poolctrl = {}
         self.putlocks = putlocks
@@ -1044,7 +1046,7 @@ class Pool(object):
         )
 
     def Process(self, *args, **kwds):
-        return self._ctx.Process(*args, **kwds)
+        return self._Process(*args, **kwds)
 
     def WorkerProcess(self, worker):
         return worker.contribute_to_object(self.Process(target=worker))
