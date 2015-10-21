@@ -4,10 +4,10 @@ cache: false
 python:
     - 3.5
 env:
-    - TOXENV=py27
-    - TOXENV=py33
-    - TOXENV=py34
-    - TOXENV=py35
+    - TOXENV=2.7
+    - TOXENV=3.3
+    - TOXENV=3.4
+    - TOXENV=3.5
     - TOXENV=pypy
     - TOXENV=pypy3
 install:
