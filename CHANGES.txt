@@ -1,3 +1,10 @@
+3.3.0.21 - 2015-10-26
+---------------------
+
+- Pool: Fixed semaphore error on Python3.
+
+- Fixed libSystem error on OS X El Capitan.
+
 3.3.0.20 - 2015-04-17
 ---------------------
 
