@@ -946,6 +946,7 @@ class Pool(object):
                  on_process_exit=None,
                  context=None,
                  max_memory_per_child=None,
+                 enable_timeouts=False,
                  **kwargs):
         self._ctx = context or get_context()
         self.synack = synack
@@ -968,6 +969,12 @@ class Pool(object):
         self.threads = threads
         self.readers = {}
         self.allow_restart = allow_restart
+
+        self.enable_timeouts = bool(
+            enable_timeouts or
+            self.timeout is not None or
+            self.soft_timeout is not None
+        )
 
         if soft_timeout and SIG_SOFT_TIMEOUT is None:
             warnings.warn(UserWarning(
@@ -1012,21 +1019,25 @@ class Pool(object):
         if threads:
             self._task_handler.start()
 
-        # Thread killing timedout jobs.
-        self._timeout_handler = self.TimeoutHandler(
-            self._pool, self._cache,
-            self.soft_timeout, self.timeout,
-        )
-        self._timeout_handler_mutex = Lock()
-        self._timeout_handler_started = False
-        if self.timeout is not None or self.soft_timeout is not None:
-            self._start_timeout_handler()
-
-        # If running without threads, we need to check for timeouts
-        # while waiting for unfinished work at shutdown.
         self.check_timeouts = None
-        if not threads:
-            self.check_timeouts = self._timeout_handler.handle_event
+
+        # Thread killing timedout jobs.
+        if self.enable_timeouts:
+            self._timeout_handler = self.TimeoutHandler(
+                self._pool, self._cache,
+                self.soft_timeout, self.timeout,
+            )
+            self._timeout_handler_mutex = Lock()
+            self._timeout_handler_started = False
+            self._start_timeout_handler()
+            # If running without threads, we need to check for timeouts
+            # while waiting for unfinished work at shutdown.
+            if not threads:
+                self.check_timeouts = self._timeout_handler.handle_event
+        else:
+            self._timeout_handler = None
+            self._timeout_handler_started = False
+            self._timeout_handler_mutex = None
 
         # Thread processing results in the outqueue.
         self._result_handler = self.create_result_handler()
