@@ -9,8 +9,6 @@
 
 from __future__ import absolute_import
 
-__all__ = ['Client', 'Listener', 'Pipe']
-
 import os
 import random
 import sys
@@ -35,6 +33,7 @@ try:
 except NameError:
     WindowsError = None  # noqa
 
+__all__ = ['Client', 'Listener', 'Pipe']
 
 # global set later
 xmlrpclib = None

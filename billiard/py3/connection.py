@@ -8,8 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['Client', 'Listener', 'Pipe', 'wait']
-
 import io
 import os
 import sys
@@ -26,6 +24,7 @@ from ..exceptions import AuthenticationError, BufferTooShort
 from ..five import monotonic
 from ..util import get_temp_dir, Finalize, sub_debug
 from ..reduction import ForkingPickler
+
 try:
     import _winapi
     from _winapi import (
@@ -46,6 +45,8 @@ except ImportError:
     if sys.platform == 'win32':
         raise
     _winapi = None
+
+__all__ = ['Client', 'Listener', 'Pipe', 'wait']
 
 #
 #
@@ -456,8 +457,8 @@ class Listener(object):
     connections, or for a Windows named pipe.
     '''
     def __init__(self, address=None, family=None, backlog=1, authkey=None):
-        family = (family or (address and address_type(address))
-                  or default_family)
+        family = (family or (address and address_type(address)) or
+                  default_family)
         address = address or arbitrary_address(family)
 
         _validate_family(family)

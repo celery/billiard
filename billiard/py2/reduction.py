@@ -10,8 +10,6 @@
 
 from __future__ import absolute_import
 
-__all__ = []
-
 import os
 import sys
 import socket
@@ -31,6 +29,8 @@ if not(is_win32 or is_pypy or is_py3k or hasattr(_billiard, 'recvfd')):
     raise ImportError('pickling of connections not supported')
 
 close = win32.CloseHandle if sys.platform == 'win32' else os.close
+
+__all__ = []
 
 # globals set later
 _listener = None

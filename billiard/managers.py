@@ -9,8 +9,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
-
 #
 # Imports
 #
@@ -27,6 +25,8 @@ from .process import AuthenticationString
 from .forking import exit, Popen
 from .reduction import ForkingPickler
 from .util import Finalize, error, info
+
+__all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
 #
 # Register some things for pickling

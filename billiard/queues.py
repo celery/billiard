@@ -8,8 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
-
 import sys
 import os
 import threading
@@ -25,6 +23,8 @@ from .synchronize import Lock, BoundedSemaphore, Semaphore, Condition
 from .util import debug, error, info, Finalize, register_after_fork
 from .five import Empty, Full
 from .forking import assert_spawning
+
+__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
 
 class Queue(object):

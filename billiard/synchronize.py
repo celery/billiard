@@ -8,10 +8,6 @@
 #
 from __future__ import absolute_import
 
-__all__ = [
-    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
-]
-
 import itertools
 import os
 import signal
@@ -25,6 +21,10 @@ from .process import current_process
 from .util import Finalize, register_after_fork, debug
 from .forking import assert_spawning, Popen
 from .compat import bytes, closerange
+
+__all__ = [
+    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
+]
 
 # Try to import the mp.synchronize module cleanly, if it fails
 # raise ImportError for platforms lacking a working sem_open implementation.

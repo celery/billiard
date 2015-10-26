@@ -19,6 +19,22 @@
 
 from __future__ import absolute_import
 
+import os
+import sys
+import warnings
+
+from .exceptions import (  # noqa
+    ProcessError,
+    BufferTooShort,
+    TimeoutError,
+    AuthenticationError,
+    TimeLimitExceeded,
+    SoftTimeLimitExceeded,
+    WorkerLostError,
+)
+from .process import Process, current_process, active_children
+from .util import SUBDEBUG, SUBWARNING
+
 VERSION = (3, 3, 0, 21)
 __version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
@@ -39,26 +55,6 @@ __all__ = [
     'RawValue', 'RawArray', 'SUBDEBUG', 'SUBWARNING', 'set_executable',
     'forking_enable', 'forking_is_enabled'
 ]
-
-#
-# Imports
-#
-
-import os
-import sys
-import warnings
-
-from .exceptions import (  # noqa
-    ProcessError,
-    BufferTooShort,
-    TimeoutError,
-    AuthenticationError,
-    TimeLimitExceeded,
-    SoftTimeLimitExceeded,
-    WorkerLostError,
-)
-from .process import Process, current_process, active_children
-from .util import SUBDEBUG, SUBWARNING
 
 
 def ensure_multiprocessing():
