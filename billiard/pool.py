@@ -1332,7 +1332,7 @@ class Pool(object):
     def _start_timeout_handler(self):
         # ensure more than one thread does not start the timeout handler
         # thread at once.
-        if self.threads:
+        if self.threads and self._timeout_handler is not None:
             with self._timeout_handler_mutex:
                 if not self._timeout_handler_started:
                     self._timeout_handler_started = True
