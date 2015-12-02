@@ -2,10 +2,12 @@ from __future__ import absolute_import
 
 import os
 import signal
+import sys
 
 from contextlib import contextmanager
 from time import time
 
+from nose import SkipTest
 from billiard.common import (
     _shutdown_cleanup,
     reset_signals,
@@ -36,6 +38,10 @@ def termsigs(default, full):
 
 
 class test_reset_signals(Case):
+
+    def setUp(self):
+        if sys.platform == 'win32':
+            raise SkipTest('win32: skip')
 
     def test_shutdown_handler(self):
         with patch('sys.exit') as exit:
