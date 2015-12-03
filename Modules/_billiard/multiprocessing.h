@@ -182,4 +182,8 @@ typedef struct {
 #  define MAX(x, y) ((x) > (y) ? x : y)
 #endif
 
+#ifndef Py_MIN
+#  define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
+#endif
+
 #endif /* MULTIPROCESSING_H */

@@ -38,8 +38,6 @@
 
 #define DWORD_MAX 4294967295U
 
-#define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
-
 /* Grab CancelIoEx dynamically from kernel32 */
 static int has_CancelIoEx = -1;
 static BOOL (CALLBACK *Py_CancelIoEx)(HANDLE, LPOVERLAPPED);
