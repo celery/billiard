@@ -26,7 +26,7 @@ from ..util import get_temp_dir, Finalize, sub_debug
 from ..reduction import ForkingPickler
 
 try:
-    from .compat import _winapi
+    import _winapi
 
     WAIT_OBJECT_0 = _winapi.WAIT_OBJECT_0
     WAIT_TIMEOUT = _winapi.WAIT_TIMEOUT
