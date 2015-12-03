@@ -15,8 +15,6 @@
     #define HAVE_FD_TRANSFER 0
 #endif
 
-PyObject *create_win32_namespace(void);
-
 /*
  * Function which raises exceptions based on error codes
  */
@@ -379,12 +377,6 @@ init_billiard(void)
 #endif
 
 #ifdef MS_WINDOWS
-    /* Initialize win32 class and add to multiprocessing */
-    temp = create_win32_namespace();
-    if (!temp)
-        return;
-    PyModule_AddObject(module, "win32", temp);
-
     /* Initialize the event handle used to signal Ctrl-C */
     sigint_event = CreateEvent(NULL, TRUE, FALSE, NULL);
     if (!sigint_event) {

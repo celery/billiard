@@ -9,9 +9,6 @@
 #include "multiprocessing.h"
 
 
-#define WIN32_CONSTANT(fmt, con) \
-    PyDict_SetItemString(Win32Type.tp_dict, #con, Py_BuildValue(fmt, con))
-
 #if defined(MS_WIN32) && !defined(MS_WIN64)
 #define HANDLE_TO_PYNUM(handle) \
     PyLong_FromUnsignedLong((unsigned long) handle)
@@ -279,20 +276,44 @@ win32_CloseHandle(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-win32_ConnectNamedPipe(PyObject *self, PyObject *args)
+win32_ConnectNamedPipe(PyObject *self, PyObject *args, PyObject *kwds)
 {
     HANDLE hNamedPipe;
-    LPOVERLAPPED lpOverlapped;
+    int use_overlapped = 0;
     BOOL success;
+    OverlappedObject *overlapped = NULL;
+    static char *kwlist[] = {"handle", "overlapped", NULL};
 
-    if (!PyArg_ParseTuple(args, F_HANDLE F_POINTER,
-                          &hNamedPipe, &lpOverlapped))
+    if (!PyArg_ParseTupleAndKeywords(args, kwds,
+                                     F_HANDLE "|" F_BOOL, kwlist,
+                                     &hNamedPipe, &use_overlapped))
         return NULL;
 
+    if (use_overlapped) {
+        overlapped = new_overlapped(hNamedPipe);
+        if (!overlapped)
+            return NULL;
+    }
+
     Py_BEGIN_ALLOW_THREADS
-    success = ConnectNamedPipe(hNamedPipe, lpOverlapped);
+    success = ConnectNamedPipe(hNamedPipe,
+                               overlapped ? &overlapped->overlapped : NULL);
     Py_END_ALLOW_THREADS
 
+    if (overlapped) {
+        int err = GetLastError();
+        /* Overlapped ConnectNamedPipe never returns a success code */
+        assert(success == 0);
+        if (err == ERROR_IO_PENDING)
+            overlapped->pending = 1;
+        else if (err == ERROR_PIPE_CONNECTED)
+            SetEvent(overlapped->overlapped.hEvent);
+        else {
+            Py_DECREF(overlapped);
+            return PyErr_SetFromWindowsErr(err);
+        }
+        return (PyObject *) overlapped;
+    }
     if (!success)
         return PyErr_SetFromWindowsErr(0);
 
@@ -825,7 +846,7 @@ win32_TerminateProcess(PyObject* self, PyObject* args)
     return Py_None;
 }
 
-static PyMethodDef win32_methods[] = {
+static PyMethodDef win32_functions[] = {
     {"CloseHandle", win32_CloseHandle, METH_VARARGS | METH_STATIC, ""},
     {"GetLastError", win32_GetLastError, METH_NOARGS, ""},
     {"OpenProcess", win32_OpenProcess, METH_VARARGS, ""},
@@ -854,20 +875,43 @@ static PyMethodDef win32_methods[] = {
     {NULL}
 };
 
+static struct PyModuleDef win32_module = {
+    PyModuleDef_HEAD_INIT,
+    "_billiard.win32",
+    NULL,
+    -1,
+    win32_functions,
+    NULL,
+    NULL,
+    NULL,
+    NULL
+};
 
 PyTypeObject Win32Type = {
     PyVarObject_HEAD_INIT(NULL, 0)
 };
 
 
-PyObject *
-create_win32_namespace(void)
+#define WIN32_CONSTANT(fmt, con) \
+    PyDict_SetItemString(d, #con, Py_BuildValue(fmt, con))
+
+PyMODINIT_FUNC
+PyInit__win32(void)
 {
-    Win32Type.tp_name = "_billiard.win32";
-    Win32Type.tp_methods = win32_methods;
-    if (PyType_Ready(&Win32Type) < 0)
+    PyObject *d;
+    PyObject *m;
+
+    if (PyType_Ready(&OverlappedType) < 0)
         return NULL;
-    Py_INCREF(&Win32Type);
+
+    m = PyModule_Create(&win32_module);
+    if (m == 0)
+        return NULL;
+    d = PyModule_GetDict(m);
+
+    PyDict_SetItemString(d, "Overlapped", (PyObject *) &OverlappedType);
+
+    /* constants */
 
     WIN32_CONSTANT(F_DWORD, ERROR_ALREADY_EXISTS);
     WIN32_CONSTANT(F_DWORD, ERROR_PIPE_BUSY);
@@ -899,6 +943,4 @@ create_win32_namespace(void)
     WIN32_CONSTANT(F_DWORD, FILE_FLAG_OVERLAPPED);
 
     WIN32_CONSTANT("i", NULL);
-
-    return (PyObject*)&Win32Type;
 }
