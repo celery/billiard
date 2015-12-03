@@ -9,9 +9,6 @@
 #include "multiprocessing.h"
 
 
-#define WIN32_FUNCTION(func) \
-    {#func, (PyCFunction)win32_ ## func, METH_VARARGS | METH_STATIC, ""}
-
 #define WIN32_CONSTANT(fmt, con) \
     PyDict_SetItemString(Win32Type.tp_dict, #con, Py_BuildValue(fmt, con))
 
@@ -37,6 +34,8 @@
 #define T_HANDLE T_POINTER
 
 #define DWORD_MAX 4294967295U
+
+#define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
 
 /* Grab CancelIoEx dynamically from kernel32 */
 static int has_CancelIoEx = -1;
@@ -827,25 +826,31 @@ win32_TerminateProcess(PyObject* self, PyObject* args)
 }
 
 static PyMethodDef win32_methods[] = {
-    WIN32_FUNCTION(CloseHandle),
-    WIN32_FUNCTION(GetLastError),
-    WIN32_FUNCTION(OpenProcess),
-    WIN32_FUNCTION(ExitProcess),
-    WIN32_FUNCTION(ConnectNamedPipe),
-    WIN32_FUNCTION(CreateFile),
-    WIN32_FUNCTION(WriteFile),
-    WIN32_FUNCTION(ReadFile),
-    WIN32_FUNCTION(CreateNamedPipe),
-    WIN32_FUNCTION(SetNamedPipeHandleState),
-    WIN32_FUNCTION(WaitNamedPipe),
-    WIN32_FUNCTION(PeekNamedPipe),
-    WIN32_FUNCTION(WaitForMultipleObjects),
-    WIN32_FUNCTION(WaitForSingleObject),
-    WIN32_FUNCTION(GetCurrentProcess),
-    WIN32_FUNCTION(GetExitCodeProcess),
-    WIN32_FUNCTION(TerminateProcess),
-    WIN32_FUNCTION(DuplicateHandle),
-    WIN32_FUNCTION(CreatePipe),
+    {"CloseHandle", win32_CloseHandle, METH_VARARGS | METH_STATIC, ""},
+    {"GetLastError", win32_GetLastError, METH_NOARGS, ""},
+    {"OpenProcess", win32_OpenProcess, METH_VARARGS, ""},
+    {"ExitProcess", win32_ExitProcess, METH_VARARGS, ""},
+    {"ConnectNamedPipe", (PyCFunction)win32_ConnectNamedPipe,
+        METH_VARARGS | METH_KEYWORDS, ""},
+    {"CreateFile", win32_CreateFile, METH_VARARGS, ""},
+    {"WriteFile", (PyCFunction)win32_WriteFile,
+        METH_VARARGS | METH_KEYWORDS, ""},
+    {"ReadFile", (PyCFunction)win32_ReadFile,
+        METH_VARARGS | METH_KEYWORDS, ""},
+    {"CreateNamedPipe", win32_CreateNamedPipe, METH_VARARGS, ""},
+    {"SetNamedPipeHandleState", win32_SetNamedPipeHandleState,
+        METH_VARARGS, ""},
+    {"WaitNamedPipe", win32_WaitNamedPipe, METH_VARARGS, ""},
+    {"PeekNamedPipe", win32_PeekNamedPipe, METH_VARARGS, ""},
+    {"WaitForMultipleObjects", win32_WaitForMultipleObjects,
+        METH_VARARGS, ""},
+    {"WaitForSingleObject", win32_WaitForSingleObject,
+        METH_VARARGS, ""},
+    {"GetCurrentProcess", win32_GetCurrentProcess, METH_VARARGS, ""},
+    {"GetExitCodeProcess", win32_GetExitCodeProcess, METH_VARARGS, ""},
+    {"TerminateProcess", win32_TerminateProcess, METH_VARARGS, ""},
+    {"DuplicateHandle", win32_DuplicateHandle, METH_VARARGS, ""},
+    {"CreatePipe", win32_CreatePipe, METH_VARARGS, ""},
     {NULL}
 };
 
