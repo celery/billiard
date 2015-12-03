@@ -40,6 +40,7 @@ except ImportError:
 else:
     if sys.platform == 'win32':
         WAIT_OBJECT_0 = _winapi.WAIT_OBJECT_0
+        try:
             WAIT_ABANDONED_0 = _winapi.WAIT_ABANDONED_0
         except AttributeError:
             WAIT_ABANDONED_0 = 128  # noqa

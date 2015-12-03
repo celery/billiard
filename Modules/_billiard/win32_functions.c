@@ -38,6 +38,8 @@
 
 #define DWORD_MAX 4294967295U
 
+#define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
+
 /* Grab CancelIoEx dynamically from kernel32 */
 static int has_CancelIoEx = -1;
 static BOOL (CALLBACK *Py_CancelIoEx)(HANDLE, LPOVERLAPPED);
@@ -87,15 +89,6 @@ overlapped_dealloc(OverlappedObject *self)
             GetOverlappedResult(self->handle, &self->overlapped, &bytes, TRUE))
         {
             /* The operation is no longer pending -- nothing to do. */
-        }
-        else if (_Py_Finalizing == NULL)
-        {
-            /* The operation is still pending -- give a warning.  This
-               will probably only happen on Windows XP. */
-            PyErr_SetString(PyExc_RuntimeError,
-                            "I/O operations still in flight while destroying "
-                            "Overlapped object, the process may crash");
-            PyErr_WriteUnraisable(NULL);
         }
         else
         {
@@ -898,7 +891,7 @@ create_win32_namespace(void)
     WIN32_CONSTANT(F_DWORD, PROCESS_DUP_HANDLE);
     WIN32_CONSTANT(F_DWORD, WAIT_OBJECT_0);
     WIN32_CONSTANT(F_DWORD, WAIT_ABANDONED_0);
-    WIN32_CONSTANT(F_DOWRD, FILE_FLAG_FIRST_PIPE_INSTANCE);
+    WIN32_CONSTANT(F_DWORD, FILE_FLAG_FIRST_PIPE_INSTANCE);
     WIN32_CONSTANT(F_DWORD, FILE_FLAG_OVERLAPPED);
 
     WIN32_CONSTANT("i", NULL);
