@@ -26,16 +26,15 @@ from ..util import get_temp_dir, Finalize, sub_debug
 from ..reduction import ForkingPickler
 
 try:
-    import _winapi
-    from _winapi import (
-        WAIT_OBJECT_0,
-        WAIT_TIMEOUT,
-        INFINITE,
-    )
+    from .compat import _winapi
+
+    WAIT_OBJECT_0 = _winapi.WAIT_OBJECT_0
+    WAIT_TIMEOUT = _winapi.WAIT_TIMEOUT
+    INFINITE = _winapi.INFINITE
     # if we got here, we seem to be running on Windows. Handle probably
     # missing WAIT_ABANDONED_0 constant:
     try:
-        from _winapi import WAIT_ABANDONED_0
+        WAIT_ABANDONED_0 = _winapi.WAIT_ABANDONED_0
     except ImportError:
         # _winapi seems to be not exporting
         # this constant, fallback solution until
