@@ -875,23 +875,6 @@ static PyMethodDef win32_functions[] = {
     {NULL}
 };
 
-static struct PyModuleDef win32_module = {
-    PyModuleDef_HEAD_INIT,
-    "_billiard.win32",
-    NULL,
-    -1,
-    win32_functions,
-    NULL,
-    NULL,
-    NULL,
-    NULL
-};
-
-PyTypeObject Win32Type = {
-    PyVarObject_HEAD_INIT(NULL, 0)
-};
-
-
 #define WIN32_CONSTANT(fmt, con) \
     PyDict_SetItemString(d, #con, Py_BuildValue(fmt, con))
 
@@ -904,11 +887,11 @@ PyInit__win32(void)
     if (PyType_Ready(&OverlappedType) < 0)
         return NULL;
 
-    m = PyModule_Create(&win32_module);
-    if (m == 0)
-        return NULL;
-    d = PyModule_GetDict(m);
+    m = Py_InitModule("_billiard.win32", win32_functions);
+    if (!m)
+        return;
 
+    d = PyModule_GetDict(m);
     PyDict_SetItemString(d, "Overlapped", (PyObject *) &OverlappedType);
 
     /* constants */
