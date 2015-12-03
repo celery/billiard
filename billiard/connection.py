@@ -20,13 +20,11 @@ import struct
 import tempfile
 import itertools
 
-import _multiprocessing
-
-
 from . import reduction
 from . import util
 
 from . import AuthenticationError, BufferTooShort
+from ._ext import _billiard
 from .compat import setblocking, send_offset
 from .five import monotonic
 from .reduction import ForkingPickler
@@ -384,10 +382,10 @@ class Connection(_ConnectionBase):
     """
 
     if _winapi:
-        def _close(self, _close=_multiprocessing.closesocket):
+        def _close(self, _close=_billiard.closesocket):
             _close(self._handle)
-        _write = _multiprocessing.send
-        _read = _multiprocessing.recv
+        _write = _billiard.send
+        _read = _billiard.recv
     else:
         def _close(self, _close=os.close):
             _close(self._handle)
