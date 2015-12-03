@@ -71,11 +71,6 @@ function InstallPip ($python_home) {
     }
 }
 
-function UpgradeSetuptools ($python_home) {
-    $pip_path = $python_home + "/Scripts/pip.exe"
-    & $pip_path install -U setuptools
-}
-
 function InstallPackage ($python_home, $pkg) {
     $pip_path = $python_home + "/Scripts/pip.exe"
     & $pip_path install $pkg
@@ -84,7 +79,6 @@ function InstallPackage ($python_home, $pkg) {
 function main () {
     InstallPython $env:PYTHON_VERSION $env:PYTHON_ARCH $env:PYTHON
     InstallPip $env:PYTHON
-    UpgradeSetuptools $env::PYTHON
     InstallPackage $env:PYTHON wheel
 }
 
