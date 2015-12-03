@@ -309,6 +309,7 @@ if _winapi:
             try:
                 if err == _winapi.ERROR_IO_PENDING:
                     waitres = _winapi.WaitForMultipleObjects(
+
                         [ov.event], False, INFINITE)
                     assert waitres == WAIT_OBJECT_0
             except:
