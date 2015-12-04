@@ -177,11 +177,6 @@ typedef struct {
 
 #define MAX_MESSAGE_LENGTH 0x7fffffff
 
-#ifndef MIN
-#  define MIN(x, y) ((x) < (y) ? x : y)
-#  define MAX(x, y) ((x) > (y) ? x : y)
-#endif
-
 #ifndef Py_MIN
 #  define Py_MIN(x, y) (((x) > (y)) ? (y) : (x))
 #endif
