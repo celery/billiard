@@ -10,6 +10,7 @@
 # the next reboot.  Without this semaphore tracker process, "killall
 # python" would probably leave unlinked semaphores.
 #
+from __future__ import absolute_import
 
 import os
 import signal
