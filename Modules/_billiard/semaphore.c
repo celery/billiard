@@ -114,7 +114,7 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
         /* do the wait */
         Py_BEGIN_ALLOW_THREADS
         ResetEvent(sigint_event);
-        res = WaitForMultipleObjects(2, handles, FALSE, msecs);
+        res = WaitForMultipleObjectsEx(2, handles, FALSE, msecs, FALSE);
         Py_END_ALLOW_THREADS
 
         /* handle result */
