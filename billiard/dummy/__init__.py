@@ -121,7 +121,7 @@ class Namespace(object):
             if not name.startswith('_'):
                 temp.append('%s=%r' % (name, value))
         temp.sort()
-        return 'Namespace(%s)' % str.join(', ', temp)
+        return '%s(%s)' % (self.__class__.__name__, str.join(', ', temp))
 
 
 dict = dict

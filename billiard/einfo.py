@@ -105,7 +105,7 @@ class ExceptionInfo(object):
         return self.traceback
 
     def __repr__(self):
-        return "<ExceptionInfo: %r>" % (self.exception, )
+        return "<%s: %r>" % (self.__class__.__name__, self.exception, )
 
     @property
     def exc_info(self):

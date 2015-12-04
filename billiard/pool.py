@@ -225,7 +225,7 @@ class MaybeEncodingError(Exception):
         super(MaybeEncodingError, self).__init__(self.exc, self.value)
 
     def __repr__(self):
-        return "<MaybeEncodingError: %s>" % str(self)
+        return "<%s: %s>" % (self.__class__.__name__, str(self))
 
     def __str__(self):
         return "Error sending result: '%r'. Reason: '%r'." % (
@@ -1710,7 +1710,8 @@ class ApplyResult(object):
         cache[self._job] = self
 
     def __repr__(self):
-        return '<Result: {id} ack:{ack} ready:{ready}>'.format(
+        return '<%s: {id} ack:{ack} ready:{ready}>'.format(
+            self.__class__.__name__,
             id=self._job, ack=self._accepted, ready=self.ready(),
         )
 
