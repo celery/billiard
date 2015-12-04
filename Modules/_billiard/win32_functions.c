@@ -198,7 +198,7 @@ static PyMemberDef overlapped_members[] = {
 
 PyTypeObject OverlappedType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    /* tp_name           */ "_billiard.Overlapped",
+    /* tp_name           */ "_winapi.Overlapped",
     /* tp_basicsize      */ sizeof(OverlappedObject),
     /* tp_itemsize       */ 0,
     /* tp_dealloc        */ (destructor) overlapped_dealloc,
@@ -847,7 +847,7 @@ win32_TerminateProcess(PyObject* self, PyObject* args)
 }
 
 static PyMethodDef win32_functions[] = {
-    {"CloseHandle", win32_CloseHandle, METH_VARARGS | METH_STATIC, ""},
+    {"CloseHandle", win32_CloseHandle, METH_VARARGS, ""},
     {"GetLastError", win32_GetLastError, METH_NOARGS, ""},
     {"OpenProcess", win32_OpenProcess, METH_VARARGS, ""},
     {"ExitProcess", win32_ExitProcess, METH_VARARGS, ""},
@@ -879,7 +879,7 @@ static PyMethodDef win32_functions[] = {
     PyDict_SetItemString(d, #con, Py_BuildValue(fmt, con))
 
 PyMODINIT_FUNC
-PyInit__win32(void)
+init_winapi(void)
 {
     PyObject *d;
     PyObject *m;
@@ -887,7 +887,7 @@ PyInit__win32(void)
     if (PyType_Ready(&OverlappedType) < 0)
         return NULL;
 
-    m = Py_InitModule("_billiard.win32", win32_functions);
+    m = Py_InitModule("_winapi", win32_functions);
     if (!m)
         return;
 

@@ -11,10 +11,7 @@ if sys.platform == 'win32':
     try:
         import _winapi  # noqa
     except ImportError:                            # pragma: no cover
-        try:
-            from _billiard import win32 as _winapi  # noqa
-        except (ImportError, AttributeError):
-            from _multiprocessing import win32 as _winapi  # noqa
+        from _multiprocessing import win32 as _winapi  # noqa
 else:
     _winapi = None  # noqa
 

@@ -209,6 +209,17 @@ def run_setup(with_extensions=True):
                 depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
             ),
         ]
+        if sys.platform == 'win32':
+            extensions.append(
+                Extension(
+                    '_winapi',
+                    sources=multiprocessing_srcs,
+                    define_macros=macros.items(),
+                    libraries=libraries,
+                    include_dirs=['Modules/_billiard'],
+                    depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
+                ),
+            )
     packages = find_packages(exclude=[
         'ez_setup', 'tests', 'funtests.*', 'tests.*',
     ])

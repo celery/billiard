@@ -74,5 +74,6 @@ class test_win32_module(Case):
         getattr(_winapi, 'NULL')
 
     def test_functions(self):
+        getattr(_winapi, 'Overlapped')
         for fun in WIN32_FUNCTIONS:
             self.assertTrue(getattr(_winapi, fun))
