@@ -576,8 +576,9 @@ class TaskHandler(PoolThread):
         put = self.put
 
         for taskseq, set_length in iter(taskqueue.get, None):
+            task = None
+            i = -1
             try:
-                i = -1
                 for i, task in enumerate(taskseq):
                     if self._state:
                         debug('task handler found thread._state != RUN')
@@ -599,9 +600,13 @@ class TaskHandler(PoolThread):
                         set_length(i + 1)
                     continue
                 break
-            except Exception as exc:
-                error('Task Handler ERROR: %r', exc, exc_info=1)
-                break
+            except Exception:
+                job, ind = task[:2] if task else (0, 0)
+                if job in cache:
+                    cache[job]._set(ind + 1, (False, ExceptionInfo()))
+                if set_length:
+                    util.debug('doing set_length()')
+                    set_length(i + 1)
         else:
             debug('task handler got sentinel')
 
