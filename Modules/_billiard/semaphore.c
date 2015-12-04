@@ -479,21 +479,30 @@ Billiard_semlock_rebuild(PyTypeObject *type, PyObject *args)
 {
     SEM_HANDLE handle;
     int kind, maxvalue;
-    char *name;
+    char *name, *name_copy = NULL;
 
     if (!PyArg_ParseTuple(args, F_SEM_HANDLE "iiz",
                           &handle, &kind, &maxvalue, &name))
         return NULL;
 
+    if (name != NULL) {
+        name_copy = PyMem_Malloc(strlen(name) + 1);
+        if (name_copy == NULL)
+            return PyErr_NoMemory();
+        strcpy(name_copy, name);
+    }
+
 #ifndef MS_WINDOWS
     if (name != NULL) {
         handle = sem_open(name, 0);
-        if (handle == SEM_FAILED)
-            return NULL;
+        if (handle == SEM_FAILED) {
+            PyMem_Free(name_copy);
+            return PyErr_SetFromErrno(PyExc_OSError);
+        }
     }
 #endif
 
-    return Billiard_newsemlockobject(type, handle, kind, maxvalue, name);
+    return Billiard_newsemlockobject(type, handle, kind, maxvalue, name_copy);
 }
 
 static void
