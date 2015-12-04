@@ -44,7 +44,7 @@ _Billiard_GetSemaphoreValue(HANDLE handle, long *value)
 {
     long previous;
 
-    switch (WaitForSingleObject(handle, 0)) {
+    switch (WaitForSingleObjectEx(handle, 0, FALSE)) {
     case WAIT_OBJECT_0:
         if (!ReleaseSemaphore(handle, 1, &previous))
             return MP_STANDARD_ERROR;
@@ -99,7 +99,7 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
     }
 
     /* check whether we can acquire without blocking */
-    if (WaitForSingleObject(self->handle, 0) == WAIT_OBJECT_0) {
+    if (WaitForSingleObjectEx(self->handle, 0, FALSE) == WAIT_OBJECT_0) {
         self->last_tid = GetCurrentThreadId();
         ++self->count;
         Py_RETURN_TRUE;
@@ -148,7 +148,7 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
     case WAIT_FAILED:
         return PyErr_SetFromWindowsErr(0);
     default:
-        PyErr_Format(PyExc_RuntimeError, "WaitForSingleObject() or "
+        PyErr_Format(PyExc_RuntimeError, "WaitForSingleObjectEx() or "
                      "WaitForMultipleObjects() gave unrecognized "
                      "value %d", res);
         return NULL;
