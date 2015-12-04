@@ -562,14 +562,16 @@ class Supervisor(PoolThread):
 
 class TaskHandler(PoolThread):
 
-    def __init__(self, taskqueue, put, outqueue, pool):
+    def __init__(self, taskqueue, put, outqueue, pool, cache):
         self.taskqueue = taskqueue
         self.put = put
         self.outqueue = outqueue
         self.pool = pool
+        self.cache = cache
         super(TaskHandler, self).__init__()
 
     def body(self):
+        cache = self.cache
         taskqueue = self.taskqueue
         put = self.put
 
@@ -585,6 +587,12 @@ class TaskHandler(PoolThread):
                     except IOError:
                         debug('could not put task on queue')
                         break
+                    except Exception:
+                        job, ind = task[:2]
+                        try:
+                            cache[job]._set(ind, (False, ExceptionInfo()))
+                        except KeyError:
+                            pass
                 else:
                     if set_length:
                         debug('doing set_length()')
@@ -1015,7 +1023,8 @@ class Pool(object):
         self._task_handler = self.TaskHandler(self._taskqueue,
                                               self._quick_put,
                                               self._outqueue,
-                                              self._pool)
+                                              self._pool,
+                                              self._cache)
         if threads:
             self._task_handler.start()
 

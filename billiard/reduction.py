@@ -15,6 +15,8 @@ import pickle
 import socket
 import sys
 
+from . import context
+
 __all__ = ['send_handle', 'recv_handle', 'ForkingPickler', 'register', 'dump']
 
 PY3 = sys.version_info[0] == 3
@@ -223,8 +225,14 @@ else:
 
     def DupFd(fd):
         '''Return a wrapper for an fd.'''
-        from .forking import Popen
-        return Popen.duplicate_for_child(fd)
+        popen_obj = context.get_spawning_popen()
+        if popen_obj is not None:
+            return popen_obj.DupFd(popen_obj.duplicate_for_child(fd))
+        elif HAVE_SEND_HANDLE:
+            from . import resource_sharer
+            return resource_sharer.DupFd(fd)
+        else:
+            raise ValueError('SCM_RIGHTS appears not to be available')
 
 #
 # Try making some callable types picklable
@@ -265,7 +273,7 @@ register(functools.partial, _reduce_partial)
 if sys.platform == 'win32':
 
     def _reduce_socket(s):
-        from ..resource_sharer import DupSocket
+        from .resource_sharer import DupSocket
         return _rebuild_socket, (DupSocket(s),)
 
     def _rebuild_socket(ds):

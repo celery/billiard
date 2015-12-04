@@ -9,15 +9,18 @@
 from __future__ import absolute_import
 
 import ctypes
+import sys
 import weakref
 
 from . import heap
+from . import get_context
+from .context import assert_spawning
 from .five import int_types
-from .forking import assert_spawning
 from .reduction import ForkingPickler
-from .synchronize import RLock
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
+
+PY3 = sys.version_info[0] == 3
 
 typecode_to_type = {
     'c': ctypes.c_char,  'u': ctypes.c_wchar,
@@ -68,6 +71,7 @@ def Value(typecode_or_type, *args, **kwds):
     Return a synchronization wrapper for a Value
     '''
     lock = kwds.pop('lock', None)
+    ctx = kwds.pop('ctx', None)
     if kwds:
         raise ValueError(
             'unrecognized keyword argument(s): %s' % list(kwds.keys()))
@@ -75,10 +79,11 @@ def Value(typecode_or_type, *args, **kwds):
     if lock is False:
         return obj
     if lock in (True, None):
-        lock = RLock()
+        ctx = ctx or get_context()
+        lock = ctx.RLock()
     if not hasattr(lock, 'acquire'):
         raise AttributeError("'%r' has no method 'acquire'" % lock)
-    return synchronized(obj, lock)
+    return synchronized(obj, lock, ctx=ctx)
 
 
 def Array(typecode_or_type, size_or_initializer, **kwds):
@@ -86,6 +91,7 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
     Return a synchronization wrapper for a RawArray
     '''
     lock = kwds.pop('lock', None)
+    ctx = kwds.pop('ctx', None)
     if kwds:
         raise ValueError(
             'unrecognized keyword argument(s): %s' % list(kwds.keys()))
@@ -93,10 +99,11 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
     if lock is False:
         return obj
     if lock in (True, None):
-        lock = RLock()
+        ctx = ctx or get_context()
+        lock = ctx.RLock()
     if not hasattr(lock, 'acquire'):
         raise AttributeError("'%r' has no method 'acquire'" % lock)
-    return synchronized(obj, lock)
+    return synchronized(obj, lock, ctx=ctx)
 
 
 def copy(obj):
@@ -105,15 +112,16 @@ def copy(obj):
     return new_obj
 
 
-def synchronized(obj, lock=None):
+def synchronized(obj, lock=None, ctx=None):
     assert not isinstance(obj, SynchronizedBase), 'object already synchronized'
+    ctx = ctx or get_context()
 
     if isinstance(obj, ctypes._SimpleCData):
-        return Synchronized(obj, lock)
+        return Synchronized(obj, lock, ctx)
     elif isinstance(obj, ctypes.Array):
         if obj._type_ is ctypes.c_char:
-            return SynchronizedString(obj, lock)
-        return SynchronizedArray(obj, lock)
+            return SynchronizedString(obj, lock, ctx)
+        return SynchronizedArray(obj, lock, ctx)
     else:
         cls = type(obj)
         try:
@@ -123,7 +131,7 @@ def synchronized(obj, lock=None):
             d = dict((name, make_property(name)) for name in names)
             classname = 'Synchronized' + cls.__name__
             scls = class_cache[cls] = type(classname, (SynchronizedBase,), d)
-        return scls(obj, lock)
+        return scls(obj, lock, ctx)
 
 #
 # Functions for pickling/unpickling
@@ -142,8 +150,12 @@ def rebuild_ctype(type_, wrapper, length):
     if length is not None:
         type_ = type_ * length
     ForkingPickler.register(type_, reduce_ctype)
-    obj = type_.from_address(wrapper.get_address())
-    obj._wrapper = wrapper
+    if PY3:
+        buf = wrapper.create_memoryview()
+        obj = type_.from_buffer(buf)
+    else:
+        obj = type_.from_address(wrapper.get_address())
+        obj._wrapper = wrapper
     return obj
 
 #
@@ -186,11 +198,21 @@ class_cache = weakref.WeakKeyDictionary()
 
 class SynchronizedBase(object):
 
-    def __init__(self, obj, lock=None):
+    def __init__(self, obj, lock=None, ctx=None):
         self._obj = obj
-        self._lock = lock or RLock()
+        if lock:
+            self._lock = lock
+        else:
+            ctx = ctx or get_context(force=True)
+            self._lock = ctx.RLock()
         self.acquire = self._lock.acquire
         self.release = self._lock.release
+
+    def __enter__(self):
+        return self._lock.__enter__()
+
+    def __exit__(self, *args):
+        return self._lock.__exit__(*args)
 
     def __reduce__(self):
         assert_spawning(self)
@@ -216,32 +238,20 @@ class SynchronizedArray(SynchronizedBase):
         return len(self._obj)
 
     def __getitem__(self, i):
-        self.acquire()
-        try:
+        with self:
             return self._obj[i]
-        finally:
-            self.release()
 
     def __setitem__(self, i, value):
-        self.acquire()
-        try:
+        with self:
             self._obj[i] = value
-        finally:
-            self.release()
 
     def __getslice__(self, start, stop):
-        self.acquire()
-        try:
+        with self:
             return self._obj[start:stop]
-        finally:
-            self.release()
 
     def __setslice__(self, start, stop, values):
-        self.acquire()
-        try:
+        with self:
             self._obj[start:stop] = values
-        finally:
-            self.release()
 
 
 class SynchronizedString(SynchronizedArray):

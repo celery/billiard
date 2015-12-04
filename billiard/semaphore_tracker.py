@@ -107,7 +107,7 @@ def main(fd):
     cache = set()
     try:
         # keep track of registered/unregistered semaphores
-        with os.fdopen(fd, 'rb') as f:
+        with open(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, name = line.strip().split(b':')

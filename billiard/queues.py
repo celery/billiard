@@ -18,7 +18,6 @@ import errno
 from . import connection
 from . import context
 
-from ._ext import _billiard
 from .compat import get_errno
 from .five import monotonic, Empty, Full
 from .util import (
@@ -39,7 +38,8 @@ class Queue(object):
         except KeyError:
             raise TypeError('missing 1 required keyword-only argument: ctx')
         if maxsize <= 0:
-            maxsize = _billiard.SemLock.SEM_VALUE_MAX
+            # Can raise ImportError (see issues #3770 and #23400)
+            from .synchronize import SEM_VALUE_MAX as maxsize
         self._maxsize = maxsize
         self._reader, self._writer = connection.Pipe(duplex=False)
         self._rlock = ctx.Lock()
@@ -76,7 +76,7 @@ class Queue(object):
         self._joincancelled = False
         self._closed = False
         self._close = None
-        self._send = self._writer.send
+        self._send_bytes = self._writer.send
         self._recv = self._reader.recv
         self._send_bytes = self._writer.send_bytes
         self._recv_bytes = self._reader.recv_bytes
@@ -137,9 +137,13 @@ class Queue(object):
 
     def close(self):
         self._closed = True
-        self._reader.close()
-        if self._close:
-            self._close()
+        try:
+            self._reader.close()
+        finally:
+            close = self._close
+            if close:
+                self._close = None
+                close()
 
     def join_thread(self):
         debug('Queue.join_thread()')

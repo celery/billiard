@@ -10,9 +10,6 @@ from . import util
 
 __all__ = ['Popen']
 
-if not reduction.HAVE_SEND_HANDLE:
-    raise ImportError('No support for sending fds between processes')
-
 #
 # Wrapper for an fd used while launching a process
 #

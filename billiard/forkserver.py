@@ -77,21 +77,6 @@ class ForkServer(object):
             try:
                 reduction.sendfds(client, allfds)
                 return parent_r, parent_w
-            except OSError:
-                # XXX This is debugging info for Issue #18762
-                import fcntl
-                L = []
-                for fd in allfds:
-                    try:
-                        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-                    except OSError as e:
-                        L.append((fd, e))
-                    else:
-                        L.append((fd, flags))
-                print('*** connect_to_new_process: %r' % L, file=sys.stderr)
-                os.close(parent_r)
-                os.close(parent_w)
-                raise
             except:
                 os.close(parent_r)
                 os.close(parent_w)
@@ -179,44 +164,38 @@ def main(listener_fd, alive_r, preload, main_path=None, sys_path=None):
 
     # ignoring SIGCHLD means no need to reap zombie processes
     handler = signal.signal(signal.SIGCHLD, signal.SIG_IGN)
-    with socket.socket(socket.AF_UNIX, fileno=listener_fd) as listener:
-        with selectors.DefaultSelector() as selector:
-            _forkserver._forkserver_address = listener.getsockname()
+    with socket.socket(socket.AF_UNIX, fileno=listener_fd) as listener, \
+            selectors.DefaultSelector() as selector:
+        _forkserver._forkserver_address = listener.getsockname()
+        selector.register(listener, selectors.EVENT_READ)
+        selector.register(alive_r, selectors.EVENT_READ)
 
-            selector.register(listener, selectors.EVENT_READ)
-            selector.register(alive_r, selectors.EVENT_READ)
+        while True:
+            try:
+                while True:
+                    rfds = [key.fileobj for (key, events) in selector.select()]
+                    if rfds:
+                        break
 
-            while True:
-                try:
-                    while True:
-                        rfds = [key.fileobj
-                                for (key, events) in selector.select()]
-                        if rfds:
-                            break
+                if alive_r in rfds:
+                    # EOF because no more client processes left
+                    assert os.read(alive_r, 1) == b''
+                    raise SystemExit
 
-                    if alive_r in rfds:
-                        # EOF because no more client processes left
-                        assert os.read(alive_r, 1) == b''
-                        raise SystemExit
-
-                    assert listener in rfds
-                    with listener.accept()[0] as s:
-                        code = 1
-                        if os.fork() == 0:
-                            try:
-                                _serve_one(s, listener, alive_r, handler)
-                            except Exception:
-                                sys.excepthook(*sys.exc_info())
-                                sys.stderr.flush()
-                            finally:
-                                os._exit(code)
-
-                except OSError as exc:
-                    if getattr(exc, 'errno', None) != errno.EINTR:
-                        raise
-                except OSError as e:
-                    if e.errno != errno.ECONNABORTED:
-                        raise
+                assert listener in rfds
+                with listener.accept()[0] as s:
+                    code = 1
+                    if os.fork() == 0:
+                        try:
+                            _serve_one(s, listener, alive_r, handler)
+                        except Exception:
+                            sys.excepthook(*sys.exc_info())
+                            sys.stderr.flush()
+                        finally:
+                            os._exit(code)
+            except OSError as e:
+                if e.errno != errno.ECONNABORTED:
+                    raise
 
 
 def __unpack_fds(child_r, child_w, alive, stfd, *inherited):
@@ -261,14 +240,7 @@ def read_unsigned(fd):
     data = b''
     length = UNSIGNED_STRUCT.size
     while len(data) < length:
-        while True:
-            try:
-                s = os.read(fd, length - len(data))
-            except OSError as exc:
-                if getattr(exc, 'errno', None) != errno.EINTR:
-                    raise
-            else:
-                break
+        s = os.read(fd, length - len(data))
         if not s:
             raise EOFError('unexpected EOF')
         data += s
@@ -278,14 +250,7 @@ def read_unsigned(fd):
 def write_unsigned(fd, n):
     msg = UNSIGNED_STRUCT.pack(n)
     while msg:
-        while True:
-            try:
-                nbytes = os.write(fd, msg)
-            except OSError as exc:
-                if getattr(exc, 'errno', None) != errno.EINTR:
-                    raise
-            else:
-                break
+        nbytes = os.write(fd, msg)
         if nbytes == 0:
             raise RuntimeError('should not get here')
         msg = msg[nbytes:]
