@@ -61,7 +61,7 @@ class Popen(popen_fork.Popen):
 
     def poll(self, flag=os.WNOHANG):
         if self.returncode is None:
-            from billiard.connection import wait
+            from .connection import wait
             timeout = 0 if flag == os.WNOHANG else None
             if not wait([self.sentinel], timeout):
                 return None

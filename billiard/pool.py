@@ -1978,7 +1978,7 @@ class IMapUnorderedIterator(IMapIterator):
 
 class ThreadPool(Pool):
 
-    from billiard.dummy import Process as DummyProcess
+    from .dummy import Process as DummyProcess
     Process = DummyProcess
 
     def __init__(self, processes=None, initializer=None, initargs=()):

@@ -148,7 +148,7 @@ def get_command_line(**kwds):
 
 def spawn_main(pipe_handle, parent_pid=None, tracker_fd=None):
     '''
-    Run code specifed by data received over pipe
+    Run code specified by data received over pipe
     '''
     assert is_forking(sys.argv)
     if sys.platform == 'win32':
@@ -176,7 +176,7 @@ def _setup_logging_in_child_hack():
     logfile = os.environ.get("_MP_FORK_LOGFILE_") or None
     format = os.environ.get("_MP_FORK_LOGFORMAT_")
     if loglevel:
-        from billiard import util
+        from . import util
         import logging
         logger = util.get_logger()
         logger.setLevel(int(loglevel))

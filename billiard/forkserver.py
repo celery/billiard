@@ -1,3 +1,5 @@
+from __future__ import absolute_import, print_function
+
 import errno
 import os
 import selectors
@@ -75,6 +77,21 @@ class ForkServer(object):
             try:
                 reduction.sendfds(client, allfds)
                 return parent_r, parent_w
+            except OSError:
+                # XXX This is debugging info for Issue #18762
+                import fcntl
+                L = []
+                for fd in allfds:
+                    try:
+                        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                    except OSError as e:
+                        L.append((fd, e))
+                    else:
+                        L.append((fd, flags))
+                print('*** connect_to_new_process: %r' % L, file=sys.stderr)
+                os.close(parent_r)
+                os.close(parent_w)
+                raise
             except:
                 os.close(parent_r)
                 os.close(parent_w)

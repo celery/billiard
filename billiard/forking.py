@@ -15,9 +15,9 @@ import signal
 import warnings
 
 from pickle import load, HIGHEST_PROTOCOL
-from billiard import util
-from billiard import process
-from billiard.five import int_types
+from . import util
+from . import process
+from .five import int_types
 from .compat import _winapi as win32
 from .reduction import dump
 
@@ -87,7 +87,7 @@ if sys.platform != 'win32':
 
         def __init__(self, process_obj):
             # register reducers
-            from billiard import connection  # noqa
+            from . import connection  # noqa
             _Django_old_layout_hack__save()
             sys.stdout.flush()
             sys.stderr.flush()
@@ -410,7 +410,7 @@ def _module_dir(mod):
 
 def main():
     '''
-    Run code specifed by data received over pipe
+    Run code specified by data received over pipe
     '''
     global _forking_is_enabled
     _Django_old_layout_hack__load()
@@ -439,7 +439,7 @@ def main():
     logfile = os.environ.get("_MP_FORK_LOGFILE_") or None
     format = os.environ.get("_MP_FORK_LOGFORMAT_")
     if loglevel:
-        from billiard import util
+        from . import util
         import logging
         logger = util.get_logger()
         logger.setLevel(int(loglevel))
@@ -469,7 +469,7 @@ def get_preparation_data(name):
     '''
     Return info about parent needed by child to unpickle process object
     '''
-    from billiard.util import _logger, _log_to_stderr
+    from .util import _logger, _log_to_stderr
 
     d = dict(
         name=name,
