@@ -28,7 +28,7 @@ __all__ = ['BufferWrapper']
 PY3 = sys.version_info[0] == 3
 
 #
-# Inheirtable class which wraps an mmap, and from which blocks can be allocated
+# Inheritable class which wraps an mmap, and from which blocks can be allocated
 #
 
 if sys.platform == 'win32':
