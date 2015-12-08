@@ -35,7 +35,7 @@ from .exceptions import (  # noqa
 from .process import Process, current_process, active_children
 from .util import SUBDEBUG, SUBWARNING
 
-VERSION = (3, 3, 0, 21)
+VERSION = (3, 3, 0, 22)
 __version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
