@@ -251,7 +251,7 @@ new_overlapped(HANDLE handle)
     self->completed = 0;
     memset(&self->overlapped, 0, sizeof(OVERLAPPED));
     memset(&self->write_buffer, 0, sizeof(Py_buffer));
-    /* Manual reset, initially non-signalled */
+    /* Manual reset, initially non-signaled */
     self->overlapped.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
     return self;
 }

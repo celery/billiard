@@ -849,8 +849,8 @@ def XmlClient(*args, **kwds):
 if sys.platform == 'win32':
 
     def _exhaustive_wait(handles, timeout):
-        # Return ALL handles which are currently signalled.  (Only
-        # returning the first signalled might create starvation issues.)
+        # Return ALL handles which are currently signaled.  (Only
+        # returning the first signaled might create starvation issues.)
         L = list(handles)
         ready = []
         while L:
