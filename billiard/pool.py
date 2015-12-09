@@ -81,6 +81,12 @@ else:
 SIGMAP = dict(
     (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')
 )
+for _alias_sig in ('SIGHUP', 'SIGABRT'):
+    try:
+        # Alias for deprecated signal overwrites the name we want
+        SIGMAP[getattr(signal, _alias_sig)] = _alias_sig
+    except AttributeError:
+        pass
 
 #
 # Constants representing the state of a pool
