@@ -141,7 +141,6 @@ def reset_signals(handler=_shutdown_cleanup, full=False):
         num = signum(sig)
         if num:
             if _should_override_term_signal(sig, signal.getsignal(num)):
-                print('SIGNAL: %r' % (sig,))
                 maybe_setsignal(num, handler)
     for sig in TERMSIGS_IGNORE:
         num = signum(sig)
