@@ -37,17 +37,38 @@ else:
     except ImportError:
         from StringIO import StringIO as BytesIO  # noqa
 
+SIGMAP = dict(
+    (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')
+)
+for _alias_sig in ('SIGHUP', 'SIGABRT'):
+    try:
+        # Alias for deprecated signal overwrites the name we want
+        SIGMAP[getattr(signal, _alias_sig)] = _alias_sig
+    except AttributeError:
+        pass
+
+
+TERM_SIGNAL, TERM_SIGNAME = signal.SIGTERM, 'SIGTERM'
+REMAP_SIGTERM = os.environ.get('REMAP_SIGTERM')
+if REMAP_SIGTERM:
+    TERM_SIGNAL, TERM_SIGNAME = (
+        getattr(signal, REMAP_SIGTERM), REMAP_SIGTERM)
+
+
+TERMSIGS_IGNORE = {'SIGTERM'} if REMAP_SIGTERM else set()
+TERMSIGS_FORCE = {'SIGQUIT'} if REMAP_SIGTERM else set()
+
 EX_SOFTWARE = 70
 
-TERMSIGS_DEFAULT = (
+TERMSIGS_DEFAULT = {
     'SIGHUP',
     'SIGQUIT',
-    'SIGTERM',
+    TERM_SIGNAME,
     'SIGUSR1',
     'SIGUSR2'
-)
+}
 
-TERMSIGS_FULL = (
+TERMSIGS_FULL = {
     'SIGHUP',
     'SIGQUIT',
     'SIGTRAP',
@@ -56,20 +77,29 @@ TERMSIGS_FULL = (
     'SIGSYS',
     'SIGPIPE',
     'SIGALRM',
-    'SIGTERM',
+    TERM_SIGNAME,
     'SIGXCPU',
     'SIGXFSZ',
     'SIGVTALRM',
     'SIGPROF',
     'SIGUSR1',
     'SIGUSR2',
-)
+}
 
 #: set by signal handlers just before calling exit.
 #: if this is true after the sighandler returns it means that something
 #: went wrong while terminating the process, and :func:`os._exit`
 #: must be called ASAP.
 _should_have_exited = [False]
+
+
+def human_status(status):
+    if (status or 0) < 0:
+        try:
+            return 'signal {0} ({1})'.format(-status, SIGMAP[-status])
+        except KeyError:
+            return 'signal {0}'.format(-status)
+    return 'exitcode {0}'.format(status)
 
 
 def pickle_loads(s, load=pickle_load):
@@ -95,16 +125,28 @@ def _shutdown_cleanup(signum, frame):
     sys.exit(-(256 - signum))
 
 
+def signum(sig):
+    return getattr(signal, sig, None)
+
+
+def _should_override_term_signal(sig, current):
+    return (
+        sig in TERMSIGS_FORCE or
+        (current is not None and current != signal.SIG_IGN)
+    )
+
+
 def reset_signals(handler=_shutdown_cleanup, full=False):
     for sig in TERMSIGS_FULL if full else TERMSIGS_DEFAULT:
-        try:
-            signum = getattr(signal, sig)
-        except AttributeError:
-            pass
-        else:
-            current = signal.getsignal(signum)
-            if current is not None and current != signal.SIG_IGN:
-                maybe_setsignal(signum, handler)
+        num = signum(sig)
+        if num:
+            if _should_override_term_signal(sig, signal.getsignal(num)):
+                print('SIGNAL: %r' % (sig,))
+                maybe_setsignal(num, handler)
+    for sig in TERMSIGS_IGNORE:
+        num = signum(sig)
+        if num:
+            maybe_setsignal(num, signal.SIG_IGN)
 
 
 class restart_state(object):

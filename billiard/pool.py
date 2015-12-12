@@ -28,7 +28,9 @@ from functools import partial
 
 from . import cpu_count, get_context
 from . import util
-from .common import pickle_loads, reset_signals, restart_state
+from .common import (
+    TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
+)
 from .compat import get_errno, send_offset
 from .einfo import ExceptionInfo
 from .dummy import DummyProcess
@@ -60,7 +62,7 @@ if platform.system() == 'Windows':  # pragma: no cover
     # handled by # any process, so this is needed to terminate the task
     # *and its children* (if any).
     from ._win import kill_processtree as _kill  # noqa
-    SIGKILL = signal.SIGTERM
+    SIGKILL = TERM_SIGNAL
 else:
     from os import kill as _kill                 # noqa
     SIGKILL = signal.SIGKILL
@@ -77,16 +79,6 @@ if sys.version_info >= (3, 3):
 else:
     # Semaphore is a factory function pointing to _Semaphore
     _Semaphore = threading._Semaphore  # noqa
-
-SIGMAP = dict(
-    (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')
-)
-for _alias_sig in ('SIGHUP', 'SIGABRT'):
-    try:
-        # Alias for deprecated signal overwrites the name we want
-        SIGMAP[getattr(signal, _alias_sig)] = _alias_sig
-    except AttributeError:
-        pass
 
 #
 # Constants representing the state of a pool
@@ -137,15 +129,6 @@ def _get_send_offset(connection):
     if native is None:
         return partial(send_offset, connection.fileno())
     return native
-
-
-def human_status(status):
-    if (status or 0) < 0:
-        try:
-            return 'signal {0} ({1})'.format(-status, SIGMAP[-status])
-        except KeyError:
-            return 'signal {0}'.format(-status)
-    return 'exitcode {0}'.format(status)
 
 
 def mapstar(args):
@@ -506,7 +489,7 @@ class PoolThread(DummyProcess):
         except RestartFreqExceeded as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
                   exc_info=1)
-            _kill(os.getpid(), signal.SIGTERM)
+            _kill(os.getpid(), TERM_SIGNAL)
             sys.exit()
         except Exception as exc:
             error("Thread %r crashed: %r", type(self).__name__, exc,
@@ -819,7 +802,7 @@ class ResultHandler(PoolThread):
 
         def on_death(pid, exitcode):
             try:
-                os.kill(pid, signal.SIGTERM)
+                os.kill(pid, TERM_SIGNAL)
             except OSError as exc:
                 if get_errno(exc) != errno.ESRCH:
                     raise
@@ -1518,7 +1501,7 @@ class Pool(object):
         proc, _ = self._process_by_pid(pid)
         if proc is not None:
             try:
-                _kill(pid, sig or signal.SIGTERM)
+                _kill(pid, sig or TERM_SIGNAL)
             except OSError as exc:
                 if get_errno(exc) != errno.ESRCH:
                     raise

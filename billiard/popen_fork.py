@@ -2,10 +2,10 @@ from __future__ import absolute_import
 
 import os
 import sys
-import signal
 import errno
 
 from . import util
+from .common import TERM_SIGNAL
 
 __all__ = ['Popen']
 
@@ -60,7 +60,7 @@ class Popen(object):
     def terminate(self):
         if self.returncode is None:
             try:
-                os.kill(self.pid, signal.SIGTERM)
+                os.kill(self.pid, TERM_SIGNAL)
             except OSError as exc:
                 if getattr(exc, 'errno', None) != errno.ESRCH:
                     if self.wait(timeout=0.1) is None:
