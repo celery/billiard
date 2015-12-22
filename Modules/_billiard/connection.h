@@ -89,6 +89,7 @@ Billiard_connection_dealloc(BilliardConnectionObject* self)
         PyObject_ClearWeakRefs((PyObject*)self);
 
     if (self->handle != INVALID_HANDLE_VALUE) {
+        self->handle = INVALID_HANDLE_VALUE;
         Py_BEGIN_ALLOW_THREADS
         CLOSE(self->handle);
         Py_END_ALLOW_THREADS
@@ -171,10 +172,12 @@ Billiard_connection_recvbytes(BilliardConnectionObject *self, PyObject *args)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS
-                CLOSE(self->handle);
-                Py_END_ALLOW_THREADS
-                self->handle = INVALID_HANDLE_VALUE;
+                if (self->handle != INVALID_HANDLE_VALUE) {
+                    self->handle = INVALID_HANDLE_VALUE;
+                    Py_BEGIN_ALLOW_THREADS
+                    CLOSE(self->handle);
+                    Py_END_ALLOW_THREADS
+                }
             } else {
                 self->flags = WRITABLE;
             }
@@ -226,10 +229,12 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS
-                CLOSE(self->handle);
-                Py_END_ALLOW_THREADS
-                self->handle = INVALID_HANDLE_VALUE;
+                if (self->handle != INVALID_HANDLE_VALUE) {
+                    self->handle = INVALID_HANDLE_VALUE;
+                    Py_BEGIN_ALLOW_THREADS
+                    CLOSE(self->handle);
+                    Py_END_ALLOW_THREADS
+                }
             } else {
                 self->flags = WRITABLE;
             }
@@ -289,10 +294,12 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     if (res < 0) {
        if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS
-                CLOSE(self->handle);
-                Py_END_ALLOW_THREADS
-                self->handle = INVALID_HANDLE_VALUE;
+                if (self->handle != INVALID_HANDLE_VALUE) {
+                    self->handle = INVALID_HANDLE_VALUE;
+                    Py_BEGIN_ALLOW_THREADS
+                    CLOSE(self->handle);
+                    Py_END_ALLOW_THREADS
+                }
             } else {
                 self->flags = WRITABLE;
             }
@@ -426,10 +433,12 @@ Billiard_connection_recv_payload(BilliardConnectionObject *self)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS
-                CLOSE(self->handle);
-                Py_END_ALLOW_THREADS
-                self->handle = INVALID_HANDLE_VALUE;
+                if (self->handle != INVALID_HANDLE_VALUE) {
+                    self->handle = INVALID_HANDLE_VALUE;
+                    Py_BEGIN_ALLOW_THREADS
+                    CLOSE(self->handle);
+                    Py_END_ALLOW_THREADS
+                }
             } else {
                 self->flags = WRITABLE;
             }
@@ -465,10 +474,12 @@ Billiard_connection_recv_obj(BilliardConnectionObject *self)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                Py_BEGIN_ALLOW_THREADS
-                CLOSE(self->handle);
-                Py_END_ALLOW_THREADS
-                self->handle = INVALID_HANDLE_VALUE;
+                if (self->handle != INVALID_HANDLE_VALUE) {
+                    self->handle = INVALID_HANDLE_VALUE;
+                    Py_BEGIN_ALLOW_THREADS
+                    CLOSE(self->handle);
+                    Py_END_ALLOW_THREADS
+                }
             } else {
                 self->flags = WRITABLE;
             }
@@ -546,10 +557,10 @@ static PyObject *
 Billiard_connection_close(BilliardConnectionObject *self)
 {
     if (self->handle != INVALID_HANDLE_VALUE) {
+        self->handle = INVALID_HANDLE_VALUE;
         Py_BEGIN_ALLOW_THREADS
         CLOSE(self->handle);
         Py_END_ALLOW_THREADS
-        self->handle = INVALID_HANDLE_VALUE;
     }
 
     Py_RETURN_NONE;
