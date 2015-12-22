@@ -85,13 +85,15 @@ Billiard_connection_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void
 Billiard_connection_dealloc(BilliardConnectionObject* self)
 {
+    HANDLE handle = self->handle;
+
     if (self->weakreflist != NULL)
         PyObject_ClearWeakRefs((PyObject*)self);
 
-    if (self->handle != INVALID_HANDLE_VALUE) {
+    if (handle != INVALID_HANDLE_VALUE) {
         self->handle = INVALID_HANDLE_VALUE;
         Py_BEGIN_ALLOW_THREADS
-        CLOSE(self->handle);
+        CLOSE(handle);
         Py_END_ALLOW_THREADS
     }
     PyObject_Del(self);
@@ -155,6 +157,7 @@ Billiard_connection_recvbytes(BilliardConnectionObject *self, PyObject *args)
     char *freeme = NULL;
     Py_ssize_t res, maxlength = PY_SSIZE_T_MAX;
     PyObject *result = NULL;
+    HANDLE handle;
 
     if (!PyArg_ParseTuple(args, "|" F_PY_SSIZE_T, &maxlength))
         return NULL;
@@ -172,10 +175,11 @@ Billiard_connection_recvbytes(BilliardConnectionObject *self, PyObject *args)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                if (self->handle != INVALID_HANDLE_VALUE) {
+                handle = self->handle;
+                if (handle != INVALID_HANDLE_VALUE) {
                     self->handle = INVALID_HANDLE_VALUE;
                     Py_BEGIN_ALLOW_THREADS
-                    CLOSE(self->handle);
+                    CLOSE(handle);
                     Py_END_ALLOW_THREADS
                 }
             } else {
@@ -203,6 +207,7 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     Py_ssize_t res, length, offset = 0;
     PyObject *result = NULL;
     Py_buffer pbuf;
+    HANDLE handle;
 
     CHECK_READABLE(self);
 
@@ -229,10 +234,11 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                if (self->handle != INVALID_HANDLE_VALUE) {
+                handle = self->handle;
+                if (handle != INVALID_HANDLE_VALUE) {
                     self->handle = INVALID_HANDLE_VALUE;
                     Py_BEGIN_ALLOW_THREADS
-                    CLOSE(self->handle);
+                    CLOSE(handle);
                     Py_END_ALLOW_THREADS
                 }
             } else {
@@ -272,6 +278,7 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     char *freeme = NULL, *buffer = NULL;
     Py_ssize_t length = 0, res, offset = 0;
     PyObject *result = NULL;
+    HANDLE handle;
 
     CHECK_READABLE(self);
 
@@ -294,10 +301,11 @@ Billiard_connection_recvbytes_into(BilliardConnectionObject *self, PyObject *arg
     if (res < 0) {
        if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                if (self->handle != INVALID_HANDLE_VALUE) {
+                handle = self->handle;
+                if (handle != INVALID_HANDLE_VALUE) {
                     self->handle = INVALID_HANDLE_VALUE;
                     Py_BEGIN_ALLOW_THREADS
-                    CLOSE(self->handle);
+                    CLOSE(handle);
                     Py_END_ALLOW_THREADS
                 }
             } else {
@@ -425,6 +433,7 @@ Billiard_connection_recv_payload(BilliardConnectionObject *self)
     char *freeme = NULL;
     Py_ssize_t res;
     PyObject *view = NULL;
+    HANDLE handle;
 
     CHECK_READABLE(self);
 
@@ -433,10 +442,11 @@ Billiard_connection_recv_payload(BilliardConnectionObject *self)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                if (self->handle != INVALID_HANDLE_VALUE) {
+                handle = self->handle;
+                if (handle != INVALID_HANDLE_VALUE) {
                     self->handle = INVALID_HANDLE_VALUE;
                     Py_BEGIN_ALLOW_THREADS
-                    CLOSE(self->handle);
+                    CLOSE(handle);
                     Py_END_ALLOW_THREADS
                 }
             } else {
@@ -465,6 +475,7 @@ Billiard_connection_recv_obj(BilliardConnectionObject *self)
     char *freeme = NULL;
     Py_ssize_t res;
     PyObject *temp = NULL, *result = NULL;
+    HANDLE handle;
 
     CHECK_READABLE(self);
 
@@ -474,10 +485,11 @@ Billiard_connection_recv_obj(BilliardConnectionObject *self)
     if (res < 0) {
         if (res == MP_BAD_MESSAGE_LENGTH) {
             if ((self->flags & WRITABLE) == 0) {
-                if (self->handle != INVALID_HANDLE_VALUE) {
+                handle = self->handle;
+                if (handle != INVALID_HANDLE_VALUE) {
                     self->handle = INVALID_HANDLE_VALUE;
                     Py_BEGIN_ALLOW_THREADS
-                    CLOSE(self->handle);
+                    CLOSE(handle);
                     Py_END_ALLOW_THREADS
                 }
             } else {
@@ -556,10 +568,12 @@ Billiard_connection_fileno(BilliardConnectionObject* self)
 static PyObject *
 Billiard_connection_close(BilliardConnectionObject *self)
 {
-    if (self->handle != INVALID_HANDLE_VALUE) {
+    HANDLE handle = self->handle;
+
+    if (handle != INVALID_HANDLE_VALUE) {
         self->handle = INVALID_HANDLE_VALUE;
         Py_BEGIN_ALLOW_THREADS
-        CLOSE(self->handle);
+        CLOSE(handle);
         Py_END_ALLOW_THREADS
     }
 
