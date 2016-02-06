@@ -12,6 +12,7 @@
 #
 from __future__ import absolute_import
 
+import io
 import os
 import signal
 import sys
@@ -108,7 +109,7 @@ def main(fd):
     cache = set()
     try:
         # keep track of registered/unregistered semaphores
-        with open(fd, 'rb') as f:
+        with io.open(fd, 'rb') as f:
             for line in f:
                 try:
                     cmd, name = line.strip().split(b':')

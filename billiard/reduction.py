@@ -88,7 +88,7 @@ else:
 
         @classmethod
         def loads(self, buf, loads=pickle.loads):
-            return loads(buf.getvalue())
+            return loads(buf)
 register = ForkingPickler.register
 
 

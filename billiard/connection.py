@@ -131,10 +131,19 @@ def address_type(address):
 #
 
 
+class _SocketContainer(object):
+
+    def __init__(self, sock):
+        self.sock = sock
+
+
 class _ConnectionBase(object):
     _handle = None
 
     def __init__(self, handle, readable=True, writable=True):
+        if isinstance(handle, _SocketContainer):
+            self._socket = handle.sock  # keep ref so not collected
+            handle = handle.sock.fileno()
         handle = handle.__index__()
         if handle < 0:
             raise ValueError("invalid handle")
@@ -536,6 +545,14 @@ def Client(address, family=None, authkey=None):
     return c
 
 
+def detach(sock):
+    if hasattr(sock, 'detach'):
+        return sock.detach()
+    # older socket lib does not have detach.  We'll keep a reference around
+    # so that it does not get garbage collected.
+    return _SocketContainer(sock)
+
+
 if sys.platform != 'win32':
 
     def Pipe(duplex=True, rnonblock=False, wnonblock=False):
@@ -546,8 +563,8 @@ if sys.platform != 'win32':
             s1, s2 = socket.socketpair()
             s1.setblocking(not rnonblock)
             s2.setblocking(not wnonblock)
-            c1 = Connection(s1.detach())
-            c2 = Connection(s2.detach())
+            c1 = Connection(detach(s1))
+            c2 = Connection(detach(s2))
         else:
             fd1, fd2 = os.pipe()
             if rnonblock:
@@ -646,7 +663,7 @@ class SocketListener(object):
             else:
                 break
         s.setblocking(True)
-        return Connection(s.detach())
+        return Connection(detach(s))
 
     def close(self):
         try:
@@ -663,10 +680,10 @@ def SocketClient(address):
     Return a connection object connected to the socket given by `address`
     '''
     family = address_type(address)
-    with socket.socket(getattr(socket, family)) as s:
-        s.setblocking(True)
-        s.connect(address)
-        return Connection(s.detach())
+    s = socket.socket(getattr(socket, family))
+    s.setblocking(True)
+    s.connect(address)
+    return Connection(detach(s))
 
 #
 # Definitions for connections based on named pipes
@@ -997,7 +1014,7 @@ if sys.platform == 'win32':
 
     def rebuild_connection(ds, readable, writable):
         sock = ds.detach()
-        return Connection(sock.detach(), readable, writable)
+        return Connection(detach(sock), readable, writable)
     reduction.register(Connection, reduce_connection)
 
     def reduce_pipe_connection(conn):
@@ -1007,8 +1024,7 @@ if sys.platform == 'win32':
         return rebuild_pipe_connection, (dh, conn.readable, conn.writable)
 
     def rebuild_pipe_connection(dh, readable, writable):
-        handle = dh.detach()
-        return PipeConnection(handle, readable, writable)
+        return PipeConnection(detach(dh), readable, writable)
     reduction.register(PipeConnection, reduce_pipe_connection)
 
 else:
@@ -1017,6 +1033,5 @@ else:
         return rebuild_connection, (df, conn.readable, conn.writable)
 
     def rebuild_connection(df, readable, writable):
-        fd = df.detach()
-        return Connection(fd, readable, writable)
+        return Connection(detach(df), readable, writable)
     reduction.register(Connection, reduce_connection)
