@@ -203,9 +203,11 @@ try:
     import _posixsubprocess
 except ImportError:
     def spawnv_passfds(path, args, passfds):
-        if not os.fork():
+        pid = os.fork()
+        if not pid:
             close_open_fds(keep=sorted(passfds))
             os.execv(fsencode(path), args)
+        return pid
 else:
     def spawnv_passfds(path, args, passfds):
         passfds = sorted(passfds)
