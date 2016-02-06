@@ -203,9 +203,18 @@ try:
     import _posixsubprocess
 except ImportError:
     def spawnv_passfds(path, args, passfds):
-        if not os.fork():
-            close_open_fds(keep=sorted(passfds))
+        if sys.platform != 'win32':
+            # when not using _posixsubprocess (on earlier python) and not on
+            # windows, we want to keep stdout/stderr open...
+            passfds = passfds + [
+                maybe_fileno(sys.stdout),
+                maybe_fileno(sys.stderr),
+            ]
+        pid = os.fork()
+        if not pid:
+            close_open_fds(keep=sorted(f for f in passfds if f))
             os.execv(fsencode(path), args)
+        return pid
 else:
     def spawnv_passfds(path, args, passfds):
         passfds = sorted(passfds)
