@@ -129,7 +129,12 @@ if sys.platform != 'win32':
             # `w` will be closed when the child exits, at which point `r`
             # will become ready for reading (using e.g. select()).
             os.close(w)
-            util.Finalize(self, os.close, (r,))
+            util.Finalize(self, self._close_sentinel)
+
+        def _close_sentinel(self):
+            if self.sentinel is not None:
+                os.close(self.sentinel)
+            self.sentinel = None
 
         def poll(self, flag=os.WNOHANG):
             if self.returncode is None:
