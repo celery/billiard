@@ -9,10 +9,8 @@ import sys
 from . import context
 from . import spawn
 from . import reduction
-from . import util
 
 from .compat import _winapi
-from .common import _FileHandle
 
 __all__ = ['Popen']
 
@@ -35,6 +33,7 @@ class Popen(object):
     Start a subprocess to run the code of a process object
     '''
     method = 'spawn'
+    sentinel = None
 
     def __init__(self, process_obj):
         os.environ["MULTIPROCESSING_FORKING_DISABLE"] = "1"
@@ -65,8 +64,6 @@ class Popen(object):
             self.returncode = None
             self._handle = hp
             self.sentinel = int(hp)
-            self._sentinel = _FileHandle(self.sentinel)
-            util.Finalize(self, self._sentinel.close)
 
             # send information to child
             context.set_spawning_popen(self)
@@ -75,6 +72,13 @@ class Popen(object):
                 reduction.dump(process_obj, to_child)
             finally:
                 context.set_spawning_popen(None)
+
+    def close(self):
+        if self.sentinel is not None:
+            try:
+                _winapi.CloseHandle(self.sentinel)
+            finally:
+                self.sentinel = None
 
     def duplicate_for_child(self, handle):
         assert self is context.get_spawning_popen()

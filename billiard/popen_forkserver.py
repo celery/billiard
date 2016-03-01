@@ -8,7 +8,6 @@ from . import context
 from . import forkserver
 from . import popen_fork
 from . import spawn
-from . import util
 
 __all__ = ['Popen']
 
@@ -28,17 +27,6 @@ class _DupFd(object):
 #
 # Start child process using a server process
 #
-
-
-class FD(object):
-
-    def __init__(self, handle):
-        self.handle = handle
-
-    def close(self):
-        if self.handle is not None:
-            os.close(self.handle)
-        self.handle = None
 
 
 class Popen(popen_fork.Popen):
@@ -64,8 +52,6 @@ class Popen(popen_fork.Popen):
             context.set_spawning_popen(None)
 
         self.sentinel, w = forkserver.connect_to_new_process(self._fds)
-        self._sentinel = FD(self.sentinel)
-        util.Finalize(self, self._sentinel.close)
         with io.open(w, 'wb', closefd=True) as f:
             f.write(buf.getbuffer())
         self.pid = forkserver.read_unsigned(self.sentinel)

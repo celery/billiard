@@ -7,9 +7,7 @@ from . import context
 from . import popen_fork
 from . import reduction
 from . import spawn
-from . import util
 
-from .common import _FileHandle
 from .compat import spawnv_passfds
 
 __all__ = ['Popen']
@@ -73,9 +71,6 @@ class Popen(popen_fork.Popen):
             with io.open(parent_w, 'wb', closefd=False) as f:
                 f.write(fp.getvalue())
         finally:
-            if self.sentinel is not None:
-                self._sentinel = _FileHandle(self.sentinel)
-                util.Finalize(self, self._sentinel.close)
             for fd in (child_r, child_w, parent_w):
                 if fd is not None:
                     os.close(fd)

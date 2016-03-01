@@ -4,8 +4,7 @@ import os
 import sys
 import errno
 
-from . import util
-from .common import TERM_SIGNAL, _FileHandle
+from .common import TERM_SIGNAL
 
 __all__ = ['Popen']
 
@@ -16,6 +15,7 @@ __all__ = ['Popen']
 
 class Popen(object):
     method = 'fork'
+    sentinel = None
 
     def __init__(self, process_obj):
         sys.stdout.flush()
@@ -82,5 +82,10 @@ class Popen(object):
         else:
             os.close(child_w)
             self.sentinel = parent_r
-            self._sentinel = _FileHandle(self.sentinel)
-            util.Finalize(self, self._sentinel.close)
+
+    def close(self):
+        if self.sentinel is not None:
+            try:
+                os.close(self.sentinel)
+            finally:
+                self.sentinel = None

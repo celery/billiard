@@ -125,6 +125,10 @@ class BaseProcess(object):
         self._sentinel = self._popen.sentinel
         _children.add(self)
 
+    def close(self):
+        if self._popen is not None:
+            self._popen.close()
+
     def terminate(self):
         '''
         Terminate process; sends SIGTERM signal or uses TerminateProcess()
@@ -140,6 +144,7 @@ class BaseProcess(object):
         res = self._popen.wait(timeout)
         if res is not None:
             _children.discard(self)
+        self.close()
 
     def is_alive(self):
         '''
