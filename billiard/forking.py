@@ -20,6 +20,7 @@ from billiard import process
 from billiard.five import int_types
 from .reduction import dump
 from .compat import _winapi as win32
+from .common import _FileHandle
 
 __all__ = ['Popen', 'assert_spawning', 'exit',
            'duplicate', 'close']
@@ -129,12 +130,8 @@ if sys.platform != 'win32':
             # `w` will be closed when the child exits, at which point `r`
             # will become ready for reading (using e.g. select()).
             os.close(w)
-            util.Finalize(self, self._close_sentinel)
-
-        def _close_sentinel(self):
-            if self.sentinel is not None:
-                os.close(self.sentinel)
-            self.sentinel = None
+            self._sentinel = _FileHandle(self.sentinel)
+            util.Finalize(self, self._sentinel.close)
 
         def poll(self, flag=os.WNOHANG):
             if self.returncode is None:
