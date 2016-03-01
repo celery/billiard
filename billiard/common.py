@@ -185,10 +185,10 @@ class _FileHandle(object):
         def close(self):
             if self.fd is not None:
                 from .compat import _winapi
-                self.fd = None
-                _winapi.CloseHandle(self.fd)
+                fd, self.fd = self.fd, None
+                _winapi.CloseHandle(fd)
     else:
         def close(self):  # noqa
             if self.fd is not None:
-                self.fd = None
-                os.close(self.fd)
+                fd, self.fd = self.fd, None
+                os.close(fd)
