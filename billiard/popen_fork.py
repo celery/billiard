@@ -5,7 +5,7 @@ import sys
 import errno
 
 from . import util
-from .common import TERM_SIGNAL
+from .common import TERM_SIGNAL, _FileHandle
 
 __all__ = ['Popen']
 
@@ -66,11 +66,6 @@ class Popen(object):
                     if self.wait(timeout=0.1) is None:
                         raise
 
-    def _close_sentinel(self):
-        if self.sentinel is not None:
-            os.close(self.sentinel)
-        self.sentinel = None
-
     def _launch(self, process_obj):
         code = 1
         parent_r, child_w = os.pipe()
@@ -87,4 +82,5 @@ class Popen(object):
         else:
             os.close(child_w)
             self.sentinel = parent_r
-            util.Finalize(self, self._close_sentinel)
+            self._sentinel = _FileHandle(self.sentinel)
+            util.Finalize(self, self._sentinel.close)

@@ -12,6 +12,7 @@ from . import reduction
 from . import util
 
 from .compat import _winapi
+from .common import _FileHandle
 
 __all__ = ['Popen']
 
@@ -64,7 +65,8 @@ class Popen(object):
             self.returncode = None
             self._handle = hp
             self.sentinel = int(hp)
-            util.Finalize(self, _winapi.CloseHandle, (self.sentinel,))
+            self._sentinel = _FileHandle(self.sentinel)
+            util.Finalize(self, self._sentinel.close)
 
             # send information to child
             context.set_spawning_popen(self)

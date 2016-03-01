@@ -22,6 +22,7 @@ from . import reduction
 from . import util
 
 from ._ext import _billiard, win32
+from .common import _FileHandle
 
 __all__ = ['BufferWrapper']
 
@@ -72,6 +73,7 @@ else:
         def __init__(self, size, fd=-1):
             self.size = size
             self.fd = fd
+            self._handle = _FileHandle(fd)
             if fd == -1:
                 self.fd, name = tempfile.mkstemp(
                     prefix='pym-%d-' % (os.getpid(), ),
@@ -79,7 +81,7 @@ else:
                 )
                 if PY3:
                     os.unlink(name)
-                    util.Finalize(self, os.close, (self.fd, ))
+                    util.Finalize(self, self._handle.close)
                     with io.open(self.fd, 'wb', closefd=False) as f:
                         bs = 1024 * 1024
                         if size >= bs:
@@ -93,7 +95,8 @@ else:
                     self.fd = os.open(
                         name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600,
                     )
-                    util.Finalize(self, os.close, (self.fd, ))
+                    self._handle = _FileHandle(self.fd)
+                    util.Finalize(self, self._handle.close)
                     os.unlink(name)
                     os.ftruncate(self.fd, size)
             self.buffer = mmap.mmap(self.fd, self.size)

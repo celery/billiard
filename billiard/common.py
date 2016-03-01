@@ -173,3 +173,22 @@ class restart_state(object):
         if self.T is None:
             self.T = now
         self.R += 1
+
+
+class _FileHandle(object):
+
+    def __init__(self, fd):
+        self.fd = fd
+
+    if sys.platform == 'win32':
+
+        def close(self):
+            if self.fd is not None:
+                from .compat import _winapi
+                self.fd = None
+                _winapi.CloseHandle(self.fd)
+    else:
+        def close(self):  # noqa
+            if self.fd is not None:
+                self.fd = None
+                os.close(self.fd)

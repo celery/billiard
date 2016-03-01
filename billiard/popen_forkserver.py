@@ -30,6 +30,17 @@ class _DupFd(object):
 #
 
 
+class FD(object):
+
+    def __init__(self, handle):
+        self.handle = handle
+
+    def close(self):
+        if self.handle is not None:
+            os.close(self.handle)
+        self.handle = None
+
+
 class Popen(popen_fork.Popen):
     method = 'forkserver'
     DupFd = _DupFd
@@ -53,7 +64,8 @@ class Popen(popen_fork.Popen):
             context.set_spawning_popen(None)
 
         self.sentinel, w = forkserver.connect_to_new_process(self._fds)
-        util.Finalize(self, os.close, (self.sentinel,))
+        self._sentinel = FD(self.sentinel)
+        util.Finalize(self, self._sentinel.close)
         with io.open(w, 'wb', closefd=True) as f:
             f.write(buf.getbuffer())
         self.pid = forkserver.read_unsigned(self.sentinel)
