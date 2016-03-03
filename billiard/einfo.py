@@ -3,18 +3,35 @@ from __future__ import absolute_import
 import sys
 import traceback
 
+__all__ = ['ExceptionInfo', 'Traceback']
+
+DEFAULT_MAX_FRAMES = sys.getrecursionlimit() // 8
+
 
 class _Code(object):
 
     def __init__(self, code):
         self.co_filename = code.co_filename
         self.co_name = code.co_name
+        self.co_argcount = code.co_argcount
+        self.co_cellvars = ()
+        self.co_firstlineno = code.co_firstlineno
+        self.co_flags = code.co_flags
+        self.co_freevars = ()
+        self.co_code = b''
+        self.co_lnotab = b''
+        self.co_names = code.co_names
+        self.co_nlocals = code.co_nlocals
+        self.co_stacksize = code.co_stacksize
+        self.co_varnames = ()
+
 
 
 class _Frame(object):
     Code = _Code
 
     def __init__(self, frame):
+        self.f_builtins = {}
         self.f_globals = {
             "__file__": frame.f_globals.get("__file__", "__main__"),
             "__name__": frame.f_globals.get("__name__"),
@@ -25,8 +42,15 @@ class _Frame(object):
             fl["__traceback_hide__"] = frame.f_locals["__traceback_hide__"]
         except KeyError:
             pass
+        self.f_trace = None
+        self.f_exc_traceback = None
+        self.f_exc_type = None
+        self.f_exc_value = None
         self.f_code = self.Code(frame.f_code)
         self.f_lineno = frame.f_lineno
+        self.f_lasti = frame.f_lasti
+        # don't want to hit https://bugs.python.org/issue21967
+        self.f_restricted = False
 
 
 class _Object(object):
@@ -48,21 +72,20 @@ class _Truncated(object):
                            co_name="[rest of traceback truncated]"),
         )
         self.tb_next = None
+        self.tb_lasti = 0
 
 
 class Traceback(object):
     Frame = _Frame
 
-    tb_frame = tb_lineno = tb_next = None
-    max_frames = sys.getrecursionlimit() // 8
-
-    def __init__(self, tb, max_frames=None, depth=0):
-        limit = self.max_frames = max_frames or self.max_frames
+    def __init__(self, tb, max_frames=DEFAULT_MAX_FRAMES, depth=0):
         self.tb_frame = self.Frame(tb.tb_frame)
         self.tb_lineno = tb.tb_lineno
+        self.tb_lasti = tb.tb_lasti
+        self.tb_next = None
         if tb.tb_next is not None:
-            if depth <= limit:
-                self.tb_next = Traceback(tb.tb_next, limit, depth + 1)
+            if depth <= max_frames:
+                self.tb_next = Traceback(tb.tb_next, max_frames, depth + 1)
             else:
                 self.tb_next = _Truncated()
 
