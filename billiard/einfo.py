@@ -26,7 +26,6 @@ class _Code(object):
         self.co_varnames = ()
 
 
-
 class _Frame(object):
     Code = _Code
 
