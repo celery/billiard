@@ -1,3 +1,13 @@
+3.3.0.23 - 2016-03-03
+---------------------
+
+- ExceptionInfo: Adds tb_lasti and other missing traceback fields
+  (Issue #180).
+
+- monotonic: Now makes sure ctypes is available.
+
+- PipeConnection: Make sure the pipe is not closed multiple times.
+
 3.3.0.22 - 2015-12-08
 ---------------------
 
