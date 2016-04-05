@@ -2,7 +2,7 @@ from __future__ import absolute_import
 
 import billiard
 
-from .utils import Case
+from .case import Case
 
 
 class test_billiard(Case):

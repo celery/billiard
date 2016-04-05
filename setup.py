@@ -184,11 +184,6 @@ def reqs(f):
     return list(filter(None, [strip_comments(l) for l in open(
         os.path.join(os.getcwd(), 'requirements', f)).readlines()]))
 
-if py_version[0] == 3:
-    tests_require = reqs('test3.txt')
-else:
-    tests_require = reqs('test.txt')
-
 
 def _is_build_command(argv=sys.argv, cmds=('install', 'build', 'bdist')):
     for arg in argv:
@@ -237,7 +232,7 @@ def run_setup(with_extensions=True):
         url=meta['homepage'],
         zip_safe=False,
         license='BSD',
-        tests_require=tests_require,
+        tests_require=reqs('test.txt'),
         test_suite='nose.collector',
         classifiers=[
             'Development Status :: 5 - Production/Stable',

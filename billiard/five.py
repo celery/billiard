@@ -104,8 +104,6 @@ if PY3:
     range = range
     int_types = (int, )
 
-    open_fqdn = 'builtins.open'
-
     def items(d):
         return d.items()
 
@@ -143,8 +141,6 @@ else:
     long_t = long                   # noqa
     range = xrange
     int_types = (int, long)
-
-    open_fqdn = '__builtin__.open'
 
     def items(d):                   # noqa
         return d.iteritems()

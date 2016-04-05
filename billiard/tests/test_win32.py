@@ -1,12 +1,8 @@
 from __future__ import absolute_import
 
-import sys
-
-from nose import SkipTest
-
 from billiard.compat import _winapi
 
-from .utils import Case
+from .case import Case, skip
 
 WIN32_CONSTANTS = {
     'ERROR_ALREADY_EXISTS',
@@ -62,11 +58,8 @@ WIN32_FUNCTIONS = {
 }
 
 
+@skip.unless_win32()
 class test_win32_module(Case):
-
-    def setUp(self):
-        if sys.platform != 'win32':
-            raise SkipTest('win32 only tests')
 
     def test_constants(self):
         for const in WIN32_CONSTANTS:
