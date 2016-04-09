@@ -36,16 +36,16 @@ class test_reset_signals(Case):
     def test_shutdown_handler(self):
         with patch('sys.exit') as exit:
             _shutdown_cleanup(15, Mock())
-            self.assertTrue(exit.called)
+            exit.assert_called()
             self.assertEqual(os.WTERMSIG(exit.call_args[0][0]), 15)
 
     def test_does_not_reset_ignored_signal(self, sigs=['SIGTERM']):
         with self.assert_context(sigs, [], signal.SIG_IGN) as (_, SET):
-            self.assertFalse(SET.called)
+            SET.assert_not_called()
 
     def test_does_not_reset_if_current_is_None(self, sigs=['SIGTERM']):
         with self.assert_context(sigs, [], None) as (_, SET):
-            self.assertFalse(SET.called)
+            SET.assert_not_called()
 
     def test_resets_for_SIG_DFL(self, sigs=['SIGTERM', 'SIGINT', 'SIGUSR1']):
         with self.assert_context(sigs, [], signal.SIG_DFL) as (_, SET):
@@ -63,7 +63,7 @@ class test_reset_signals(Case):
         for exc in (OSError(), AttributeError(),
                     ValueError(), RuntimeError()):
             with self.assert_context(sigs, [], signal.SIG_DFL, exc) as (_, S):
-                self.assertTrue(S.called)
+                S.assert_called()
 
     @contextmanager
     def assert_context(self, default, full, get_returns=None, set_effect=None):
