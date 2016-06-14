@@ -93,7 +93,7 @@ if sys.version_info < (2, 5):
 if sys.platform == 'win32':  # Windows
     macros = dict()
     libraries = ['ws2_32']
-elif sys.platform.startswith('darwin'):  # Mac OSX
+elif sys.platform.startswith('darwin'):  # macOS
     macros = dict(
         HAVE_SEM_OPEN=1,
         HAVE_SEM_TIMEDWAIT=0,

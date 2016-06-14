@@ -160,7 +160,7 @@
     Fix contributed by Tin Tvrtkovic.
 
 - Now uses ``ctypes.find_library`` instead of hardcoded path to find
-  the OS X CoreServices framework.
+  the macOS CoreServices framework.
 
     Fix contributed by Moritz Kassner.
 
@@ -233,7 +233,7 @@
 - Includes many changes from multiprocessing in 3.4.
 
 - Now uses ``time.monotonic`` when available, also including
-  fallback implementations for Linux and OS X.
+  fallback implementations for Linux and macOS.
 
 - No longer cleans up after receiving SIGILL, SIGSEGV or SIGFPE
 

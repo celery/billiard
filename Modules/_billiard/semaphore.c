@@ -199,7 +199,7 @@ Billiard_semlock_release(BilliardSemLockObject *self, PyObject *args)
 #define SEM_GETVALUE(sem, pval) sem_getvalue(sem, pval)
 #define SEM_UNLINK(name) sem_unlink(name)
 
-/* OS X 10.4 defines SEM_FAILED as -1 instead (sem_t *)-1; this gives
+/* macOS 10.4 defines SEM_FAILED as -1 instead (sem_t *)-1; this gives
     compiler warnings, and (potentially) undefined behavior. */
 #ifdef __APPLE__
 #   undef SEM_FAILED
