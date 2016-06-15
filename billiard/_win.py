@@ -89,7 +89,7 @@ def get_processtree_pids(pid, include_parent=True):
     """Return a list with all the pids of a process tree"""
     parents = get_all_processes_pids()
     all_pids = list(parents.keys())
-    pids = set([pid])
+    pids = {pid}
     while 1:
         pids_new = pids.copy()
 
