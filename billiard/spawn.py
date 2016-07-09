@@ -10,6 +10,7 @@
 from __future__ import absolute_import
 
 import os
+import io
 import pickle
 import sys
 import runpy
@@ -197,7 +198,7 @@ def _setup_logging_in_child_hack():
 
 def _main(fd):
     _Django_old_layout_hack__load()
-    with os.fdopen(fd, 'rb', closefd=True) as from_parent:
+    with io.open(fd, 'rb', closefd=True) as from_parent:
         process.current_process()._inheriting = True
         try:
             preparation_data = pickle.load(from_parent)

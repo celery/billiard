@@ -84,11 +84,11 @@ else:
 
         @classmethod
         def loadbuf(cls, buf, protocol=None):
-            return cls.loads(buf)
+            return cls.loads(buf.getvalue())
 
         @classmethod
-        def loads(self, buf, loads=pickle.loads):
-            return loads(buf.getvalue())
+        def loads(self, S, loads=pickle.loads):
+            return loads(S)
 register = ForkingPickler.register
 
 

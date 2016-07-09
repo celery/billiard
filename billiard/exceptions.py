@@ -1,24 +1,16 @@
 from __future__ import absolute_import
 
-try:
-    from multiprocessing import (
-        ProcessError,
-        BufferTooShort,
-        TimeoutError,
-        AuthenticationError,
-    )
-except ImportError:
-    class ProcessError(Exception):          # noqa
-        pass
+class ProcessError(Exception):          # noqa
+    pass
 
-    class BufferTooShort(Exception):        # noqa
-        pass
+class BufferTooShort(ProcessError):        # noqa
+    pass
 
-    class TimeoutError(Exception):          # noqa
-        pass
+class TimeoutError(ProcessError):          # noqa
+    pass
 
-    class AuthenticationError(Exception):   # noqa
-        pass
+class AuthenticationError(ProcessError):   # noqa
+    pass
 
 
 class TimeLimitExceeded(Exception):

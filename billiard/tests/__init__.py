@@ -8,8 +8,8 @@ def teardown():
     # is attempted after global already collected at shutdown.
     cancelled = set()
     try:
-        import multiprocessing.util
-        cancelled.add(multiprocessing.util._exit_function)
+        import billiard.util
+        cancelled.add(billiard.util._exit_function)
     except (AttributeError, ImportError):
         pass
 
