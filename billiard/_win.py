@@ -28,16 +28,16 @@ INVALID_HANDLE_VALUE = c_void_p(-1).value
 
 class PROCESSENTRY32(Structure):
     _fields_ = [
-        ('dwSize',              DWORD),
-        ('cntUsage',            DWORD),
-        ('th32ProcessID',       DWORD),
-        ('th32DefaultHeapID',   c_size_t),
-        ('th32ModuleID',        DWORD),
-        ('cntThreads',          DWORD),
+        ('dwSize', DWORD),
+        ('cntUsage', DWORD),
+        ('th32ProcessID', DWORD),
+        ('th32DefaultHeapID', c_size_t),
+        ('th32ModuleID', DWORD),
+        ('cntThreads', DWORD),
         ('th32ParentProcessID', DWORD),
-        ('pcPriClassBase',      LONG),
-        ('dwFlags',             DWORD),
-        ('szExeFile',           c_char * 260),
+        ('pcPriClassBase', LONG),
+        ('dwFlags', DWORD),
+        ('szExeFile', c_char * 260),
     ]
 LPPROCESSENTRY32 = POINTER(PROCESSENTRY32)
 

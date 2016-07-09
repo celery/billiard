@@ -585,14 +585,14 @@ else:
             1, obsize, ibsize, _winapi.NMPWAIT_WAIT_FOREVER,
             # default security descriptor: the handle cannot be inherited
             _winapi.NULL
-            )
+        )
         h2 = _winapi.CreateFile(
             address, access, 0, _winapi.NULL, _winapi.OPEN_EXISTING,
             _winapi.FILE_FLAG_OVERLAPPED, _winapi.NULL
-            )
+        )
         _winapi.SetNamedPipeHandleState(
             h2, _winapi.PIPE_READMODE_MESSAGE, None, None
-            )
+        )
 
         overlapped = _winapi.ConnectNamedPipe(h1, overlapped=True)
         _, err = overlapped.GetOverlappedResult(True)
@@ -632,7 +632,7 @@ class SocketListener(object):
         if family == 'AF_UNIX':
             self._unlink = util.Finalize(
                 self, os.unlink, args=(address,), exitpriority=0
-                )
+            )
         else:
             self._unlink = None
 
@@ -687,7 +687,7 @@ if sys.platform == 'win32':
             self.close = util.Finalize(
                 self, PipeListener._finalize_pipe_listener,
                 args=(self._handle_queue, self._address), exitpriority=0
-                )
+            )
 
         def _new_handle(self, first=False):
             flags = _winapi.PIPE_ACCESS_DUPLEX | _winapi.FILE_FLAG_OVERLAPPED
@@ -699,7 +699,7 @@ if sys.platform == 'win32':
                 _winapi.PIPE_WAIT,
                 _winapi.PIPE_UNLIMITED_INSTANCES, BUFSIZE, BUFSIZE,
                 _winapi.NMPWAIT_WAIT_FOREVER, _winapi.NULL
-                )
+            )
 
         def accept(self):
             self._handle_queue.append(self._new_handle())
@@ -743,7 +743,7 @@ if sys.platform == 'win32':
                     address, _winapi.GENERIC_READ | _winapi.GENERIC_WRITE,
                     0, _winapi.NULL, _winapi.OPEN_EXISTING,
                     _winapi.FILE_FLAG_OVERLAPPED, _winapi.NULL
-                    )
+                )
             except OSError as e:
                 if e.winerror not in _ignore or _check_timeout(t):
                     raise
@@ -754,7 +754,7 @@ if sys.platform == 'win32':
 
         _winapi.SetNamedPipeHandleState(
             h, _winapi.PIPE_READMODE_MESSAGE, None, None
-            )
+        )
         return PipeConnection(h)
 
 #
@@ -864,7 +864,7 @@ if sys.platform == 'win32':
             else:
                 raise RuntimeError('Should not get here')
             ready.append(L[res])
-            L = L[res+1:]
+            L = L[res + 1:]
             timeout = 0
         return ready
 

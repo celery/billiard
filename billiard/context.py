@@ -419,4 +419,4 @@ def assert_spawning(obj):
         raise RuntimeError(
             '%s objects should only be shared between processes'
             ' through inheritance' % type(obj).__name__
-            )
+        )

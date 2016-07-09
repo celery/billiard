@@ -235,7 +235,7 @@ def get_preparation_data(name):
     d = dict(
         log_to_stderr=util._log_to_stderr,
         authkey=process.current_process().authkey,
-        )
+    )
 
     if util._logger is not None:
         d['log_level'] = util._logger.getEffectiveLevel()
@@ -255,7 +255,7 @@ def get_preparation_data(name):
         orig_dir=process.ORIGINAL_DIR,
         dir=os.getcwd(),
         start_method=get_start_method(),
-        )
+    )
 
     # Figure out whether to initialise main in the subprocess as a module
     # or through direct execution (or to leave it alone entirely)

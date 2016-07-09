@@ -1586,7 +1586,7 @@ class Pool(object):
         stop_if_not_current(self._result_handler)
         debug('result handler joined')
         for i, p in enumerate(self._pool):
-            debug('joining worker %s/%s (%r)', i+1, len(self._pool), p)
+            debug('joining worker %s/%s (%r)', i + 1, len(self._pool), p)
             if p._popen is not None:  # process started?
                 p.join()
         debug('pool join complete')
