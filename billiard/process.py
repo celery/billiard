@@ -118,8 +118,6 @@ class BaseProcess(object):
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
             'can only start a process object created by current process'
-        assert not _current_process._config.get('daemon'), \
-            'daemonic processes are not allowed to have children'
         _cleanup()
         self._popen = self._Popen(self)
         self._sentinel = self._popen.sentinel
