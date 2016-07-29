@@ -1,7 +1,11 @@
-3.5.0.0 - TBA
--------------
+3.5.0.0 - 2016-07-28
+--------------------
 
-- Merged changes in CPython 3.5
+- No longer supports Python 2.6
+
+    You need Python 2.7 or later to use this version of billiard.
+
+- Merged changes from CPython 3.5
 
 3.3.0.20 - 2015-04-17
 ---------------------
