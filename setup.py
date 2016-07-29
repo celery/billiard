@@ -87,8 +87,8 @@ finally:
     meta_fh.close()
 
 
-if sys.version_info < (2, 5):
-    raise ValueError('Versions of Python before 2.5 are not supported')
+if sys.version_info < (2, 7):
+    raise ValueError('Versions of Python before 2.7 are not supported')
 
 if sys.platform == 'win32':  # Windows
     macros = dict()
