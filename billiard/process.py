@@ -229,6 +229,11 @@ class BaseProcess(object):
             raise ValueError("process not started")
 
     @property
+    def _counter(self):
+        # compat for 2.7
+        return _process_counter
+
+    @property
     def _children(self):
         # compat for 2.7
         return _children
