@@ -4,10 +4,9 @@ import os
 import sys
 import glob
 
-try:
-    from setuptools import setup, Extension, find_packages
-except ImportError:
-    from distutils.core import setup, Extension, find_packages  # noqa
+import setuptools
+import setuptools.command.test
+
 from distutils import sysconfig
 from distutils.errors import (
     CCompilerError,
@@ -99,7 +98,7 @@ elif sys.platform.startswith('darwin'):  # macOS
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
         HAVE_BROKEN_SEM_GETVALUE=1
-        )
+    )
     libraries = []
 elif sys.platform.startswith('cygwin'):  # Cygwin
     macros = dict(
@@ -107,7 +106,7 @@ elif sys.platform.startswith('cygwin'):  # Cygwin
         HAVE_SEM_TIMEDWAIT=1,
         HAVE_FD_TRANSFER=0,
         HAVE_BROKEN_SEM_UNLINK=1
-        )
+    )
     libraries = []
 elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
     # FreeBSD's P1003.1b semaphore support is very experimental
@@ -116,7 +115,7 @@ elif sys.platform in ('freebsd4', 'freebsd5', 'freebsd6'):
         HAVE_SEM_OPEN=0,
         HAVE_SEM_TIMEDWAIT=0,
         HAVE_FD_TRANSFER=1,
-        )
+    )
     libraries = []
 elif re.match('^(gnukfreebsd(8|9|10|11)|freebsd(7|8|9|0))', sys.platform):
     macros = dict(                  # FreeBSD 7+ and GNU/kFreeBSD 8+
@@ -191,11 +190,23 @@ def _is_build_command(argv=sys.argv, cmds=('install', 'build', 'bdist')):
             return arg
 
 
+class pytest(setuptools.command.test.test):
+    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
+
+    def initialize_options(self):
+        setuptools.command.test.test.initialize_options(self)
+        self.pytest_args = []
+
+    def run_tests(self):
+        import pytest
+        sys.exit(pytest.main(self.pytest_args))
+
+
 def run_setup(with_extensions=True):
     extensions = []
     if with_extensions:
         extensions = [
-            Extension(
+            setuptools.Extension(
                 '_billiard',
                 sources=multiprocessing_srcs,
                 define_macros=macros.items(),
@@ -206,7 +217,7 @@ def run_setup(with_extensions=True):
         ]
         if sys.platform == 'win32':
             extensions.append(
-                Extension(
+                setuptools.Extension(
                     '_winapi',
                     sources=multiprocessing_srcs,
                     define_macros=macros.items(),
@@ -215,10 +226,8 @@ def run_setup(with_extensions=True):
                     depends=glob.glob('Modules/_billiard/*.h') + ['setup.py'],
                 ),
             )
-    packages = find_packages(exclude=[
-        'ez_setup', 'tests', 'funtests.*', 'tests.*',
-    ])
-    setup(
+    packages = setuptools.find_packages(exclude=['ez_setup', 't', 't.*'])
+    setuptools.setup(
         name='billiard',
         version=meta['VERSION'],
         description=meta['doc'],
@@ -233,7 +242,7 @@ def run_setup(with_extensions=True):
         zip_safe=False,
         license='BSD',
         tests_require=reqs('test.txt'),
-        test_suite='nose.collector',
+        cmdclass={'test': pytest},
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',

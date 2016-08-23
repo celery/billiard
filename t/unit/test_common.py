@@ -1,18 +1,19 @@
 from __future__ import absolute_import
 
 import os
+import pytest
 import signal
 
 from contextlib import contextmanager
 from time import time
+
+from case import Mock, call, patch, skip
 
 from billiard.common import (
     _shutdown_cleanup,
     reset_signals,
     restart_state,
 )
-
-from .case import Case, Mock, call, patch, skip
 
 
 def signo(name):
@@ -31,13 +32,13 @@ def termsigs(default, full):
 
 
 @skip.if_win32()
-class test_reset_signals(Case):
+class test_reset_signals:
 
     def test_shutdown_handler(self):
         with patch('sys.exit') as exit:
             _shutdown_cleanup(15, Mock())
             exit.assert_called()
-            self.assertEqual(os.WTERMSIG(exit.call_args[0][0]), 15)
+            assert os.WTERMSIG(exit.call_args[0][0]) == 15
 
     def test_does_not_reset_ignored_signal(self, sigs=['SIGTERM']):
         with self.assert_context(sigs, [], signal.SIG_IGN) as (_, SET):
@@ -79,20 +80,20 @@ class test_reset_signals(Case):
                     yield GET, SET
 
 
-class test_restart_state(Case):
+class test_restart_state:
 
     def test_raises(self):
         s = restart_state(100, 1)  # max 100 restarts in 1 second.
         s.R = 99
         s.step()
-        with self.assertRaises(s.RestartFreqExceeded):
+        with pytest.raises(s.RestartFreqExceeded):
             s.step()
 
     def test_time_passed_resets_counter(self):
         s = restart_state(100, 10)
         s.R, s.T = 100, time()
-        with self.assertRaises(s.RestartFreqExceeded):
+        with pytest.raises(s.RestartFreqExceeded):
             s.step()
         s.R, s.T = 100, time()
         s.step(time() + 20)
-        self.assertEqual(s.R, 1)
+        assert s.R == 1
