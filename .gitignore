@@ -24,3 +24,4 @@ cover/
 .eggs/
 htmlcov/
 .cache/
+.coverage
