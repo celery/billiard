@@ -28,6 +28,13 @@ WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 #
 
 
+if sys.platform == 'win32':
+    try:
+        from _winapi import CreateProcess
+    except ImportError:  # Py2.7
+        from _subprocess import CreateProcess
+
+
 class Popen(object):
     '''
     Start a subprocess to run the code of a process object
@@ -51,7 +58,7 @@ class Popen(object):
         with io.open(wfd, 'wb', closefd=True) as to_child:
             # start process
             try:
-                hp, ht, pid, tid = _winapi.CreateProcess(
+                hp, ht, pid, tid = CreateProcess(
                     spawn.get_executable(), cmd,
                     None, None, False, 0, None, None, None)
                 _winapi.CloseHandle(ht)

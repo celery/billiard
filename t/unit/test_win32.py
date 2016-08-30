@@ -65,7 +65,6 @@ class test_win32_module:
         'TerminateProcess',
         'DuplicateHandle',
         'CreatePipe',
-        'CreateProcess',
     ])
     def test_functions(self, name):
         assert getattr(_winapi, name)
