@@ -1100,7 +1100,7 @@ class _TestZZZNumberOfObjects(BaseTestCase):
         self.assertEqual(refs, EXPECTED_NUMBER)
 
 # Test of creating a customized manager class
-from billiard.managers import BaseManager, BaseProxy, RemoteError
+from billiard.managers import BaseManager, BaseProxy, RemoteError  # noqa
 
 
 class FooBar(object):
