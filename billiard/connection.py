@@ -409,10 +409,11 @@ class Connection(_ConnectionBase):
             except (OSError, IOError, socket.error) as exc:
                 if getattr(exc, 'errno', None) != errno.EINTR:
                     raise
-            remaining -= n
-            if remaining == 0:
-                break
-            buf = buf[n:]
+            else:
+                remaining -= n
+                if remaining == 0:
+                    break
+                buf = buf[n:]
 
     def _recv(self, size, read=_read):
         buf = io.BytesIO()
@@ -424,14 +425,15 @@ class Connection(_ConnectionBase):
             except (OSError, IOError, socket.error) as exc:
                 if getattr(exc, 'errno', None) != errno.EINTR:
                     raise
-            n = len(chunk)
-            if n == 0:
-                if remaining == size:
-                    raise EOFError
-                else:
-                    raise OSError("got end of file during message")
-            buf.write(chunk)
-            remaining -= n
+            else:
+                n = len(chunk)
+                if n == 0:
+                    if remaining == size:
+                        raise EOFError
+                    else:
+                        raise OSError("got end of file during message")
+                buf.write(chunk)
+                remaining -= n
         return buf
 
     def _send_bytes(self, buf, memoryview=memoryview):
