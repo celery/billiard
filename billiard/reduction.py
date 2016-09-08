@@ -88,6 +88,8 @@ else:
 
         @classmethod
         def loads(self, buf, loads=pickle.loads):
+            if isinstance(buf, io.BytesIO):
+                buf = buf.getvalue()
             return loads(buf)
 register = ForkingPickler.register
 
