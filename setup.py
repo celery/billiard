@@ -236,6 +236,7 @@ def run_setup(with_extensions=True):
         ext_modules=extensions,
         author=meta['author'],
         author_email=meta['author_email'],
+        keywords='multiprocessing pool process',
         maintainer=meta['maintainer'],
         maintainer_email=meta['contact'],
         url=meta['homepage'],
