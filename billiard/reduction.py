@@ -87,7 +87,7 @@ else:
             return cls.loads(buf)
 
         @classmethod
-        def loads(self, buf, loads=pickle.loads):
+        def loads(cls, buf, loads=pickle.loads):
             if isinstance(buf, io.BytesIO):
                 buf = buf.getvalue()
             return loads(buf)

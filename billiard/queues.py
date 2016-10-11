@@ -39,7 +39,7 @@ class Queue(object):
             raise TypeError('missing 1 required keyword-only argument: ctx')
         if maxsize <= 0:
             # Can raise ImportError (see issues #3770 and #23400)
-            from .synchronize import SEM_VALUE_MAX as maxsize
+            from .synchronize import SEM_VALUE_MAX as maxsize  # noqa
         self._maxsize = maxsize
         self._reader, self._writer = connection.Pipe(duplex=False)
         self._rlock = ctx.Lock()
