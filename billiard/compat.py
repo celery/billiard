@@ -250,3 +250,59 @@ else:
             handle, F_SETFL,
             flags & (~O_NONBLOCK) if blocking else flags | O_NONBLOCK,
         )
+
+
+E_PSUTIL_MISSING = """
+On Windows, the ability to inspect memory usage requires the psutil library.
+
+You can install it using pip:
+
+    $ pip install psutil
+"""
+
+
+E_RESOURCE_MISSING = """
+Your platform ({0}) does not seem to have the `resource.getrusage' function.
+
+Please open an issue so that we can add support for this platform.
+"""
+
+
+if sys.platform == 'win32':
+
+    try:
+        import psutil
+    except ImportError:  # pragma: no cover
+        psutil = None    # noqa
+
+    def mem_rss():
+        # type () -> int
+        if psutil is None:
+            raise ImportError(E_PSUTIL_MISSING.strip())
+        return int(psutil.Process(os.getpid()).memory_info()[0] / 1024.0)
+
+else:
+    try:
+        from resource import getrusage, RUSAGE_SELF
+    except ImportError:  # pragma: no cover
+        getrusage = RUSAGE_SELF = None  # noqa
+
+    if 'bsd' in sys.platform or sys.platform == 'darwin':
+        # On BSD platforms :man:`getrusage(2)` ru_maxrss field is in bytes.
+
+        def maxrss_to_kb(v):
+            # type: (SupportsInt) -> int
+            return int(v) / 1024.0
+
+    else:
+        # On Linux it's kilobytes.
+
+        def maxrss_to_kb(v):
+            # type: (SupportsInt) -> int
+            return int(v)
+
+    def mem_rss():
+        # type () -> int
+        if resource is None:
+            raise ImportError(E_RESOURCE_MISSING.strip().format(sys.platform))
+        return maxrss_to_kb(getrusage(RUSAGE_SELF).ru_maxrss)

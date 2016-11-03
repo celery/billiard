@@ -31,7 +31,7 @@ from . import util
 from .common import (
     TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
 )
-from .compat import get_errno, send_offset
+from .compat import get_errno, mem_rss, send_offset
 from .einfo import ExceptionInfo
 from .dummy import DummyProcess
 from .exceptions import (
@@ -49,11 +49,6 @@ from .util import Finalize, debug
 MAXMEM_USED_FMT = """\
 child process exiting after exceeding memory limit ({0}KiB / {0}KiB)
 """
-
-try:
-    import resource
-except ImportError:  # pragma: no cover
-    resource = None  # noqa
 
 PY3 = sys.version_info[0] == 3
 
@@ -329,8 +324,6 @@ class Worker(object):
         maxtasks = self.maxtasks
         max_memory_per_child = self.max_memory_per_child or 0
         prepare_result = self.prepare_result
-        getrusage = getattr(resource, 'getrusage', None)
-        rusage_self = getattr(resource, 'RUSAGE_SELF', None)
 
         wait_for_job = self.wait_for_job
         _wait_for_syn = self.wait_for_syn
@@ -380,7 +373,7 @@ class Worker(object):
                         del(tb)
                 completed += 1
                 if max_memory_per_child > 0:
-                    used_kb = getrusage(rusage_self).ru_maxrss
+                    used_kb = mem_rss()
                     if used_kb <= 0:
                         error('worker unable to determine memory usage')
                     if used_kb > 0 and used_kb > max_memory_per_child:
