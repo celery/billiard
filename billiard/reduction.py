@@ -84,7 +84,7 @@ else:
 
         @classmethod
         def loadbuf(cls, buf, protocol=None):
-            return cls.loads(buf)
+            return cls.loads(buf.getvalue())
 
         @classmethod
         def loads(cls, buf, loads=pickle.loads):
