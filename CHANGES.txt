@@ -1,3 +1,15 @@
+3.5.0.2 - 2016-10-03
+--------------------
+
+- max_memory_per_child was measured in kilobytes on Linux, but bytes on
+  *BSD/MacOS, it's now always kilobytes.
+
+- Windows: Adds support for max_memory_per_child, but requires the
+  ``psutil`` package to be installed.
+
+- Fixed bug in ForkingPickler.loadbuf, where it tried to pass
+  a BytesIO instance directly to ``pickle.loads`` on Python 2.7.
+
 3.5.0.1 - 2016-09-07
 --------------------
 
