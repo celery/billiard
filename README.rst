@@ -3,14 +3,15 @@ billiard
 ========
 :version: 3.5.0.2
 
-|build-status| |coverage| |license| |wheel| |pyversion| |pyimp|
+|build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
-.. |build-status| image:: https://secure.travis-ci.org/celery/billiard.png?branch=master
-    :alt: Build status
+.. |build-status-lin| image:: https://secure.travis-ci.org/celery/billiard.png?branch=master
+    :alt: Build status on Linux
     :target: https://travis-ci.org/celery/billiard
 
-.. |coverage| image:: https://codecov.io/github/celery/billiard.svg?branch=master
-    :target: https://codecov.io/github/celery/billiard?branch=master
+.. |build-status-win| image:: https://ci.appveyor.com/api/projects/status/github/celery/billiard?png=true&branch=master
+    :alt: Build status on Windows
+    :target: https://ci.appveyor.com/project/ask/billiard
 
 .. |license| image:: https://img.shields.io/pypi/l/billiard.svg
     :alt: BSD License
@@ -34,8 +35,8 @@ About
 `billiard` is a fork of the Python 2.7 `multiprocessing <http://docs.python.org/library/multiprocessing.html>`_
 package. The multiprocessing package itself is a renamed and updated version of
 R Oudkerk's `pyprocessing <http://pypi.python.org/pypi/processing/>`_ package.
-This standalone variant is intended to be compatible with Python 2.4 and 2.5,
-and will draw its fixes/improvements from python-trunk.
+This standalone variant draws its fixes/improvements from python-trunk and provides
+additional bug fixes and improvements.
 
 - This package would not be possible if not for the contributions of not only
   the current maintainers but all of the contributors to the original pyprocessing
@@ -47,8 +48,10 @@ and will draw its fixes/improvements from python-trunk.
 
 - And the Pool improvements previously located in `Celery`_.
 
-.. _`Celery`: http://celeryproject.org
+- Billiard is used in and is a dependency for `Celery`_ and is maintained by the
+  Celery team.
 
+.. _`Celery`: http://celeryproject.org
 
 Bug reporting
 -------------
@@ -56,8 +59,3 @@ Bug reporting
 Please report bugs related to multiprocessing at the
 `Python bug tracker <http://bugs.python.org/>`_. Issues related to billiard
 should be reported at http://github.com/celery/billiard/issues.
-
-
-.. image:: https://d2weczhvl823v0.cloudfront.net/celery/billiard/trend.png
-    :alt: Bitdeli badge
-    :target: https://bitdeli.com/free
