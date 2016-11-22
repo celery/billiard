@@ -388,6 +388,7 @@ class Event(object):
 # Barrier
 #
 
+
 if hasattr(threading, 'Barrier'):
 
     class Barrier(threading.Barrier):

@@ -172,6 +172,7 @@ def make_property(name):
         prop_cache[name] = d[name]
         return d[name]
 
+
 template = '''
 def get%s(self):
     self.acquire()
