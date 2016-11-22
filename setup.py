@@ -157,16 +157,6 @@ else:
         multiprocessing_srcs.append('Modules/_billiard/semaphore.c')
 
 long_description = open(os.path.join(HERE, 'README.rst')).read()
-long_description += """
-
-===========
-Changes
-===========
-
-"""
-long_description += open(os.path.join(HERE, 'CHANGES.txt')).read()
-if not is_py3k:
-    long_description = long_description.encode('ascii', 'replace')
 
 # -*- Installation Requires -*-
 
