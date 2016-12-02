@@ -238,6 +238,11 @@ class BaseProcess(object):
         # compat for 2.7
         return _children
 
+    @property
+    def _authkey(self):
+        # compat for 2.7
+        return self.authkey
+
     def __repr__(self):
         if self is _current_process:
             status = 'started'
