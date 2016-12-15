@@ -380,8 +380,6 @@ class Worker(object):
                         error(MAXMEM_USED_FMT.format(
                             used_kb, max_memory_per_child))
                         return EX_RECYCLE
-                    else:
-                        error('worker unable to determine worker memory usage')
 
         debug('worker exiting after %d tasks', completed)
         if maxtasks:
