@@ -680,11 +680,15 @@ class TimeoutHandler(PoolThread):
         else:
             if worker._popen.wait(timeout=0.1):
                 return
-        debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
-        try:
-            _kill(worker.pid, SIGKILL)
-        except OSError:
-            pass
+
+        debug('timeout: TERM timed-out on %s', worker._name)
+
+        if sys.platform != 'win32':
+            debug('timeout: now sending KILL to %s', worker._name)
+            try:
+                _kill(worker.pid, SIGKILL)
+            except OSError:
+                pass
 
     def handle_timeouts(self):
         cache = self.cache
