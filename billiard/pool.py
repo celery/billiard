@@ -135,8 +135,7 @@ def starmapstar(args):
 
 
 def error(msg, *args, **kwargs):
-    if util._logger:
-        util._logger.error(msg, *args, **kwargs)
+    util.get_logger().error(msg, *args, **kwargs)
 
 
 def stop_if_not_current(thread, timeout=None):
