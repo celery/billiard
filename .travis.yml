@@ -1,14 +1,20 @@
 language: python
 sudo: false
 cache: false
-python:
-    - 3.5
-env:
-    - TOXENV=2.7
-    - TOXENV=3.3
-    - TOXENV=3.4
-    - TOXENV=3.5
-    - TOXENV=pypy
+
+matrix:
+  include:
+    - python: 2.7
+      env: TOXENV=2.7
+    - python: 3.4
+      env: TOXENV=3.4
+    - python: 3.5
+      env: TOXENV=3.5
+    - python: 3.6
+      env: TOXENV=3.6
+    - python: pypy
+      env: TOXENV=pypy
+
 install:
     - travis_retry pip install tox
 script: tox
