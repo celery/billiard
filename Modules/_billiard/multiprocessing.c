@@ -328,11 +328,11 @@ static PyMethodDef Billiard_module_methods[] = {
     {"sendfd", Billiard_multiprocessing_sendfd, METH_VARARGS,
      "sendfd(sockfd, fd) -> None\n\n"
      "Send file descriptor given by fd over the unix domain socket\n"
-     "whose file decriptor is sockfd"},
+     "whose file descriptor is sockfd"},
     {"recvfd", Billiard_multiprocessing_recvfd, METH_VARARGS,
      "recvfd(sockfd) -> fd\n\n"
      "Receive a file descriptor over a unix domain socket\n"
-     "whose file decriptor is sockfd"},
+     "whose file descriptor is sockfd"},
 #endif
 #if !defined(MS_WINDOWS)
     {"read", Billiard_read, METH_VARARGS,
