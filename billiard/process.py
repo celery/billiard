@@ -239,6 +239,16 @@ class BaseProcess(object):
         return _children
 
     @property
+    def _tempdir(self):
+        # compat for 2.7
+        return None
+
+    @property
+    def _daemonic(self):
+        # compat for 2.7
+        return self.daemon
+
+    @property
     def _authkey(self):
         # compat for 2.7
         return self.authkey
