@@ -3,6 +3,7 @@
 *~
 *.sqlite
 *.sqlite-journal
+.idea/
 settings_local.py
 local_settings.py
 .*.sw[po]
