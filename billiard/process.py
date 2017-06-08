@@ -103,6 +103,8 @@ class BaseProcess(object):
             self.daemon = daemon
         if _dangling is not None:
             _dangling.add(self)
+        
+        self._controlled_termination = False
 
     def run(self):
         '''
@@ -132,6 +134,10 @@ class BaseProcess(object):
         Terminate process; sends SIGTERM signal or uses TerminateProcess()
         '''
         self._popen.terminate()
+        
+    def terminate_controlled(self):
+        self._controlled_termination = True
+        self.terminate()
 
     def join(self, timeout=None):
         '''
