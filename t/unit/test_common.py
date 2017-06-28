@@ -14,6 +14,7 @@ from billiard.common import (
     reset_signals,
     restart_state,
 )
+from billiard import Value
 
 
 def signo(name):
@@ -97,3 +98,17 @@ class test_restart_state:
         s.R, s.T = 100, time()
         s.step(time() + 20)
         assert s.R == 1
+
+
+class test_values:
+
+    def test_issue_229(self):
+        """Test fix for issue #229"""
+
+        a = Value('i', 0)
+        b = Value('i', 0)
+
+        a.value = 5
+        assert a.value == 5
+        assert b.value == 0
+

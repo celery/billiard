@@ -155,7 +155,7 @@ def rebuild_ctype(type_, wrapper, length):
         obj = type_.from_buffer(buf)
     else:
         obj = type_.from_address(wrapper.get_address())
-        obj._wrapper = wrapper
+    obj._wrapper = wrapper
     return obj
 
 #
