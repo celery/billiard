@@ -47,7 +47,7 @@ from .five import Empty, Queue, range, values, reraise, monotonic
 from .util import Finalize, debug
 
 MAXMEM_USED_FMT = """\
-child process exiting after exceeding memory limit ({0}KiB / {0}KiB)
+child process exiting after exceeding memory limit ({0}KiB / {1}KiB)
 """
 
 PY3 = sys.version_info[0] == 3
