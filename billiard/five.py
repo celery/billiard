@@ -17,7 +17,10 @@ PY3 = sys.version_info[0] == 3
 try:
     reload = reload                         # noqa
 except NameError:                           # pragma: no cover
-    from imp import reload                  # noqa
+    try:
+        from importlib import reload        # noqa
+    except ImportError:                     # pragma: no cover
+        from imp import reload              # noqa
 
 try:
     from UserList import UserList           # noqa
