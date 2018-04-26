@@ -15,7 +15,7 @@ http://bugs.python.org/issue1683`_.
 
 Windows binary builds for Python 2.4 and Python 2.5 are available at
 
-    http://pypi.python.org/pypi/multiprocessing
+    https://pypi.org/project/multiprocessing/
 
 Python 2.6 and newer versions already come with multiprocessing. Although
 the stand alone variant of the multiprocessing package is kept compatible
