@@ -19,22 +19,22 @@ billiard
 
 .. |wheel| image:: https://img.shields.io/pypi/wheel/billiard.svg
     :alt: Billiard can be installed via wheel
-    :target: http://pypi.python.org/pypi/billiard
+    :target: https://pypi.org/project/billiard/
 
 .. |pyversion| image:: https://img.shields.io/pypi/pyversions/billiard.svg
     :alt: Supported Python versions.
-    :target: http://pypi.python.org/pypi/billiard
+    :target: https://pypi.org/project/billiard/
 
 .. |pyimp| image:: https://img.shields.io/pypi/implementation/billiard.svg
     :alt: Support Python implementations.
-    :target: http://pypi.python.org/pypi/billiard
+    :target: https://pypi.org/project/billiard/
 
 About
 -----
 
 `billiard` is a fork of the Python 2.7 `multiprocessing <http://docs.python.org/library/multiprocessing.html>`_
 package. The multiprocessing package itself is a renamed and updated version of
-R Oudkerk's `pyprocessing <http://pypi.python.org/pypi/processing/>`_ package.
+R Oudkerk's `pyprocessing <https://pypi.org/project/processing/>`_ package.
 This standalone variant draws its fixes/improvements from python-trunk and provides
 additional bug fixes and improvements.
 
