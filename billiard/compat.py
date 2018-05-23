@@ -221,7 +221,7 @@ else:
         errpipe_read, errpipe_write = os.pipe()
         try:
             return _posixsubprocess.fork_exec(
-                args, [fsencode(path)], True, passfds, None, None,
+                args, [fsencode(path)], True, tuple(passfds), None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
                 False, False, None)
         finally:
