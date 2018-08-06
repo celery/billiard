@@ -12,7 +12,7 @@ from __future__ import absolute_import
 #
 # Imports
 #
-
+import copy
 import errno
 import itertools
 import os
@@ -696,7 +696,7 @@ class TimeoutHandler(PoolThread):
             pass
 
     def handle_timeouts(self):
-        cache = self.cache.copy()
+        cache = copy.deepcopy(self.cache)
         t_hard, t_soft = self.t_hard, self.t_soft
         dirty = set()
         on_soft_timeout = self.on_soft_timeout
