@@ -57,17 +57,17 @@ if platform.system() == 'Windows':  # pragma: no cover
     # handled by # any process, so this is needed to terminate the task
     # *and its children* (if any).
     from ._win import kill_processtree as _kill  # noqa
+
     SIGKILL = TERM_SIGNAL
 else:
-    from os import kill as _kill                 # noqa
-    SIGKILL = signal.SIGKILL
+    from os import kill as _kill  # noqa
 
+    SIGKILL = signal.SIGKILL
 
 try:
     TIMEOUT_MAX = threading.TIMEOUT_MAX
 except AttributeError:  # pragma: no cover
     TIMEOUT_MAX = 1e10  # noqa
-
 
 if sys.version_info >= (3, 3):
     _Semaphore = threading.Semaphore
@@ -99,7 +99,6 @@ DEATH = 4
 EX_OK = 0
 EX_FAILURE = 1
 EX_RECYCLE = 0x9B
-
 
 # Signal used for soft time limits.
 SIG_SOFT_TIMEOUT = getattr(signal, "SIGUSR1", None)
@@ -197,6 +196,7 @@ class LaxBoundedSemaphore(_Semaphore):
             while self._Semaphore__value < self._initial_value:
                 _Semaphore.release(self)
 
+
 #
 # Exceptions
 #
@@ -226,6 +226,7 @@ class WorkersJoined(Exception):
 def soft_timeout_sighandler(signum, frame):
     raise SoftTimeLimitExceeded()
 
+
 #
 # Code run by worker processes
 #
@@ -251,7 +252,7 @@ class Worker(object):
 
     def contribute_to_object(self, obj):
         obj.inq, obj.outq, obj.synq = self.inq, self.outq, self.synq
-        obj.inqW_fd = self.inq._writer.fileno()    # inqueue write fd
+        obj.inqW_fd = self.inq._writer.fileno()  # inqueue write fd
         obj.outqR_fd = self.outq._reader.fileno()  # outqueue read fd
         if self.synq:
             obj.synqR_fd = self.synq._reader.fileno()  # synqueue read fd
@@ -278,6 +279,7 @@ class Worker(object):
         def exit(status=None):
             _exitcode[0] = status
             return _exit()
+
         sys.exit = exit
 
         pid = os.getpid()
@@ -369,7 +371,7 @@ class Worker(object):
                         ))
                         put((READY, (job, i, (False, einfo), inqW_fd)))
                     finally:
-                        del(tb)
+                        del tb
                 completed += 1
                 if max_memory_per_child > 0:
                     used_kb = mem_rss()
@@ -694,7 +696,7 @@ class TimeoutHandler(PoolThread):
             pass
 
     def handle_timeouts(self):
-        cache = self.cache
+        cache = self.cache.copy()
         t_hard, t_soft = self.t_hard, self.t_soft
         dirty = set()
         on_soft_timeout = self.on_soft_timeout
@@ -815,6 +817,7 @@ class ResultHandler(PoolThread):
                 state_handlers[state](*args)
             except KeyError:
                 debug("Unknown job state: %s (args=%s)", state, args)
+
         self.on_state_change = on_state_change
 
     def _process_result(self, timeout=1.0):
@@ -1155,8 +1158,7 @@ class Pool(object):
                 debug('Supervisor: worked %d joined', i)
                 cleaned[worker.pid] = worker
                 exitcodes[worker.pid] = exitcode
-                if exitcode not in (EX_OK, EX_RECYCLE) and \
-                        not getattr(worker, '_controlled_termination', False):
+                if exitcode not in (EX_OK, EX_RECYCLE) and not getattr(worker, '_controlled_termination', False):
                     error(
                         'Process %r pid:%r exited with %r',
                         worker.name, worker.pid, human_status(exitcode),
@@ -1224,8 +1226,6 @@ class Pool(object):
             )
         except WorkerLostError:
             job._set(None, (False, ExceptionInfo()))
-        else:  # pragma: no cover
-            pass
 
     def __enter__(self):
         return self
@@ -1326,6 +1326,7 @@ class Pool(object):
             if self._outqueue._reader.poll(timeout):
                 return True, self._quick_get()
             return False, None
+
         self._poll_result = _poll_result
 
     def _start_timeout_handler(self):
@@ -1481,7 +1482,7 @@ class Pool(object):
                 self._start_timeout_handler()
             if self.threads:
                 self._taskqueue.put(([(TASK, (result._job, None,
-                                    func, args, kwds))], None))
+                                              func, args, kwds))], None))
             else:
                 self._quick_put((TASK, (result._job, None, func, args, kwds)))
             return result
@@ -1612,7 +1613,7 @@ class Pool(object):
         worker_handler.terminate()
 
         task_handler.terminate()
-        taskqueue.put(None)                 # sentinel
+        taskqueue.put(None)  # sentinel
 
         debug('helping task handler/workers to finish')
         cls._help_stuff_finish(*help_stuff_finish_args)
@@ -1653,6 +1654,7 @@ class Pool(object):
     @property
     def process_sentinels(self):
         return [w._popen.sentinel for w in self._pool]
+
 
 #
 # Class whose instances are returned by `Pool.apply_async()`
@@ -1775,7 +1777,7 @@ class ApplyResult(object):
                 self.safe_apply_callback(
                     self._callback, self._value)
             if (self._value is not None and
-                    self._error_callback and not self._success):
+                self._error_callback and not self._success):
                 self.safe_apply_callback(
                     self._error_callback, self._value)
 
@@ -1811,6 +1813,7 @@ class ApplyResult(object):
                         )
             if self._send_ack and synqW_fd:
                 self._send_ack(response, pid, self._job, synqW_fd)
+
 
 #
 # Class whose instances are returned by `Pool.map_async()`
@@ -1873,6 +1876,7 @@ class MapResult(ApplyResult):
     def worker_pids(self):
         return [pid for pid in self._worker_pid if pid]
 
+
 #
 # Class whose instances are returned by `Pool.imap()`
 #
@@ -1919,7 +1923,7 @@ class IMapIterator(object):
             return value
         raise Exception(value)
 
-    __next__ = next                    # XXX
+    __next__ = next  # XXX
 
     def _set(self, i, obj):
         with self._cond:
@@ -1955,6 +1959,7 @@ class IMapIterator(object):
     def worker_pids(self):
         return self._worker_pids
 
+
 #
 # Class whose instances are returned by `Pool.imap_unordered()`
 #
@@ -1971,13 +1976,13 @@ class IMapUnorderedIterator(IMapIterator):
                 self._ready = True
                 del self._cache[self._job]
 
+
 #
 #
 #
 
 
 class ThreadPool(Pool):
-
     from .dummy import Process as DummyProcess
     Process = DummyProcess
 
@@ -1995,6 +2000,7 @@ class ThreadPool(Pool):
                 return True, self._quick_get(timeout=timeout)
             except Empty:
                 return False, None
+
         self._poll_result = _poll_result
 
     @staticmethod
