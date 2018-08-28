@@ -1,3 +1,5 @@
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcelery%2Fbilliard.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcelery%2Fbilliard?ref=badge_shield)
+
 ========
 billiard
 ========
@@ -59,3 +61,6 @@ Bug reporting
 Please report bugs related to multiprocessing at the
 `Python bug tracker <http://bugs.python.org/>`_. Issues related to billiard
 should be reported at http://github.com/celery/billiard/issues.
+
+
+[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fcelery%2Fbilliard.svg?type=large)](https://app.fossa.io/projects/git%2Bgithub.com%2Fcelery%2Fbilliard?ref=badge_large)
