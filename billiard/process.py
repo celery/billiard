@@ -302,7 +302,7 @@ class BaseProcess(object):
             _set_current_process(self)
 
             # Re-init logging system.
-            # Workaround for http://bugs.python.org/issue6721/#msg140215
+            # Workaround for https://bugs.python.org/issue6721/#msg140215
             # Python logging module uses RLock() objects which are broken
             # after fork. This can result in a deadlock (Celery Issue #496).
             loggerDict = logging.Logger.manager.loggerDict
