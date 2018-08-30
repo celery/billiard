@@ -14,7 +14,7 @@
 - Extend 'Process' to be compatible with < Py3.5.
 - Use a properly initialized logger in pool.py error logging.
 - _trywaitkill can now kill a whole process group if the worker process declares itself as a group leader.
-- Fix cpython issue 14881 (See http://bugs.python.org/issue14881).
+- Fix cpython issue 14881 (See https://bugs.python.org/issue14881).
 - Fix for a crash on windows.
 - Fix messaging in case of worker exceeds max memory.
 
@@ -742,4 +742,4 @@
 
 - Pool improvements from Celery.
 
-- no-execv patch added (http://bugs.python.org/issue8713)
+- no-execv patch added (https://bugs.python.org/issue8713)

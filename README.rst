@@ -32,7 +32,7 @@ billiard
 About
 -----
 
-`billiard` is a fork of the Python 2.7 `multiprocessing <http://docs.python.org/library/multiprocessing.html>`_
+`billiard` is a fork of the Python 2.7 `multiprocessing <https://docs.python.org/library/multiprocessing.html>`_
 package. The multiprocessing package itself is a renamed and updated version of
 R Oudkerk's `pyprocessing <https://pypi.org/project/processing/>`_ package.
 This standalone variant draws its fixes/improvements from python-trunk and provides
@@ -57,5 +57,5 @@ Bug reporting
 -------------
 
 Please report bugs related to multiprocessing at the
-`Python bug tracker <http://bugs.python.org/>`_. Issues related to billiard
-should be reported at http://github.com/celery/billiard/issues.
+`Python bug tracker <https://bugs.python.org/>`_. Issues related to billiard
+should be reported at https://github.com/celery/billiard/issues.
