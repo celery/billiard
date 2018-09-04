@@ -1224,6 +1224,8 @@ class Pool(object):
             )
         except WorkerLostError:
             job._set(None, (False, ExceptionInfo()))
+        else:  # pragma: no cover
+            pass
 
     def __enter__(self):
         return self
