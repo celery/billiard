@@ -369,7 +369,7 @@ class Worker(object):
                         ))
                         put((READY, (job, i, (False, einfo), inqW_fd)))
                     finally:
-                        del tb
+                        del(tb)
                 completed += 1
                 if max_memory_per_child > 0:
                     used_kb = mem_rss()
