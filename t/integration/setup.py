@@ -44,7 +44,6 @@ setup(
     test_suite='nose.collector',
     build_requires=[
         'nose',
-        'unittest2',
         'coverage>=3.0',
     ],
     classifiers=[
