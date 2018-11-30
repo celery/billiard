@@ -13,6 +13,8 @@ import errno
 import functools
 import atexit
 
+from ctypes import cdll, byref, c_int
+
 try:
     from subprocess import _args_from_interpreter_flags  # noqa
 except ImportError:  # pragma: no cover
@@ -64,6 +66,11 @@ __all__ = [
     'is_exiting', 'Finalize', 'ForkAwareThreadLock', 'ForkAwareLocal',
     'SUBDEBUG', 'SUBWARNING',
 ]
+
+
+# Constants from prctl.h
+PR_GET_PDEATHSIG = 2
+PR_SET_PDEATHSIG = 1
 
 #
 # Logging
@@ -155,6 +162,27 @@ def log_to_stderr(level=None):
     _log_to_stderr = True
     return _logger
 
+
+def get_pdeathsig():
+    """
+    Return the current value of the parent process death signal
+    """
+    sig = c_int()
+    libc = cdll.LoadLibrary("libc.so.6")
+    libc.prctl(PR_GET_PDEATHSIG, byref(sig))
+    return sig.value
+
+
+def set_pdeathsig(sig):
+    """
+    Set the parent process death signal of the calling process to sig
+    (either a signal value in the range 1..maxsig, or 0 to clear).
+    This is the signal that the calling process will get when its parent dies.
+    This value is cleared for the child of a fork(2) and
+    (since Linux 2.4.36 / 2.6.23) when executing a set-user-ID or set-group-ID binary.
+    """
+    libc = cdll.LoadLibrary("libc.so.6")
+    libc.prctl(PR_SET_PDEATHSIG, sig)
 
 def _eintr_retry(func):
     '''
