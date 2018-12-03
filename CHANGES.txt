@@ -1,9 +1,16 @@
+3.5.0.5 - 2018-12-03
+--------------------
+
+- Fix a crash when handling a timeout.
+- Improve billiard.einfo.Frame compatibility with Python to avoid crashes when using Django.
+- Cleanups.
+
 3.5.0.4 - 2018-07-07
 --------------------
 
-- Fix rebuild_ctype losing BufferedWrapper reference on Python 3
-- Deprecation warning with python 3.6 fixed
-- Correct spawn start method
+- Fix rebuild_ctype losing BufferedWrapper reference on Python 3.
+- Deprecation warning with python 3.6 fixed.
+- Correct spawn start method.
 
 3.5.0.3 - 2017-07-16
 --------------------
