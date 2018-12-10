@@ -13,7 +13,10 @@ import errno
 import functools
 import atexit
 
-from ctypes import cdll, byref, c_int
+try:
+    import cffi
+except ImportError:
+    import ctypes
 
 try:
     from subprocess import _args_from_interpreter_flags  # noqa
@@ -167,10 +170,21 @@ def get_pdeathsig():
     """
     Return the current value of the parent process death signal
     """
-    sig = c_int()
-    libc = cdll.LoadLibrary("libc.so.6")
-    libc.prctl(PR_GET_PDEATHSIG, byref(sig))
-    return sig.value
+    try:
+        if 'cffi' in sys.modules:
+            ffi = cffi.FFI()
+            ffi.cdef("int prctl (int __option, ...);")
+            arg = ffi.new("int *")
+            C = ffi.dlopen(None)
+            C.prctl(PR_GET_PDEATHSIG, arg)
+            return arg[0]
+        else:
+            sig = ctypes.c_int()
+            libc = ctypes.cdll.LoadLibrary("libc.so.6")
+            libc.prctl(PR_GET_PDEATHSIG, ctypes.byref(sig))
+            return sig.value
+    except Exception:
+        raise OSError()
 
 
 def set_pdeathsig(sig):
@@ -181,8 +195,17 @@ def set_pdeathsig(sig):
     This value is cleared for the child of a fork(2) and
     (since Linux 2.4.36 / 2.6.23) when executing a set-user-ID or set-group-ID binary.
     """
-    libc = cdll.LoadLibrary("libc.so.6")
-    libc.prctl(PR_SET_PDEATHSIG, sig)
+    try:
+        if 'cffi' in sys.modules:
+            ffi = cffi.FFI()
+            ffi.cdef("int prctl (int __option, ...);")
+            C = ffi.dlopen(None)
+            C.prctl(PR_SET_PDEATHSIG, ffi.cast("int", sig))
+        else:
+            libc = ctypes.cdll.LoadLibrary("libc.so.6")
+            libc.prctl(PR_SET_PDEATHSIG, sig)
+    except Exception:
+        raise OSError()
 
 def _eintr_retry(func):
     '''
