@@ -170,6 +170,9 @@ def get_pdeathsig():
     """
     Return the current value of the parent process death signal
     """
+    if not sys.platform.startswith('linux'):
+        # currently we support only linux platform.
+        raise OSError()
     try:
         if 'cffi' in sys.modules:
             ffi = cffi.FFI()
@@ -195,6 +198,9 @@ def set_pdeathsig(sig):
     This value is cleared for the child of a fork(2) and
     (since Linux 2.4.36 / 2.6.23) when executing a set-user-ID or set-group-ID binary.
     """
+    if not sys.platform.startswith('linux'):
+        # currently we support only linux platform.
+        raise OSError()
     try:
         if 'cffi' in sys.modules:
             ffi = cffi.FFI()
