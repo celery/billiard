@@ -28,6 +28,8 @@ class test_spawn:
         with pytest.raises(psutil.NoSuchProcess):
             proc = psutil.Process(return_pid.value)
 
+    @pytest.mark.skipif(not sys.platform.startswith('linux'),
+                        reason='get_pdeathsig() is supported only in Linux')
     def test_set_get_pdeathsig(self):
         sig = get_pdeathsig()
         assert sig == 0
