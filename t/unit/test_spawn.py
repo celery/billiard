@@ -24,7 +24,7 @@ class test_spawn:
         p = Process(target=parent_task, args=(return_pid,))
         p.start()
         p.join()
-        sleep(1)    # We need to wait to have child process killed.
+        sleep(5)    # We need to wait to have child process killed.
         with pytest.raises(psutil.NoSuchProcess):
             proc = psutil.Process(return_pid.value)
 
@@ -37,17 +37,15 @@ class test_spawn:
         sig = get_pdeathsig()
         assert sig == signal.SIGTERM
 
-def child_process(child_started):
+def child_process():
     set_pdeathsig(signal.SIGTERM)
-    child_started.set()
     while True:
         sleep(1)
 
 def parent_task(return_pid):
-    child_started = Event()
-    p = Process(target=child_process, args=(child_started,))
+    p = Process(target=child_process)
     p.start()
-    child_started.wait()
+    sleep(1)
     return_pid.value = p.pid
 
 def task_from_process(name):
