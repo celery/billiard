@@ -14,6 +14,11 @@ import functools
 import atexit
 
 try:
+    import cffi
+except ImportError:
+    import ctypes
+
+try:
     from subprocess import _args_from_interpreter_flags  # noqa
 except ImportError:  # pragma: no cover
     def _args_from_interpreter_flags():  # noqa
@@ -64,6 +69,11 @@ __all__ = [
     'is_exiting', 'Finalize', 'ForkAwareThreadLock', 'ForkAwareLocal',
     'SUBDEBUG', 'SUBWARNING',
 ]
+
+
+# Constants from prctl.h
+PR_GET_PDEATHSIG = 2
+PR_SET_PDEATHSIG = 1
 
 #
 # Logging
@@ -155,6 +165,53 @@ def log_to_stderr(level=None):
     _log_to_stderr = True
     return _logger
 
+
+def get_pdeathsig():
+    """
+    Return the current value of the parent process death signal
+    """
+    if not sys.platform.startswith('linux'):
+        # currently we support only linux platform.
+        raise OSError()
+    try:
+        if 'cffi' in sys.modules:
+            ffi = cffi.FFI()
+            ffi.cdef("int prctl (int __option, ...);")
+            arg = ffi.new("int *")
+            C = ffi.dlopen(None)
+            C.prctl(PR_GET_PDEATHSIG, arg)
+            return arg[0]
+        else:
+            sig = ctypes.c_int()
+            libc = ctypes.cdll.LoadLibrary("libc.so.6")
+            libc.prctl(PR_GET_PDEATHSIG, ctypes.byref(sig))
+            return sig.value
+    except Exception:
+        raise OSError()
+
+
+def set_pdeathsig(sig):
+    """
+    Set the parent process death signal of the calling process to sig
+    (either a signal value in the range 1..maxsig, or 0 to clear).
+    This is the signal that the calling process will get when its parent dies.
+    This value is cleared for the child of a fork(2) and
+    (since Linux 2.4.36 / 2.6.23) when executing a set-user-ID or set-group-ID binary.
+    """
+    if not sys.platform.startswith('linux'):
+        # currently we support only linux platform.
+        raise OSError()
+    try:
+        if 'cffi' in sys.modules:
+            ffi = cffi.FFI()
+            ffi.cdef("int prctl (int __option, ...);")
+            C = ffi.dlopen(None)
+            C.prctl(PR_SET_PDEATHSIG, ffi.cast("int", sig))
+        else:
+            libc = ctypes.cdll.LoadLibrary("libc.so.6")
+            libc.prctl(PR_SET_PDEATHSIG, sig)
+    except Exception:
+        raise OSError()
 
 def _eintr_retry(func):
     '''
