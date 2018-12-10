@@ -77,4 +77,4 @@ class test_win32_module:
 
     def test_get_pdeathsig(self):
         with pytest.raises(OSError):
-            get_pdeathsig(signal.SIGTERM)
+            get_pdeathsig()
