@@ -23,8 +23,9 @@ class test_spawn:
         return_pid = Value('i')
         p = Process(target=parent_task, args=(return_pid,))
         p.start()
-        p.join()
-        sleep(5)    # We need to wait to have child process killed.
+        sleep(3) # wait for setting pdeathsig
+        p.terminate()
+        sleep(3) # wait for process termination
         with pytest.raises(psutil.NoSuchProcess):
             proc = psutil.Process(return_pid.value)
 
@@ -45,7 +46,7 @@ def child_process():
 def parent_task(return_pid):
     p = Process(target=child_process)
     p.start()
-    sleep(1)
+    sleep(1) # Wait for starting process
     return_pid.value = p.pid
 
 def task_from_process(name):
