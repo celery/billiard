@@ -1,8 +1,10 @@
 from __future__ import absolute_import
 
 import pytest
+import signal
 
 from case import skip
+from billiard.util import set_pdeathsig, get_pdeathsig
 
 from billiard.compat import _winapi
 
@@ -68,3 +70,11 @@ class test_win32_module:
     ])
     def test_functions(self, name):
         assert getattr(_winapi, name)
+
+    def test_set_pdeathsig(self):
+        with pytest.raises(OSError):
+            set_pdeathsig(signal.SIGTERM)
+
+    def test_get_pdeathsig(self):
+        with pytest.raises(OSError):
+            get_pdeathsig(signal.SIGTERM)
