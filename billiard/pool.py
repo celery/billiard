@@ -1585,6 +1585,11 @@ class Pool(object):
 
     def restart(self):
         for e in values(self._poolctrl):
+            # If allow_restart is False, the sentinel would be None.
+            # Attempting to restart the pool will result in an error for processes like these.
+            if not e:
+                debug("process is not restartable. skipping...")
+                continue
             e.set()
 
     @staticmethod
