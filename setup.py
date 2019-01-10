@@ -16,7 +16,7 @@ from distutils.errors import (
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 ext_errors = (CCompilerError, DistutilsExecError, DistutilsPlatformError)
-if sys.platform == 'win32' and sys.version_info >= (2, 6):
+if sys.platform == 'win32':
     # distutils.msvc9compiler can raise IOError if the compiler is missing
     ext_errors += (IOError, )
 
