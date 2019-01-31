@@ -694,7 +694,6 @@ class TimeoutHandler(PoolThread):
             pass
 
     def handle_timeouts(self):
-        cache = copy.deepcopy(self.cache)
         t_hard, t_soft = self.t_hard, self.t_soft
         dirty = set()
         on_soft_timeout = self.on_soft_timeout
@@ -708,12 +707,16 @@ class TimeoutHandler(PoolThread):
 
         # Inner-loop
         while self._state == RUN:
+            # Perform a shallow copy before iteration because keys can change.
+            # A deep copy fails (on shutdown) due to thread.lock objects.
+            # https://github.com/celery/billiard/issues/260
+            cache = copy.copy(self.cache)
 
             # Remove dirty items not in cache anymore
             if dirty:
                 dirty = set(k for k in dirty if k in cache)
 
-            for i, job in list(cache.items()):
+            for i, job in cache.items():
                 ack_time = job._time_accepted
                 soft_timeout = job._soft_timeout
                 if soft_timeout is None:
