@@ -1,4 +1,4 @@
-3.6.0.0 - 2018-02-04
+3.6.0.0 - 2019-02-04
 --------------------
 
 - Add support of sending parent process death signal.
