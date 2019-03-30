@@ -84,6 +84,7 @@ SUBDEBUG = 5
 DEBUG = 10
 INFO = 20
 SUBWARNING = 25
+WARNING = 30
 ERROR = 40
 
 LOGGER_NAME = 'multiprocessing'
@@ -112,6 +113,9 @@ def sub_warning(msg, *args, **kwargs):
     if _logger:
         _logger.log(SUBWARNING, msg, *args, **kwargs)
 
+def warning(msg, *args, **kwargs):
+    if _logger:
+        _logger.log(WARNING, msg, *args, **kwargs)
 
 def error(msg, *args, **kwargs):
     if _logger:

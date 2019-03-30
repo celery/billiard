@@ -44,7 +44,7 @@ from .exceptions import (
     WorkerLostError,
 )
 from .five import Empty, Queue, range, values, reraise, monotonic
-from .util import Finalize, debug
+from .util import Finalize, debug, warning
 
 MAXMEM_USED_FMT = """\
 child process exiting after exceeding memory limit ({0}KiB / {1}KiB)
@@ -376,7 +376,7 @@ class Worker(object):
                     if used_kb <= 0:
                         error('worker unable to determine memory usage')
                     if used_kb > 0 and used_kb > max_memory_per_child:
-                        error(MAXMEM_USED_FMT.format(
+                        warning(MAXMEM_USED_FMT.format(
                             used_kb, max_memory_per_child))
                         return EX_RECYCLE
 
