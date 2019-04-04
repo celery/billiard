@@ -277,6 +277,8 @@ class Worker(object):
 
         def exit(status=None):
             _exitcode[0] = status
+            if sys.platform == 'win32' and sys.version_info < (3,0)
+                return _exit()
             return _exit(status)
         sys.exit = exit
 
