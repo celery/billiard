@@ -277,7 +277,7 @@ class Worker(object):
 
         def exit(status=None):
             _exitcode[0] = status
-            return _exit()
+            return _exit(status)
         sys.exit = exit
 
         pid = os.getpid()
