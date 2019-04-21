@@ -399,7 +399,7 @@ class Worker(object):
 
         for retry in range(GUARANTEE_MESSAGE_CONSUMPTION_RETRY_LIMIT):
             if self.on_ready_counter.value >= completed:
-                debug(f'ensured messages consumed after %d retries', retry)
+                debug('ensured messages consumed after %d retries', retry)
                 return True
             time.sleep(GUARANTEE_MESSAGE_CONSUMPTION_RETRY_INTERVAL)
         warning('could not ensure all messages were consumed prior to '
