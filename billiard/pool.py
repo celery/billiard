@@ -110,6 +110,8 @@ SIG_SOFT_TIMEOUT = getattr(signal, "SIGUSR1", None)
 
 LOST_WORKER_TIMEOUT = 10.0
 EX_OK = getattr(os, "EX_OK", 0)
+GUARANTEE_MESSAGE_CONSUMPTION_RETRY_LIMIT = 300
+GUARANTEE_MESSAGE_CONSUMPTION_RETRY_INTERVAL = 0.1
 
 job_counter = itertools.count()
 
@@ -236,7 +238,7 @@ class Worker(object):
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
                  sigprotection=True, wrap_exception=True,
-                 max_memory_per_child=None):
+                 max_memory_per_child=None, on_ready_counter=None):
         assert maxtasks is None or (type(maxtasks) == int and maxtasks > 0)
         self.initializer = initializer
         self.initargs = initargs
@@ -247,6 +249,7 @@ class Worker(object):
         self.sigprotection = sigprotection
         self.inq, self.outq, self.synq = inq, outq, synq
         self.wrap_exception = wrap_exception  # XXX cannot disable yet
+        self.on_ready_counter = on_ready_counter
         self.contribute_to_object(self)
 
     def contribute_to_object(self, obj):
@@ -378,12 +381,30 @@ class Worker(object):
                     if used_kb > 0 and used_kb > max_memory_per_child:
                         warning(MAXMEM_USED_FMT.format(
                             used_kb, max_memory_per_child))
+                        self._ensure_messages_consumed(completed=completed)
                         return EX_RECYCLE
 
+        self._ensure_messages_consumed(completed=completed)
         debug('worker exiting after %d tasks', completed)
         if maxtasks:
             return EX_RECYCLE if completed == maxtasks else EX_FAILURE
         return EX_OK
+
+    def _ensure_messages_consumed(self, completed):
+        """ Returns true if all messages sent out have been received and
+        consumed within a reasonable amount of time """
+
+        if not self.on_ready_counter:
+            return False
+
+        for retry in range(GUARANTEE_MESSAGE_CONSUMPTION_RETRY_LIMIT):
+            if self.on_ready_counter.value >= completed:
+                debug(f'ensured messages consumed after %d retries', retry)
+                return True
+            time.sleep(GUARANTEE_MESSAGE_CONSUMPTION_RETRY_INTERVAL)
+        warning('could not ensure all messages were consumed prior to '
+                'exiting')
+        return False
 
     def after_fork(self):
         if hasattr(self.inq, '_writer'):
@@ -753,7 +774,7 @@ class ResultHandler(PoolThread):
 
     def __init__(self, outqueue, get, cache, poll,
                  join_exited_workers, putlock, restart_state,
-                 check_timeouts, on_job_ready):
+                 check_timeouts, on_job_ready, on_ready_counters=None):
         self.outqueue = outqueue
         self.get = get
         self.cache = cache
@@ -765,6 +786,7 @@ class ResultHandler(PoolThread):
         self._shutdown_complete = False
         self.check_timeouts = check_timeouts
         self.on_job_ready = on_job_ready
+        self.on_ready_counters = on_ready_counters
         self._make_methods()
         super(ResultHandler, self).__init__()
 
@@ -793,6 +815,14 @@ class ResultHandler(PoolThread):
                 item = cache[job]
             except KeyError:
                 return
+
+            if self.on_ready_counters:
+                worker_pid = next(iter(item.worker_pids()), None)
+                if worker_pid and worker_pid in self.on_ready_counters:
+                    on_ready_counter = self.on_ready_counters[worker_pid]
+                    with on_ready_counter.get_lock():
+                        on_ready_counter.value += 1
+
             if not item.ready():
                 if putlock is not None:
                     putlock.release()
@@ -1004,6 +1034,7 @@ class Pool(object):
 
         self._pool = []
         self._poolctrl = {}
+        self._on_ready_counters = {}
         self.putlocks = putlocks
         self._putlock = semaphore or LaxBoundedSemaphore(self._processes)
         for i in range(self._processes):
@@ -1069,7 +1100,8 @@ class Pool(object):
             self._outqueue, self._quick_get, self._cache,
             self._poll_result, self._join_exited_workers,
             self._putlock, self.restart_state, self.check_timeouts,
-            self.on_job_ready, **extra_kwargs
+            self.on_job_ready, on_ready_counters=self._on_ready_counters,
+            **extra_kwargs
         )
 
     def on_job_ready(self, job, i, obj, inqW_fd):
@@ -1102,6 +1134,7 @@ class Pool(object):
     def _create_worker_process(self, i):
         sentinel = self._ctx.Event() if self.allow_restart else None
         inq, outq, synq = self.get_process_queues()
+        on_ready_counter = self._ctx.Value('i')
         w = self.WorkerProcess(self.Worker(
             inq, outq, synq, self._initializer, self._initargs,
             self._maxtasksperchild, sentinel, self._on_process_exit,
@@ -1110,6 +1143,7 @@ class Pool(object):
             sigprotection=self.threads,
             wrap_exception=self._wrap_exception,
             max_memory_per_child=self._max_memory_per_child,
+            on_ready_counter=on_ready_counter,
         ))
         self._pool.append(w)
         self._process_register_queues(w, (inq, outq, synq))
@@ -1118,6 +1152,7 @@ class Pool(object):
         w.index = i
         w.start()
         self._poolctrl[w.pid] = sentinel
+        self._on_ready_counters[w.pid] = on_ready_counter
         if self.on_process_up:
             self.on_process_up(w)
         return w
@@ -1168,6 +1203,7 @@ class Pool(object):
                 self.process_flush_queues(worker)
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
+                del self._on_ready_counters[worker.pid]
         if cleaned:
             all_pids = [w.pid for w in self._pool]
             for job in list(self._cache.values()):
