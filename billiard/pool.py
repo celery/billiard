@@ -346,49 +346,54 @@ class Worker(object):
                 i += 1
 
         completed = 0
-        while maxtasks is None or (maxtasks and completed < maxtasks):
-            req = wait_for_job()
-            if req:
-                type_, args_ = req
-                assert type_ == TASK
-                job, i, fun, args, kwargs = args_
-                put((ACK, (job, i, now(), pid, synqW_fd)))
-                if _wait_for_syn:
-                    confirm = wait_for_syn(job)
-                    if not confirm:
-                        continue  # received NACK
-                try:
-                    result = (True, prepare_result(fun(*args, **kwargs)))
-                except Exception:
-                    result = (False, ExceptionInfo())
-                try:
-                    put((READY, (job, i, result, inqW_fd)))
-                except Exception as exc:
-                    _, _, tb = sys.exc_info()
+        try:
+            while maxtasks is None or (maxtasks and completed < maxtasks):
+                req = wait_for_job()
+                if req:
+                    type_, args_ = req
+                    assert type_ == TASK
+                    job, i, fun, args, kwargs = args_
+                    put((ACK, (job, i, now(), pid, synqW_fd)))
+                    if _wait_for_syn:
+                        confirm = wait_for_syn(job)
+                        if not confirm:
+                            continue  # received NACK
                     try:
-                        wrapped = MaybeEncodingError(exc, result[1])
-                        einfo = ExceptionInfo((
-                            MaybeEncodingError, wrapped, tb,
-                        ))
-                        put((READY, (job, i, (False, einfo), inqW_fd)))
-                    finally:
-                        del(tb)
-                completed += 1
-                if max_memory_per_child > 0:
-                    used_kb = mem_rss()
-                    if used_kb <= 0:
-                        error('worker unable to determine memory usage')
-                    if used_kb > 0 and used_kb > max_memory_per_child:
-                        warning(MAXMEM_USED_FMT.format(
-                            used_kb, max_memory_per_child))
-                        self._ensure_messages_consumed(completed=completed)
-                        return EX_RECYCLE
+                        result = (True, prepare_result(fun(*args, **kwargs)))
+                    except Exception:
+                        result = (False, ExceptionInfo())
+                    try:
+                        put((READY, (job, i, result, inqW_fd)))
+                    except Exception as exc:
+                        _, _, tb = sys.exc_info()
+                        try:
+                            wrapped = MaybeEncodingError(exc, result[1])
+                            einfo = ExceptionInfo((
+                                MaybeEncodingError, wrapped, tb,
+                            ))
+                            put((READY, (job, i, (False, einfo), inqW_fd)))
+                        finally:
+                            del(tb)
+                    completed += 1
+                    if max_memory_per_child > 0:
+                        used_kb = mem_rss()
+                        if used_kb <= 0:
+                            error('worker unable to determine memory usage')
+                        if used_kb > 0 and used_kb > max_memory_per_child:
+                            warning(MAXMEM_USED_FMT.format(
+                                used_kb, max_memory_per_child))
+                            return EX_RECYCLE
 
-        self._ensure_messages_consumed(completed=completed)
-        debug('worker exiting after %d tasks', completed)
-        if maxtasks:
-            return EX_RECYCLE if completed == maxtasks else EX_FAILURE
-        return EX_OK
+            debug('worker exiting after %d tasks', completed)
+            if maxtasks:
+                return EX_RECYCLE if completed == maxtasks else EX_FAILURE
+            return EX_OK
+        finally:
+            # Before exiting the worker, we want to ensure that that all
+            # messages produced by the worker have been consumed by the main
+            # process. This prevents the worker being terminated prematurely
+            # and messages being lost.
+            self._ensure_messages_consumed(completed=completed)
 
     def _ensure_messages_consumed(self, completed):
         """ Returns true if all messages sent out have been received and
