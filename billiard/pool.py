@@ -271,7 +271,7 @@ class Worker(object):
         return self.__class__, (
             self.inq, self.outq, self.synq, self.initializer,
             self.initargs, self.maxtasks, self._shutdown, self.on_exit,
-            self.sigprotection, self.wrap_exception,
+            self.sigprotection, self.wrap_exception, self.max_memory_per_child,
         )
 
     def __call__(self):
