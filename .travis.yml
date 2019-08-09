@@ -1,20 +1,21 @@
 language: python
-sudo: false
+dist: xenial
 cache: pip
+python:
+  - '2.7'
+  - '3.5'
+  - '3.6'
+  - '3.7'
+  - '3.8-dev'
+  - 'nightly'
+  - 'pypy'
+  - 'pypy3.5'
 
 matrix:
-  include:
-    - python: 2.7
-      env: TOXENV=2.7
-    - python: 3.4
-      env: TOXENV=3.4
-    - python: 3.5
-      env: TOXENV=3.5
-    - python: 3.6
-      env: TOXENV=3.6
-    - python: pypy
-      env: TOXENV=pypy
+  allow_failures:
+    - python: '3.8-dev'
+    - python: 'nightly'
 
 install:
-    - travis_retry pip install tox
+    - travis_retry pip install tox-travis
 script: tox
