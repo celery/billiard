@@ -30,9 +30,13 @@ WINSERVICE = sys.executable.lower().endswith("pythonservice.exe")
 
 if sys.platform == 'win32':
     try:
-        from _winapi import CreateProcess
+        from _winapi import CreateProcess, GetExitCodeProcess
+        close_thread_handle = _winapi.CloseHandle
     except ImportError:  # Py2.7
-        from _subprocess import CreateProcess
+        from _subprocess import CreateProcess, GetExitCodeProcess
+
+        def close_thread_handle(handle):
+            handle.Close()
 
 
 class Popen(object):
@@ -61,7 +65,7 @@ class Popen(object):
                 hp, ht, pid, tid = CreateProcess(
                     spawn.get_executable(), cmd,
                     None, None, False, 0, None, None, None)
-                _winapi.CloseHandle(ht)
+                close_thread_handle(ht)
             except:
                 _winapi.CloseHandle(rhandle)
                 raise
@@ -100,7 +104,7 @@ class Popen(object):
 
             res = _winapi.WaitForSingleObject(int(self._handle), msecs)
             if res == _winapi.WAIT_OBJECT_0:
-                code = _winapi.GetExitCodeProcess(self._handle)
+                code = GetExitCodeProcess(self._handle)
                 if code == TERMINATE:
                     code = -signal.SIGTERM
                 self.returncode = code

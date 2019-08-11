@@ -4,7 +4,7 @@
 #define PY_SSIZE_T_CLEAN
 
 #ifdef __sun
-/* The control message API is only available on Solaris 
+/* The control message API is only available on Solaris
    if XPG 4.2 or later is requested. */
 #define _XOPEN_SOURCE 500
 #endif
@@ -37,7 +37,7 @@
 #    include <semaphore.h>
      typedef sem_t *SEM_HANDLE;
 #  endif
-#  define HANDLE int
+#  define HANDLE long
 #  define SOCKET int
 #  define BOOL int
 #  define UINT32 uint32_t

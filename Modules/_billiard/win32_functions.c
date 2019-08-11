@@ -551,7 +551,7 @@ win32_WriteFile(PyObject *self, PyObject *args, PyObject *kwds)
     else
         buf = &_buf;
 
-    if (!PyArg_Parse(bufobj, "y*", buf)) {
+    if (!PyArg_Parse(bufobj, "s*", buf)) {
         Py_XDECREF(overlapped);
         return NULL;
     }
@@ -685,7 +685,7 @@ win32_WaitForMultipleObjects(PyObject* self, PyObject* args)
         Py_DECREF(v);
     }
     /* If this is the main thread then make the wait interruptible
-       by Ctrl-C unless we are waiting for *all* handles 
+       by Ctrl-C unless we are waiting for *all* handles
     if (!wait_flag && _PyOS_IsMainThread()) {
         sigint_event = _PyOS_SigintEvent();
         assert(sigint_event != NULL);
@@ -904,6 +904,7 @@ init_winapi(void)
     WIN32_CONSTANT(F_DWORD, ERROR_BROKEN_PIPE);
     WIN32_CONSTANT(F_DWORD, ERROR_IO_PENDING);
     WIN32_CONSTANT(F_DWORD, ERROR_NETNAME_DELETED);
+    WIN32_CONSTANT(F_DWORD, ERROR_OPERATION_ABORTED);
     WIN32_CONSTANT(F_DWORD, GENERIC_READ);
     WIN32_CONSTANT(F_DWORD, GENERIC_WRITE);
     WIN32_CONSTANT(F_DWORD, DUPLICATE_SAME_ACCESS);
@@ -924,6 +925,8 @@ init_winapi(void)
     WIN32_CONSTANT(F_DWORD, WAIT_TIMEOUT);
     WIN32_CONSTANT(F_DWORD, FILE_FLAG_FIRST_PIPE_INSTANCE);
     WIN32_CONSTANT(F_DWORD, FILE_FLAG_OVERLAPPED);
+    WIN32_CONSTANT(F_DWORD, FILE_GENERIC_READ);
+    WIN32_CONSTANT(F_DWORD, FILE_GENERIC_WRITE);
 
     WIN32_CONSTANT("i", NULL);
 }
