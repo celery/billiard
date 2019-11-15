@@ -14,12 +14,12 @@ enum { RECURSIVE_MUTEX, SEMAPHORE };
 typedef struct {
     PyObject_HEAD
     SEM_HANDLE handle;
-    long last_tid;
+    unsigned long last_tid;
     int count;
     int maxvalue;
     int kind;
     char *name;
-} BilliardSemLockObject;
+} SemLockObject;
 
 #define ISMINE(o) (o->count > 0 && PyThread_get_thread_ident() == o->last_tid)
 
@@ -36,11 +36,11 @@ typedef struct {
 #define SEM_GET_LAST_ERROR() GetLastError()
 #define SEM_CREATE(name, val, max) CreateSemaphore(NULL, val, max, NULL)
 #define SEM_CLOSE(sem) (CloseHandle(sem) ? 0 : -1)
-#define SEM_GETVALUE(sem, pval) _Billiard_GetSemaphoreValue(sem, pval)
+#define SEM_GETVALUE(sem, pval) _GetSemaphoreValue(sem, pval)
 #define SEM_UNLINK(name) 0
 
 static int
-_Billiard_GetSemaphoreValue(HANDLE handle, long *value)
+_GetSemaphoreValue(HANDLE handle, long *value)
 {
     long previous;
 
@@ -59,12 +59,13 @@ _Billiard_GetSemaphoreValue(HANDLE handle, long *value)
 }
 
 static PyObject *
-Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *kwds)
+semlock_acquire(SemLockObject *self, PyObject *args, PyObject *kwds)
 {
     int blocking = 1;
     double timeout;
     PyObject *timeout_obj = Py_None;
-    DWORD res, full_msecs, msecs, start, ticks;
+    DWORD res, full_msecs, nhandles;
+    HANDLE handles[2], sigint_event;
 
     static char *kwlist[] = {"block", "timeout", NULL};
 
@@ -98,65 +99,55 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
         Py_RETURN_TRUE;
     }
 
-    /* check whether we can acquire without blocking */
+    /* check whether we can acquire without releasing the GIL and blocking */
     if (WaitForSingleObjectEx(self->handle, 0, FALSE) == WAIT_OBJECT_0) {
         self->last_tid = GetCurrentThreadId();
         ++self->count;
         Py_RETURN_TRUE;
     }
 
-    msecs = full_msecs;
-    start = GetTickCount();
-
-    for ( ; ; ) {
-        HANDLE handles[2] = {self->handle, sigint_event};
-
-        /* do the wait */
-        Py_BEGIN_ALLOW_THREADS
-        ResetEvent(sigint_event);
-        res = WaitForMultipleObjectsEx(2, handles, FALSE, msecs, FALSE);
-        Py_END_ALLOW_THREADS
-
-        /* handle result */
-        if (res != WAIT_OBJECT_0 + 1)
-            break;
-
-        /* got SIGINT so give signal handler a chance to run */
-        Sleep(1);
-
-        /* if this is main thread let KeyboardInterrupt be raised */
-        if (PyErr_CheckSignals())
-            return NULL;
-
-        /* recalculate timeout */
-        if (msecs != INFINITE) {
-            ticks = GetTickCount();
-            if ((DWORD)(ticks - start) >= full_msecs)
-                Py_RETURN_FALSE;
-            msecs = full_msecs - (ticks - start);
-        }
+    /* prepare list of handles */
+    nhandles = 0;
+    handles[nhandles++] = self->handle;
+    if (_PyOS_IsMainThread()) {
+        sigint_event = _PyOS_SigintEvent();
+        assert(sigint_event != NULL);
+        handles[nhandles++] = sigint_event;
     }
+    else {
+        sigint_event = NULL;
+    }
+
+    /* do the wait */
+    Py_BEGIN_ALLOW_THREADS
+    if (sigint_event != NULL)
+        ResetEvent(sigint_event);
+    res = WaitForMultipleObjectsEx(nhandles, handles, FALSE, full_msecs, FALSE);
+    Py_END_ALLOW_THREADS
 
     /* handle result */
     switch (res) {
     case WAIT_TIMEOUT:
         Py_RETURN_FALSE;
-    case WAIT_OBJECT_0:
+    case WAIT_OBJECT_0 + 0:
         self->last_tid = GetCurrentThreadId();
         ++self->count;
         Py_RETURN_TRUE;
+    case WAIT_OBJECT_0 + 1:
+        errno = EINTR;
+        return PyErr_SetFromErrno(PyExc_OSError);
     case WAIT_FAILED:
         return PyErr_SetFromWindowsErr(0);
     default:
-        PyErr_Format(PyExc_RuntimeError, "WaitForSingleObjectEx() or "
+        PyErr_Format(PyExc_RuntimeError, "WaitForSingleObject() or "
                      "WaitForMultipleObjects() gave unrecognized "
-                     "value %d", res);
+                     "value %u", res);
         return NULL;
     }
 }
 
 static PyObject *
-Billiard_semlock_release(BilliardSemLockObject *self, PyObject *args)
+semlock_release(SemLockObject *self, PyObject *args)
 {
     if (self->kind == RECURSIVE_MUTEX) {
         if (!ISMINE(self)) {
@@ -199,22 +190,22 @@ Billiard_semlock_release(BilliardSemLockObject *self, PyObject *args)
 #define SEM_GETVALUE(sem, pval) sem_getvalue(sem, pval)
 #define SEM_UNLINK(name) sem_unlink(name)
 
-/* macOS 10.4 defines SEM_FAILED as -1 instead (sem_t *)-1; this gives
-    compiler warnings, and (potentially) undefined behavior. */
+/* OS X 10.4 defines SEM_FAILED as -1 instead of (sem_t *)-1;  this gives
+   compiler warnings, and (potentially) undefined behaviour. */
 #ifdef __APPLE__
-#   undef SEM_FAILED
-#   define SEM_FAILED ((sem_t *)-1)
+#  undef SEM_FAILED
+#  define SEM_FAILED ((sem_t *)-1)
 #endif
 
 #ifndef HAVE_SEM_UNLINK
 #  define sem_unlink(name) 0
 #endif
 
-//#ifndef HAVE_SEM_TIMEDWAIT
-#  define sem_timedwait(sem,deadline) Billiard_sem_timedwait_save(sem,deadline,_save)
+#ifndef HAVE_SEM_TIMEDWAIT
+#  define sem_timedwait(sem,deadline) sem_timedwait_save(sem,deadline,_save)
 
-int
-Billiard_sem_timedwait_save(sem_t *sem, struct timespec *deadline, PyThreadState *_save)
+static int
+sem_timedwait_save(sem_t *sem, struct timespec *deadline, PyThreadState *_save)
 {
     int res;
     unsigned long delay, difference;
@@ -271,12 +262,12 @@ Billiard_sem_timedwait_save(sem_t *sem, struct timespec *deadline, PyThreadState
     }
 }
 
-//#endif /* !HAVE_SEM_TIMEDWAIT */
+#endif /* !HAVE_SEM_TIMEDWAIT */
 
 static PyObject *
-Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *kwds)
+semlock_acquire(SemLockObject *self, PyObject *args, PyObject *kwds)
 {
-    int blocking = 1, res;
+    int blocking = 1, res, err = 0;
     double timeout;
     PyObject *timeout_obj = Py_None;
     struct timespec deadline = {0};
@@ -313,20 +304,32 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
         deadline.tv_nsec %= 1000000000;
     }
 
+    /* Check whether we can acquire without releasing the GIL and blocking */
     do {
-        Py_BEGIN_ALLOW_THREADS
-        if (blocking && timeout_obj == Py_None)
-            res = sem_wait(self->handle);
-        else if (!blocking)
-            res = sem_trywait(self->handle);
-        else
-            res = sem_timedwait(self->handle, &deadline);
-        Py_END_ALLOW_THREADS
-        if (res == MP_EXCEPTION_HAS_BEEN_SET)
-            break;
+        res = sem_trywait(self->handle);
+        err = errno;
     } while (res < 0 && errno == EINTR && !PyErr_CheckSignals());
+    errno = err;
+
+    if (res < 0 && errno == EAGAIN && blocking) {
+        /* Couldn't acquire immediately, need to block */
+        do {
+            Py_BEGIN_ALLOW_THREADS
+            if (timeout_obj == Py_None) {
+                res = sem_wait(self->handle);
+            }
+            else {
+                res = sem_timedwait(self->handle, &deadline);
+            }
+            Py_END_ALLOW_THREADS
+            err = errno;
+            if (res == MP_EXCEPTION_HAS_BEEN_SET)
+                break;
+        } while (res < 0 && errno == EINTR && !PyErr_CheckSignals());
+    }
 
     if (res < 0) {
+        errno = err;
         if (errno == EAGAIN || errno == ETIMEDOUT)
             Py_RETURN_FALSE;
         else if (errno == EINTR)
@@ -342,7 +345,7 @@ Billiard_semlock_acquire(BilliardSemLockObject *self, PyObject *args, PyObject *
 }
 
 static PyObject *
-Billiard_semlock_release(BilliardSemLockObject *self, PyObject *args)
+semlock_release(SemLockObject *self, PyObject *args)
 {
     if (self->kind == RECURSIVE_MUTEX) {
         if (!ISMINE(self)) {
@@ -408,12 +411,12 @@ Billiard_semlock_release(BilliardSemLockObject *self, PyObject *args)
  */
 
 static PyObject *
-Billiard_newsemlockobject(PyTypeObject *type, SEM_HANDLE handle, int kind, int maxvalue,
+newsemlockobject(PyTypeObject *type, SEM_HANDLE handle, int kind, int maxvalue,
                  char *name)
 {
-    BilliardSemLockObject *self;
+    SemLockObject *self;
 
-    self = PyObject_New(BilliardSemLockObject, type);
+    self = PyObject_New(SemLockObject, type);
     if (!self)
         return NULL;
     self->handle = handle;
@@ -426,7 +429,7 @@ Billiard_newsemlockobject(PyTypeObject *type, SEM_HANDLE handle, int kind, int m
 }
 
 static PyObject *
-Billiard_semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
     SEM_HANDLE handle = SEM_FAILED;
     int kind, maxvalue, value, unlink;
@@ -446,8 +449,9 @@ Billiard_semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     if (!unlink) {
         name_copy = PyMem_Malloc(strlen(name) + 1);
-        if (name_copy == NULL)
-            goto failure;
+        if (name_copy == NULL) {
+            return PyErr_NoMemory();
+        }
         strcpy(name_copy, name);
     }
 
@@ -460,7 +464,7 @@ Billiard_semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (unlink && SEM_UNLINK(name) < 0)
         goto failure;
 
-    result = Billiard_newsemlockobject(type, handle, kind, maxvalue, name_copy);
+    result = newsemlockobject(type, handle, kind, maxvalue, name_copy);
     if (!result)
         goto failure;
 
@@ -470,12 +474,14 @@ Billiard_semlock_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (handle != SEM_FAILED)
         SEM_CLOSE(handle);
     PyMem_Free(name_copy);
-    Billiard_SetError(NULL, MP_STANDARD_ERROR);
+    if (!PyErr_Occurred()) {
+        _PyMp_SetError(NULL, MP_STANDARD_ERROR);
+    }
     return NULL;
 }
 
 static PyObject *
-Billiard_semlock_rebuild(PyTypeObject *type, PyObject *args)
+semlock_rebuild(PyTypeObject *type, PyObject *args)
 {
     SEM_HANDLE handle;
     int kind, maxvalue;
@@ -502,11 +508,11 @@ Billiard_semlock_rebuild(PyTypeObject *type, PyObject *args)
     }
 #endif
 
-    return Billiard_newsemlockobject(type, handle, kind, maxvalue, name_copy);
+    return newsemlockobject(type, handle, kind, maxvalue, name_copy);
 }
 
 static void
-Billiard_semlock_dealloc(BilliardSemLockObject* self)
+semlock_dealloc(SemLockObject* self)
 {
     if (self->handle != SEM_FAILED)
         SEM_CLOSE(self->handle);
@@ -515,20 +521,20 @@ Billiard_semlock_dealloc(BilliardSemLockObject* self)
 }
 
 static PyObject *
-Billiard_semlock_count(BilliardSemLockObject *self)
+semlock_count(SemLockObject *self, PyObject *Py_UNUSED(ignored))
 {
-    return PyInt_FromLong((long)self->count);
+    return PyLong_FromLong((long)self->count);
 }
 
 static PyObject *
-Billiard_semlock_ismine(BilliardSemLockObject *self)
+semlock_ismine(SemLockObject *self, PyObject *Py_UNUSED(ignored))
 {
     /* only makes sense for a lock */
     return PyBool_FromLong(ISMINE(self));
 }
 
 static PyObject *
-Billiard_semlock_getvalue(BilliardSemLockObject *self)
+semlock_getvalue(SemLockObject *self, PyObject *Py_UNUSED(ignored))
 {
 #ifdef HAVE_BROKEN_SEM_GETVALUE
     PyErr_SetNone(PyExc_NotImplementedError);
@@ -536,56 +542,40 @@ Billiard_semlock_getvalue(BilliardSemLockObject *self)
 #else
     int sval;
     if (SEM_GETVALUE(self->handle, &sval) < 0)
-        return Billiard_SetError(NULL, MP_STANDARD_ERROR);
+        return _PyMp_SetError(NULL, MP_STANDARD_ERROR);
     /* some posix implementations use negative numbers to indicate
        the number of waiting threads */
     if (sval < 0)
         sval = 0;
-    return PyInt_FromLong((long)sval);
+    return PyLong_FromLong((long)sval);
 #endif
 }
 
 static PyObject *
-Billiard_semlock_iszero(BilliardSemLockObject *self)
+semlock_iszero(SemLockObject *self, PyObject *Py_UNUSED(ignored))
 {
 #ifdef HAVE_BROKEN_SEM_GETVALUE
     if (sem_trywait(self->handle) < 0) {
         if (errno == EAGAIN)
             Py_RETURN_TRUE;
-        return Billiard_SetError(NULL, MP_STANDARD_ERROR);
+        return _PyMp_SetError(NULL, MP_STANDARD_ERROR);
     } else {
         if (sem_post(self->handle) < 0)
-            return Billiard_SetError(NULL, MP_STANDARD_ERROR);
+            return _PyMp_SetError(NULL, MP_STANDARD_ERROR);
         Py_RETURN_FALSE;
     }
 #else
     int sval;
     if (SEM_GETVALUE(self->handle, &sval) < 0)
-        return Billiard_SetError(NULL, MP_STANDARD_ERROR);
+        return _PyMp_SetError(NULL, MP_STANDARD_ERROR);
     return PyBool_FromLong((long)sval == 0);
 #endif
 }
 
 static PyObject *
-Billiard_semlock_afterfork(BilliardSemLockObject *self)
+semlock_afterfork(SemLockObject *self, PyObject *Py_UNUSED(ignored))
 {
     self->count = 0;
-    Py_RETURN_NONE;
-}
-
-PyObject *
-Billiard_semlock_unlink(PyObject *ignore, PyObject *args)
-{
-    char *name;
-
-    if (!PyArg_ParseTuple(args, "s", &name))
-        return NULL;
-
-    if (SEM_UNLINK(name) < 0) {
-        Billiard_SetError(NULL, MP_STANDARD_ERROR);
-        return NULL;
-    }
-
     Py_RETURN_NONE;
 }
 
@@ -593,30 +583,27 @@ Billiard_semlock_unlink(PyObject *ignore, PyObject *args)
  * Semaphore methods
  */
 
-static PyMethodDef Billiard_semlock_methods[] = {
-    {"acquire", (PyCFunction)Billiard_semlock_acquire, METH_VARARGS | METH_KEYWORDS,
+static PyMethodDef semlock_methods[] = {
+    {"acquire", (PyCFunction)(void(*)(void))semlock_acquire, METH_VARARGS | METH_KEYWORDS,
      "acquire the semaphore/lock"},
-    {"release", (PyCFunction)Billiard_semlock_release, METH_NOARGS,
+    {"release", (PyCFunction)semlock_release, METH_NOARGS,
      "release the semaphore/lock"},
-    {"__enter__", (PyCFunction)Billiard_semlock_acquire, METH_VARARGS | METH_KEYWORDS,
+    {"__enter__", (PyCFunction)(void(*)(void))semlock_acquire, METH_VARARGS | METH_KEYWORDS,
      "enter the semaphore/lock"},
-    {"__exit__", (PyCFunction)Billiard_semlock_release, METH_VARARGS,
+    {"__exit__", (PyCFunction)semlock_release, METH_VARARGS,
      "exit the semaphore/lock"},
-    {"_count", (PyCFunction)Billiard_semlock_count, METH_NOARGS,
+    {"_count", (PyCFunction)semlock_count, METH_NOARGS,
      "num of `acquire()`s minus num of `release()`s for this process"},
-    {"_is_mine", (PyCFunction)Billiard_semlock_ismine, METH_NOARGS,
+    {"_is_mine", (PyCFunction)semlock_ismine, METH_NOARGS,
      "whether the lock is owned by this thread"},
-    {"_get_value", (PyCFunction)Billiard_semlock_getvalue, METH_NOARGS,
+    {"_get_value", (PyCFunction)semlock_getvalue, METH_NOARGS,
      "get the value of the semaphore"},
-    {"_is_zero", (PyCFunction)Billiard_semlock_iszero, METH_NOARGS,
+    {"_is_zero", (PyCFunction)semlock_iszero, METH_NOARGS,
      "returns whether semaphore has value zero"},
-    {"_rebuild", (PyCFunction)Billiard_semlock_rebuild, METH_VARARGS | METH_CLASS,
+    {"_rebuild", (PyCFunction)semlock_rebuild, METH_VARARGS | METH_CLASS,
      ""},
-    {"_after_fork", (PyCFunction)Billiard_semlock_afterfork, METH_NOARGS,
+    {"_after_fork", (PyCFunction)semlock_afterfork, METH_NOARGS,
      "rezero the net acquisition count after fork()"},
-    {"sem_unlink", (PyCFunction)Billiard_semlock_unlink, METH_VARARGS | METH_STATIC,
-     "unlink the named semaphore using sem_unlink()"},
-
     {NULL}
 };
 
@@ -624,14 +611,14 @@ static PyMethodDef Billiard_semlock_methods[] = {
  * Member table
  */
 
-static PyMemberDef Billiard_semlock_members[] = {
-    {"handle", T_SEM_HANDLE, offsetof(BilliardSemLockObject, handle), READONLY,
+static PyMemberDef semlock_members[] = {
+    {"handle", T_SEM_HANDLE, offsetof(SemLockObject, handle), READONLY,
      ""},
-    {"kind", T_INT, offsetof(BilliardSemLockObject, kind), READONLY,
+    {"kind", T_INT, offsetof(SemLockObject, kind), READONLY,
      ""},
-    {"maxvalue", T_INT, offsetof(BilliardSemLockObject, maxvalue), READONLY,
+    {"maxvalue", T_INT, offsetof(SemLockObject, maxvalue), READONLY,
      ""},
-    {"name", T_STRING, offsetof(BilliardSemLockObject, name), READONLY,
+    {"name", T_STRING, offsetof(SemLockObject, name), READONLY,
      ""},
     {NULL}
 };
@@ -640,16 +627,16 @@ static PyMemberDef Billiard_semlock_members[] = {
  * Semaphore type
  */
 
-PyTypeObject BilliardSemLockType = {
+PyTypeObject _PyMp_SemLockType = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    /* tp_name           */ "_billiard.SemLock",
-    /* tp_basicsize      */ sizeof(BilliardSemLockObject),
+    /* tp_name           */ "_multiprocessing.SemLock",
+    /* tp_basicsize      */ sizeof(SemLockObject),
     /* tp_itemsize       */ 0,
-    /* tp_dealloc        */ (destructor)Billiard_semlock_dealloc,
-    /* tp_print          */ 0,
+    /* tp_dealloc        */ (destructor)semlock_dealloc,
+    /* tp_vectorcall_offset */ 0,
     /* tp_getattr        */ 0,
     /* tp_setattr        */ 0,
-    /* tp_compare        */ 0,
+    /* tp_as_async       */ 0,
     /* tp_repr           */ 0,
     /* tp_as_number      */ 0,
     /* tp_as_sequence    */ 0,
@@ -668,8 +655,8 @@ PyTypeObject BilliardSemLockType = {
     /* tp_weaklistoffset */ 0,
     /* tp_iter           */ 0,
     /* tp_iternext       */ 0,
-    /* tp_methods        */ Billiard_semlock_methods,
-    /* tp_members        */ Billiard_semlock_members,
+    /* tp_methods        */ semlock_methods,
+    /* tp_members        */ semlock_members,
     /* tp_getset         */ 0,
     /* tp_base           */ 0,
     /* tp_dict           */ 0,
@@ -678,5 +665,25 @@ PyTypeObject BilliardSemLockType = {
     /* tp_dictoffset     */ 0,
     /* tp_init           */ 0,
     /* tp_alloc          */ 0,
-    /* tp_new            */ Billiard_semlock_new,
+    /* tp_new            */ semlock_new,
 };
+
+/*
+ * Function to unlink semaphore names
+ */
+
+PyObject *
+_PyMp_sem_unlink(PyObject *ignore, PyObject *args)
+{
+    char *name;
+
+    if (!PyArg_ParseTuple(args, "s", &name))
+        return NULL;
+
+    if (SEM_UNLINK(name) < 0) {
+        _PyMp_SetError(NULL, MP_STANDARD_ERROR);
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}

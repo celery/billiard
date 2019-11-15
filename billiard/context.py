@@ -1,38 +1,30 @@
-from __future__ import absolute_import
-
 import os
 import sys
 import threading
-import warnings
 
 from . import process
+from . import reduction
 
-__all__ = []            # things are copied from here to __init__.py
-
-
-W_NO_EXECV = """\
-force_execv is not supported as the billiard C extension \
-is not installed\
-"""
-
+__all__ = ()
 
 #
 # Exceptions
 #
 
-from .exceptions import (  # noqa
-    ProcessError,
-    BufferTooShort,
-    TimeoutError,
-    AuthenticationError,
-    TimeLimitExceeded,
-    SoftTimeLimitExceeded,
-    WorkerLostError,
-)
+class ProcessError(Exception):
+    pass
 
+class BufferTooShort(ProcessError):
+    pass
+
+class TimeoutError(ProcessError):
+    pass
+
+class AuthenticationError(ProcessError):
+    pass
 
 #
-# Base type for contexts
+# Base type for contexts. Bound methods of an instance of this type are included in __all__ of __init__.py
 #
 
 class BaseContext(object):
@@ -41,47 +33,18 @@ class BaseContext(object):
     BufferTooShort = BufferTooShort
     TimeoutError = TimeoutError
     AuthenticationError = AuthenticationError
-    TimeLimitExceeded = TimeLimitExceeded
-    SoftTimeLimitExceeded = SoftTimeLimitExceeded
-    WorkerLostError = WorkerLostError
 
     current_process = staticmethod(process.current_process)
+    parent_process = staticmethod(process.parent_process)
     active_children = staticmethod(process.active_children)
 
-    if hasattr(os, 'cpu_count'):
-        def cpu_count(self):
-            '''Returns the number of CPUs in the system'''
-            num = os.cpu_count()
-            if num is None:
-                raise NotImplementedError('cannot determine number of cpus')
-            else:
-                return num
-    else:
-        def cpu_count(self):  # noqa
-            if sys.platform == 'win32':
-                try:
-                    num = int(os.environ['NUMBER_OF_PROCESSORS'])
-                except (ValueError, KeyError):
-                    num = 0
-            elif 'bsd' in sys.platform or sys.platform == 'darwin':
-                comm = '/sbin/sysctl -n hw.ncpu'
-                if sys.platform == 'darwin':
-                    comm = '/usr' + comm
-                try:
-                    with os.popen(comm) as p:
-                        num = int(p.read())
-                except ValueError:
-                    num = 0
-            else:
-                try:
-                    num = os.sysconf('SC_NPROCESSORS_ONLN')
-                except (ValueError, OSError, AttributeError):
-                    num = 0
-
-            if num >= 1:
-                return num
-            else:
-                raise NotImplementedError('cannot determine number of cpus')
+    def cpu_count(self):
+        '''Returns the number of CPUs in the system'''
+        num = os.cpu_count()
+        if num is None:
+            raise NotImplementedError('cannot determine number of cpus')
+        else:
+            return num
 
     def Manager(self):
         '''Returns a manager associated with a running server process
@@ -94,10 +57,10 @@ class BaseContext(object):
         m.start()
         return m
 
-    def Pipe(self, duplex=True, rnonblock=False, wnonblock=False):
+    def Pipe(self, duplex=True):
         '''Returns two connection object connected by a pipe'''
         from .connection import Pipe
-        return Pipe(duplex, rnonblock, wnonblock)
+        return Pipe(duplex)
 
     def Lock(self):
         '''Returns a non-recursive lock object'''
@@ -150,18 +113,10 @@ class BaseContext(object):
         return SimpleQueue(ctx=self.get_context())
 
     def Pool(self, processes=None, initializer=None, initargs=(),
-             maxtasksperchild=None, timeout=None, soft_timeout=None,
-             lost_worker_timeout=None, max_restarts=None,
-             max_restart_freq=1, on_process_up=None, on_process_down=None,
-             on_timeout_set=None, on_timeout_cancel=None, threads=True,
-             semaphore=None, putlocks=False, allow_restart=False):
+             maxtasksperchild=None):
         '''Returns a process pool object'''
         from .pool import Pool
         return Pool(processes, initializer, initargs, maxtasksperchild,
-                    timeout, soft_timeout, lost_worker_timeout,
-                    max_restarts, max_restart_freq, on_process_up,
-                    on_process_down, on_timeout_set, on_timeout_cancel,
-                    threads, semaphore, putlocks, allow_restart,
                     context=self.get_context())
 
     def RawValue(self, typecode_or_type, *args):
@@ -174,17 +129,15 @@ class BaseContext(object):
         from .sharedctypes import RawArray
         return RawArray(typecode_or_type, size_or_initializer)
 
-    def Value(self, typecode_or_type, *args, **kwargs):
+    def Value(self, typecode_or_type, *args, lock=True):
         '''Returns a synchronized shared object'''
         from .sharedctypes import Value
-        lock = kwargs.get('lock', True)
         return Value(typecode_or_type, *args, lock=lock,
                      ctx=self.get_context())
 
-    def Array(self, typecode_or_type, size_or_initializer, *args, **kwargs):
+    def Array(self, typecode_or_type, size_or_initializer, *, lock=True):
         '''Returns a synchronized shared array'''
         from .sharedctypes import Array
-        lock = kwargs.get('lock', True)
         return Array(typecode_or_type, size_or_initializer, lock=lock,
                      ctx=self.get_context())
 
@@ -214,7 +167,7 @@ class BaseContext(object):
         '''
         # This is undocumented.  In previous versions of multiprocessing
         # its only effect was to make socket objects inheritable on Windows.
-        from . import connection  # noqa
+        from . import connection
 
     def set_executable(self, executable):
         '''Sets the path to a python.exe or pythonw.exe binary used to run
@@ -237,28 +190,25 @@ class BaseContext(object):
         try:
             ctx = _concrete_contexts[method]
         except KeyError:
-            raise ValueError('cannot find context for %r' % method)
+            raise ValueError('cannot find context for %r' % method) from None
         ctx._check_available()
         return ctx
 
     def get_start_method(self, allow_none=False):
         return self._name
 
-    def set_start_method(self, method=None):
+    def set_start_method(self, method, force=False):
         raise ValueError('cannot set start method of concrete context')
 
-    def forking_is_enabled(self):
-        # XXX for compatibility with billiard <3.4
-        return (self.get_start_method() or 'fork') == 'fork'
+    @property
+    def reducer(self):
+        '''Controls how objects will be reduced to a form that can be
+        shared with other processes.'''
+        return globals().get('reduction')
 
-    def forking_enable(self, value):
-        # XXX for compatibility with billiard <3.4
-        if not value:
-            from ._ext import supports_exec
-            if supports_exec:
-                self.set_start_method('spawn', force=True)
-            else:
-                warnings.warn(RuntimeWarning(W_NO_EXECV))
+    @reducer.setter
+    def reducer(self, reduction):
+        globals()['reduction'] = reduction
 
     def _check_available(self):
         pass
@@ -267,14 +217,11 @@ class BaseContext(object):
 # Type of default context -- underlying context can be set at most once
 #
 
-
 class Process(process.BaseProcess):
     _start_method = None
-
     @staticmethod
     def _Popen(process_obj):
         return _default_context.get_context().Process._Popen(process_obj)
-
 
 class DefaultContext(BaseContext):
     Process = Process
@@ -289,7 +236,7 @@ class DefaultContext(BaseContext):
                 self._actual_context = self._default_context
             return self._actual_context
         else:
-            return super(DefaultContext, self).get_context(method)
+            return super().get_context(method)
 
     def set_start_method(self, method, force=False):
         if self._actual_context is not None and not force:
@@ -310,13 +257,10 @@ class DefaultContext(BaseContext):
         if sys.platform == 'win32':
             return ['spawn']
         else:
-            from . import reduction
             if reduction.HAVE_SEND_HANDLE:
                 return ['fork', 'spawn', 'forkserver']
             else:
                 return ['fork', 'spawn']
-
-DefaultContext.__all__ = list(x for x in dir(DefaultContext) if x[0] != '_')
 
 #
 # Context types for fixed start method
@@ -326,7 +270,6 @@ if sys.platform != 'win32':
 
     class ForkProcess(process.BaseProcess):
         _start_method = 'fork'
-
         @staticmethod
         def _Popen(process_obj):
             from .popen_fork import Popen
@@ -334,7 +277,6 @@ if sys.platform != 'win32':
 
     class SpawnProcess(process.BaseProcess):
         _start_method = 'spawn'
-
         @staticmethod
         def _Popen(process_obj):
             from .popen_spawn_posix import Popen
@@ -342,7 +284,6 @@ if sys.platform != 'win32':
 
     class ForkServerProcess(process.BaseProcess):
         _start_method = 'forkserver'
-
         @staticmethod
         def _Popen(process_obj):
             from .popen_forkserver import Popen
@@ -359,9 +300,7 @@ if sys.platform != 'win32':
     class ForkServerContext(BaseContext):
         _name = 'forkserver'
         Process = ForkServerProcess
-
         def _check_available(self):
-            from . import reduction
             if not reduction.HAVE_SEND_HANDLE:
                 raise ValueError('forkserver start method not available')
 
@@ -370,13 +309,17 @@ if sys.platform != 'win32':
         'spawn': SpawnContext(),
         'forkserver': ForkServerContext(),
     }
-    _default_context = DefaultContext(_concrete_contexts['fork'])
+    if sys.platform == 'darwin':
+        # bpo-33725: running arbitrary code after fork() is no longer reliable
+        # on macOS since macOS 10.14 (Mojave). Use spawn by default instead.
+        _default_context = DefaultContext(_concrete_contexts['spawn'])
+    else:
+        _default_context = DefaultContext(_concrete_contexts['fork'])
 
 else:
 
     class SpawnProcess(process.BaseProcess):
         _start_method = 'spawn'
-
         @staticmethod
         def _Popen(process_obj):
             from .popen_spawn_win32 import Popen
@@ -395,7 +338,6 @@ else:
 # Force the start method
 #
 
-
 def _force_start_method(method):
     _default_context._actual_context = _concrete_contexts[method]
 
@@ -405,18 +347,15 @@ def _force_start_method(method):
 
 _tls = threading.local()
 
-
 def get_spawning_popen():
     return getattr(_tls, 'spawning_popen', None)
 
-
 def set_spawning_popen(popen):
     _tls.spawning_popen = popen
-
 
 def assert_spawning(obj):
     if get_spawning_popen() is None:
         raise RuntimeError(
             '%s objects should only be shared between processes'
             ' through inheritance' % type(obj).__name__
-        )
+            )

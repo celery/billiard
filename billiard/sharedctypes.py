@@ -6,37 +6,40 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 import ctypes
-import sys
 import weakref
 
 from . import heap
 from . import get_context
-from .context import assert_spawning
-from .five import int_types
-from .reduction import ForkingPickler
+
+from .context import reduction, assert_spawning
+_ForkingPickler = reduction.ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
 
-PY3 = sys.version_info[0] == 3
+#
+#
+#
 
 typecode_to_type = {
-    'c': ctypes.c_char, 'u': ctypes.c_wchar,
-    'b': ctypes.c_byte, 'B': ctypes.c_ubyte,
-    'h': ctypes.c_short, 'H': ctypes.c_ushort,
-    'i': ctypes.c_int, 'I': ctypes.c_uint,
-    'l': ctypes.c_long, 'L': ctypes.c_ulong,
-    'f': ctypes.c_float, 'd': ctypes.c_double
-}
+    'c': ctypes.c_char,     'u': ctypes.c_wchar,
+    'b': ctypes.c_byte,     'B': ctypes.c_ubyte,
+    'h': ctypes.c_short,    'H': ctypes.c_ushort,
+    'i': ctypes.c_int,      'I': ctypes.c_uint,
+    'l': ctypes.c_long,     'L': ctypes.c_ulong,
+    'q': ctypes.c_longlong, 'Q': ctypes.c_ulonglong,
+    'f': ctypes.c_float,    'd': ctypes.c_double
+    }
 
+#
+#
+#
 
 def _new_value(type_):
     size = ctypes.sizeof(type_)
     wrapper = heap.BufferWrapper(size)
     return rebuild_ctype(type_, wrapper, None)
-
 
 def RawValue(typecode_or_type, *args):
     '''
@@ -48,13 +51,12 @@ def RawValue(typecode_or_type, *args):
     obj.__init__(*args)
     return obj
 
-
 def RawArray(typecode_or_type, size_or_initializer):
     '''
     Returns a ctypes array allocated from shared memory
     '''
     type_ = typecode_to_type.get(typecode_or_type, typecode_or_type)
-    if isinstance(size_or_initializer, int_types):
+    if isinstance(size_or_initializer, int):
         type_ = type_ * size_or_initializer
         obj = _new_value(type_)
         ctypes.memset(ctypes.addressof(obj), 0, ctypes.sizeof(obj))
@@ -65,16 +67,10 @@ def RawArray(typecode_or_type, size_or_initializer):
         result.__init__(*size_or_initializer)
         return result
 
-
-def Value(typecode_or_type, *args, **kwds):
+def Value(typecode_or_type, *args, lock=True, ctx=None):
     '''
     Return a synchronization wrapper for a Value
     '''
-    lock = kwds.pop('lock', None)
-    ctx = kwds.pop('ctx', None)
-    if kwds:
-        raise ValueError(
-            'unrecognized keyword argument(s): %s' % list(kwds.keys()))
     obj = RawValue(typecode_or_type, *args)
     if lock is False:
         return obj
@@ -82,19 +78,13 @@ def Value(typecode_or_type, *args, **kwds):
         ctx = ctx or get_context()
         lock = ctx.RLock()
     if not hasattr(lock, 'acquire'):
-        raise AttributeError("'%r' has no method 'acquire'" % lock)
+        raise AttributeError("%r has no method 'acquire'" % lock)
     return synchronized(obj, lock, ctx=ctx)
 
-
-def Array(typecode_or_type, size_or_initializer, **kwds):
+def Array(typecode_or_type, size_or_initializer, *, lock=True, ctx=None):
     '''
     Return a synchronization wrapper for a RawArray
     '''
-    lock = kwds.pop('lock', None)
-    ctx = kwds.pop('ctx', None)
-    if kwds:
-        raise ValueError(
-            'unrecognized keyword argument(s): %s' % list(kwds.keys()))
     obj = RawArray(typecode_or_type, size_or_initializer)
     if lock is False:
         return obj
@@ -102,15 +92,13 @@ def Array(typecode_or_type, size_or_initializer, **kwds):
         ctx = ctx or get_context()
         lock = ctx.RLock()
     if not hasattr(lock, 'acquire'):
-        raise AttributeError("'%r' has no method 'acquire'" % lock)
+        raise AttributeError("%r has no method 'acquire'" % lock)
     return synchronized(obj, lock, ctx=ctx)
-
 
 def copy(obj):
     new_obj = _new_value(type(obj))
     ctypes.pointer(new_obj)[0] = obj
     return new_obj
-
 
 def synchronized(obj, lock=None, ctx=None):
     assert not isinstance(obj, SynchronizedBase), 'object already synchronized'
@@ -128,7 +116,7 @@ def synchronized(obj, lock=None, ctx=None):
             scls = class_cache[cls]
         except KeyError:
             names = [field[0] for field in cls._fields_]
-            d = dict((name, make_property(name)) for name in names)
+            d = {name: make_property(name) for name in names}
             classname = 'Synchronized' + cls.__name__
             scls = class_cache[cls] = type(classname, (SynchronizedBase,), d)
         return scls(obj, lock, ctx)
@@ -137,7 +125,6 @@ def synchronized(obj, lock=None, ctx=None):
 # Functions for pickling/unpickling
 #
 
-
 def reduce_ctype(obj):
     assert_spawning(obj)
     if isinstance(obj, ctypes.Array):
@@ -145,16 +132,12 @@ def reduce_ctype(obj):
     else:
         return rebuild_ctype, (type(obj), obj._wrapper, None)
 
-
 def rebuild_ctype(type_, wrapper, length):
     if length is not None:
         type_ = type_ * length
-    ForkingPickler.register(type_, reduce_ctype)
-    if PY3:
-        buf = wrapper.create_memoryview()
-        obj = type_.from_buffer(buf)
-    else:
-        obj = type_.from_address(wrapper.get_address())
+    _ForkingPickler.register(type_, reduce_ctype)
+    buf = wrapper.create_memoryview()
+    obj = type_.from_buffer(buf)
     obj._wrapper = wrapper
     return obj
 
@@ -162,16 +145,14 @@ def rebuild_ctype(type_, wrapper, length):
 # Function to create properties
 #
 
-
 def make_property(name):
     try:
         return prop_cache[name]
     except KeyError:
         d = {}
-        exec(template % ((name, ) * 7), d)
+        exec(template % ((name,)*7), d)
         prop_cache[name] = d[name]
         return d[name]
-
 
 template = '''
 def get%s(self):
@@ -195,7 +176,6 @@ class_cache = weakref.WeakKeyDictionary()
 #
 # Synchronized wrappers
 #
-
 
 class SynchronizedBase(object):
 
