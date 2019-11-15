@@ -6,40 +6,37 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
+
+__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
 import sys
 import os
 import threading
 import collections
+import time
 import weakref
 import errno
 
+from queue import Empty, Full
+
+import _multiprocessing
+
 from . import connection
 from . import context
+_ForkingPickler = context.reduction.ForkingPickler
 
-from .compat import get_errno
-from .five import monotonic, Empty, Full
-from .util import (
-    debug, error, info, Finalize, register_after_fork, is_exiting,
-)
-from .reduction import ForkingPickler
+from .util import debug, info, Finalize, register_after_fork, is_exiting
 
-__all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
-
+#
+# Queue type using a pipe, buffer and thread
+#
 
 class Queue(object):
-    '''
-    Queue type using a pipe, buffer and thread
-    '''
-    def __init__(self, maxsize=0, *args, **kwargs):
-        try:
-            ctx = kwargs['ctx']
-        except KeyError:
-            raise TypeError('missing 1 required keyword-only argument: ctx')
+
+    def __init__(self, maxsize=0, *, ctx):
         if maxsize <= 0:
             # Can raise ImportError (see issues #3770 and #23400)
-            from .synchronize import SEM_VALUE_MAX as maxsize  # noqa
+            from .synchronize import SEM_VALUE_MAX as maxsize
         self._maxsize = maxsize
         self._reader, self._writer = connection.Pipe(duplex=False)
         self._rlock = ctx.Lock()
@@ -76,14 +73,13 @@ class Queue(object):
         self._joincancelled = False
         self._closed = False
         self._close = None
-        self._send_bytes = self._writer.send
-        self._recv = self._reader.recv
         self._send_bytes = self._writer.send_bytes
         self._recv_bytes = self._reader.recv_bytes
         self._poll = self._reader.poll
 
     def put(self, obj, block=True, timeout=None):
-        assert not self._closed
+        if self._closed:
+            raise ValueError(f"Queue {self!r} is closed")
         if not self._sem.acquire(block, timeout):
             raise Full
 
@@ -94,20 +90,21 @@ class Queue(object):
             self._notempty.notify()
 
     def get(self, block=True, timeout=None):
+        if self._closed:
+            raise ValueError(f"Queue {self!r} is closed")
         if block and timeout is None:
             with self._rlock:
                 res = self._recv_bytes()
             self._sem.release()
-
         else:
             if block:
-                deadline = monotonic() + timeout
+                deadline = time.monotonic() + timeout
             if not self._rlock.acquire(block, timeout):
                 raise Empty
             try:
                 if block:
-                    timeout = deadline - monotonic()
-                    if timeout < 0 or not self._poll(timeout):
+                    timeout = deadline - time.monotonic()
+                    if not self._poll(timeout):
                         raise Empty
                 elif not self._poll():
                     raise Empty
@@ -116,11 +113,10 @@ class Queue(object):
             finally:
                 self._rlock.release()
         # unserialize the data after having released the lock
-        return ForkingPickler.loads(res)
+        return _ForkingPickler.loads(res)
 
     def qsize(self):
-        # Raises NotImplementedError on macOS because
-        # of broken sem_getvalue()
+        # Raises NotImplementedError on Mac OSX because of broken sem_getvalue()
         return self._maxsize - self._sem._semlock._get_value()
 
     def empty(self):
@@ -147,7 +143,7 @@ class Queue(object):
 
     def join_thread(self):
         debug('Queue.join_thread()')
-        assert self._closed
+        assert self._closed, "Queue {0!r} not closed".format(self)
         if self._jointhread:
             self._jointhread()
 
@@ -167,7 +163,8 @@ class Queue(object):
         self._thread = threading.Thread(
             target=Queue._feed,
             args=(self._buffer, self._notempty, self._send_bytes,
-                  self._wlock, self._writer.close, self._ignore_epipe),
+                  self._wlock, self._writer.close, self._ignore_epipe,
+                  self._on_queue_feeder_error, self._sem),
             name='QueueFeederThread'
         )
         self._thread.daemon = True
@@ -176,26 +173,19 @@ class Queue(object):
         self._thread.start()
         debug('... done self._thread.start()')
 
-        # On process exit we will wait for data to be flushed to pipe.
-        #
-        # However, if this process created the queue then all
-        # processes which use the queue will be descendants of this
-        # process.  Therefore waiting for the queue to be flushed
-        # is pointless once all the child processes have been joined.
-        created_by_this_process = (self._opid == os.getpid())
-        if not self._joincancelled and not created_by_this_process:
+        if not self._joincancelled:
             self._jointhread = Finalize(
                 self._thread, Queue._finalize_join,
                 [weakref.ref(self._thread)],
                 exitpriority=-5
-            )
+                )
 
         # Send sentinel to the thread queue object when garbage collected
         self._close = Finalize(
             self, Queue._finalize_close,
             [self._buffer, self._notempty],
             exitpriority=10
-        )
+            )
 
     @staticmethod
     def _finalize_join(twr):
@@ -215,9 +205,9 @@ class Queue(object):
             notempty.notify()
 
     @staticmethod
-    def _feed(buffer, notempty, send_bytes, writelock, close, ignore_epipe):
+    def _feed(buffer, notempty, send_bytes, writelock, close, ignore_epipe,
+              onerror, queue_sem):
         debug('starting thread to feed data to pipe')
-
         nacquire = notempty.acquire
         nrelease = notempty.release
         nwait = notempty.wait
@@ -229,8 +219,8 @@ class Queue(object):
         else:
             wacquire = None
 
-        try:
-            while 1:
+        while 1:
+            try:
                 nacquire()
                 try:
                     if not buffer:
@@ -246,7 +236,7 @@ class Queue(object):
                             return
 
                         # serialize the data before acquiring the lock
-                        obj = ForkingPickler.dumps(obj)
+                        obj = _ForkingPickler.dumps(obj)
                         if wacquire is None:
                             send_bytes(obj)
                         else:
@@ -257,41 +247,48 @@ class Queue(object):
                                 wrelease()
                 except IndexError:
                     pass
-        except Exception as exc:
-            if ignore_epipe and get_errno(exc) == errno.EPIPE:
-                return
-            # Since this runs in a daemon thread the resources it uses
-            # may be become unusable while the process is cleaning up.
-            # We ignore errors which happen after the process has
-            # started to cleanup.
-            try:
+            except Exception as e:
+                if ignore_epipe and getattr(e, 'errno', 0) == errno.EPIPE:
+                    return
+                # Since this runs in a daemon thread the resources it uses
+                # may be become unusable while the process is cleaning up.
+                # We ignore errors which happen after the process has
+                # started to cleanup.
                 if is_exiting():
-                    info('error in queue thread: %r', exc, exc_info=True)
+                    info('error in queue thread: %s', e)
+                    return
                 else:
-                    if not error('error in queue thread: %r', exc,
-                                 exc_info=True):
-                        import traceback
-                        traceback.print_exc()
-            except Exception:
-                pass
+                    # Since the object has not been sent in the queue, we need
+                    # to decrease the size of the queue. The error acts as
+                    # if the object had been silently removed from the queue
+                    # and this step is necessary to have a properly working
+                    # queue.
+                    queue_sem.release()
+                    onerror(e, obj)
+
+    @staticmethod
+    def _on_queue_feeder_error(e, obj):
+        """
+        Private API hook called when feeding data in the background thread
+        raises an exception.  For overriding by concurrent.futures.
+        """
+        import traceback
+        traceback.print_exc()
+
 
 _sentinel = object()
 
+#
+# A queue type which also supports join() and task_done() methods
+#
+# Note that if you do not call task_done() for each finished task then
+# eventually the counter's semaphore may overflow causing Bad Things
+# to happen.
+#
 
 class JoinableQueue(Queue):
-    '''
-    A queue type which also supports join() and task_done() methods
 
-    Note that if you do not call task_done() for each finished task then
-    eventually the counter's semaphore may overflow causing Bad Things
-    to happen.
-    '''
-
-    def __init__(self, maxsize=0, *args, **kwargs):
-        try:
-            ctx = kwargs['ctx']
-        except KeyError:
-            raise TypeError('missing 1 required keyword argument: ctx')
+    def __init__(self, maxsize=0, *, ctx):
         Queue.__init__(self, maxsize, ctx=ctx)
         self._unfinished_tasks = ctx.Semaphore(0)
         self._cond = ctx.Condition()
@@ -304,17 +301,17 @@ class JoinableQueue(Queue):
         self._cond, self._unfinished_tasks = state[-2:]
 
     def put(self, obj, block=True, timeout=None):
-        assert not self._closed
+        if self._closed:
+            raise ValueError(f"Queue {self!r} is closed")
         if not self._sem.acquire(block, timeout):
             raise Full
 
-        with self._notempty:
-            with self._cond:
-                if self._thread is None:
-                    self._start_thread()
-                self._buffer.append(obj)
-                self._unfinished_tasks.release()
-                self._notempty.notify()
+        with self._notempty, self._cond:
+            if self._thread is None:
+                self._start_thread()
+            self._buffer.append(obj)
+            self._unfinished_tasks.release()
+            self._notempty.notify()
 
     def task_done(self):
         with self._cond:
@@ -328,18 +325,20 @@ class JoinableQueue(Queue):
             if not self._unfinished_tasks._semlock._is_zero():
                 self._cond.wait()
 
+#
+# Simplified Queue type -- really just a locked pipe
+#
 
-class _SimpleQueue(object):
-    '''
-    Simplified Queue type -- really just a locked pipe
-    '''
+class SimpleQueue(object):
 
-    def __init__(self, rnonblock=False, wnonblock=False, ctx=None):
-        self._reader, self._writer = connection.Pipe(
-            duplex=False, rnonblock=rnonblock, wnonblock=wnonblock,
-        )
+    def __init__(self, *, ctx):
+        self._reader, self._writer = connection.Pipe(duplex=False)
+        self._rlock = ctx.Lock()
         self._poll = self._reader.poll
-        self._rlock = self._wlock = None
+        if sys.platform == 'win32':
+            self._wlock = None
+        else:
+            self._wlock = ctx.Lock()
 
     def empty(self):
         return not self._poll()
@@ -350,41 +349,20 @@ class _SimpleQueue(object):
 
     def __setstate__(self, state):
         (self._reader, self._writer, self._rlock, self._wlock) = state
-
-    def get_payload(self):
-        return self._reader.recv_bytes()
-
-    def send_payload(self, value):
-        self._writer.send_bytes(value)
+        self._poll = self._reader.poll
 
     def get(self):
+        with self._rlock:
+            res = self._reader.recv_bytes()
         # unserialize the data after having released the lock
-        return ForkingPickler.loads(self.get_payload())
+        return _ForkingPickler.loads(res)
 
     def put(self, obj):
         # serialize the data before acquiring the lock
-        self.send_payload(ForkingPickler.dumps(obj))
-
-
-class SimpleQueue(_SimpleQueue):
-
-    def __init__(self, *args, **kwargs):
-        try:
-            ctx = kwargs['ctx']
-        except KeyError:
-            raise TypeError('missing required keyword argument: ctx')
-        self._reader, self._writer = connection.Pipe(duplex=False)
-        self._rlock = ctx.Lock()
-        self._wlock = ctx.Lock() if sys.platform != 'win32' else None
-
-    def get_payload(self):
-        with self._rlock:
-            return self._reader.recv_bytes()
-
-    def send_payload(self, value):
+        obj = _ForkingPickler.dumps(obj)
         if self._wlock is None:
             # writes to a message oriented win32 pipe are atomic
-            self._writer.send_bytes(value)
+            self._writer.send_bytes(obj)
         else:
             with self._wlock:
-                self._writer.send_bytes(value)
+                self._writer.send_bytes(obj)

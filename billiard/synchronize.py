@@ -6,107 +6,86 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
-import errno
+__all__ = [
+    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event'
+    ]
+
+import threading
 import sys
 import tempfile
-import threading
+import _multiprocessing
+import time
 
 from . import context
 from . import process
 from . import util
 
-from ._ext import _billiard, ensure_SemLock
-from .five import range, monotonic
-
-__all__ = [
-    'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',
-]
-
 # Try to import the mp.synchronize module cleanly, if it fails
 # raise ImportError for platforms lacking a working sem_open implementation.
 # See issue 3770
-ensure_SemLock()
+try:
+    from _multiprocessing import SemLock, sem_unlink
+except (ImportError):
+    raise ImportError("This platform lacks a functioning sem_open" +
+                      " implementation, therefore, the required" +
+                      " synchronization primitives needed will not" +
+                      " function, see issue 3770.")
 
 #
 # Constants
 #
 
 RECURSIVE_MUTEX, SEMAPHORE = list(range(2))
-SEM_VALUE_MAX = _billiard.SemLock.SEM_VALUE_MAX
-
-try:
-    sem_unlink = _billiard.SemLock.sem_unlink
-except AttributeError:  # pragma: no cover
-    try:
-        # Py3.4+ implements sem_unlink and the semaphore must be named
-        from _multiprocessing import sem_unlink  # noqa
-    except ImportError:
-        sem_unlink = None   # noqa
+SEM_VALUE_MAX = _multiprocessing.SemLock.SEM_VALUE_MAX
 
 #
-# Base class for semaphores and mutexes; wraps `_billiard.SemLock`
+# Base class for semaphores and mutexes; wraps `_multiprocessing.SemLock`
 #
-
-
-def _semname(sl):
-    try:
-        return sl.name
-    except AttributeError:
-        pass
-
 
 class SemLock(object):
+
     _rand = tempfile._RandomNameSequence()
 
-    def __init__(self, kind, value, maxvalue, ctx=None):
+    def __init__(self, kind, value, maxvalue, *, ctx):
         if ctx is None:
             ctx = context._default_context.get_context()
         name = ctx.get_start_method()
         unlink_now = sys.platform == 'win32' or name == 'fork'
-        if sem_unlink:
-            for i in range(100):
-                try:
-                    sl = self._semlock = _billiard.SemLock(
-                        kind, value, maxvalue, self._make_name(), unlink_now,
-                    )
-                except (OSError, IOError) as exc:
-                    if getattr(exc, 'errno', None) != errno.EEXIST:
-                        raise
-                else:
-                    break
+        for i in range(100):
+            try:
+                sl = self._semlock = _multiprocessing.SemLock(
+                    kind, value, maxvalue, self._make_name(),
+                    unlink_now)
+            except FileExistsError:
+                pass
             else:
-                exc = IOError('cannot find file for semaphore')
-                exc.errno = errno.EEXIST
-                raise exc
+                break
         else:
-            sl = self._semlock = _billiard.SemLock(kind, value, maxvalue)
+            raise FileExistsError('cannot find name for semaphore')
 
-        util.debug('created semlock with handle %s', sl.handle)
+        util.debug('created semlock with handle %s' % sl.handle)
         self._make_methods()
 
-        if sem_unlink:
+        if sys.platform != 'win32':
+            def _after_fork(obj):
+                obj._semlock._after_fork()
+            util.register_after_fork(self, _after_fork)
 
-            if sys.platform != 'win32':
-                def _after_fork(obj):
-                    obj._semlock._after_fork()
-                util.register_after_fork(self, _after_fork)
-
-            if _semname(self._semlock) is not None:
-                # We only get here if we are on Unix with forking
-                # disabled.  When the object is garbage collected or the
-                # process shuts down we unlink the semaphore name
-                from .semaphore_tracker import register
-                register(self._semlock.name)
-                util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
-                              exitpriority=0)
+        if self._semlock.name is not None:
+            # We only get here if we are on Unix with forking
+            # disabled.  When the object is garbage collected or the
+            # process shuts down we unlink the semaphore name
+            from .resource_tracker import register
+            register(self._semlock.name, "semaphore")
+            util.Finalize(self, SemLock._cleanup, (self._semlock.name,),
+                          exitpriority=0)
 
     @staticmethod
     def _cleanup(name):
-        from .semaphore_tracker import unregister
+        from .resource_tracker import unregister
         sem_unlink(name)
-        unregister(name)
+        unregister(name, "semaphore")
 
     def _make_methods(self):
         self.acquire = self._semlock.acquire
@@ -125,16 +104,11 @@ class SemLock(object):
             h = context.get_spawning_popen().duplicate_for_child(sl.handle)
         else:
             h = sl.handle
-        state = (h, sl.kind, sl.maxvalue)
-        try:
-            state += (sl.name, )
-        except AttributeError:
-            pass
-        return state
+        return (h, sl.kind, sl.maxvalue, sl.name)
 
     def __setstate__(self, state):
-        self._semlock = _billiard.SemLock._rebuild(*state)
-        util.debug('recreated blocker with handle %r', state[0])
+        self._semlock = _multiprocessing.SemLock._rebuild(*state)
+        util.debug('recreated blocker with handle %r' % state[0])
         self._make_methods()
 
     @staticmethod
@@ -142,10 +116,13 @@ class SemLock(object):
         return '%s-%s' % (process.current_process()._config['semprefix'],
                           next(SemLock._rand))
 
+#
+# Semaphore
+#
 
 class Semaphore(SemLock):
 
-    def __init__(self, value=1, ctx=None):
+    def __init__(self, value=1, *, ctx):
         SemLock.__init__(self, SEMAPHORE, value, SEM_VALUE_MAX, ctx=ctx)
 
     def get_value(self):
@@ -158,10 +135,13 @@ class Semaphore(SemLock):
             value = 'unknown'
         return '<%s(value=%s)>' % (self.__class__.__name__, value)
 
+#
+# Bounded semaphore
+#
 
 class BoundedSemaphore(Semaphore):
 
-    def __init__(self, value=1, ctx=None):
+    def __init__(self, value=1, *, ctx):
         SemLock.__init__(self, SEMAPHORE, value, value, ctx=ctx)
 
     def __repr__(self):
@@ -169,16 +149,16 @@ class BoundedSemaphore(Semaphore):
             value = self._semlock._get_value()
         except Exception:
             value = 'unknown'
-        return '<%s(value=%s, maxvalue=%s)>' % (
-            self.__class__.__name__, value, self._semlock.maxvalue)
+        return '<%s(value=%s, maxvalue=%s)>' % \
+               (self.__class__.__name__, value, self._semlock.maxvalue)
 
+#
+# Non-recursive lock
+#
 
 class Lock(SemLock):
-    '''
-    Non-recursive lock.
-    '''
 
-    def __init__(self, ctx=None):
+    def __init__(self, *, ctx):
         SemLock.__init__(self, SEMAPHORE, 1, 1, ctx=ctx)
 
     def __repr__(self):
@@ -197,13 +177,13 @@ class Lock(SemLock):
             name = 'unknown'
         return '<%s(owner=%s)>' % (self.__class__.__name__, name)
 
+#
+# Recursive lock
+#
 
 class RLock(SemLock):
-    '''
-    Recursive lock
-    '''
 
-    def __init__(self, ctx=None):
+    def __init__(self, *, ctx):
         SemLock.__init__(self, RECURSIVE_MUTEX, 1, 1, ctx=ctx)
 
     def __repr__(self):
@@ -223,14 +203,13 @@ class RLock(SemLock):
             name, count = 'unknown', 'unknown'
         return '<%s(%s, %s)>' % (self.__class__.__name__, name, count)
 
+#
+# Condition variable
+#
 
 class Condition(object):
-    '''
-    Condition variable
-    '''
 
-    def __init__(self, lock=None, ctx=None):
-        assert ctx
+    def __init__(self, lock=None, *, ctx):
         self._lock = lock or ctx.RLock()
         self._sleeping_count = ctx.Semaphore(0)
         self._woken_count = ctx.Semaphore(0)
@@ -263,12 +242,11 @@ class Condition(object):
                            self._woken_count._semlock._get_value())
         except Exception:
             num_waiters = 'unknown'
-        return '<%s(%s, %s)>' % (
-            self.__class__.__name__, self._lock, num_waiters)
+        return '<%s(%s, %s)>' % (self.__class__.__name__, self._lock, num_waiters)
 
     def wait(self, timeout=None):
         assert self._lock._semlock._is_mine(), \
-            'must acquire() condition before using wait()'
+               'must acquire() condition before using wait()'
 
         # indicate that this thread is going to sleep
         self._sleeping_count.release()
@@ -289,35 +267,21 @@ class Condition(object):
             for i in range(count):
                 self._lock.acquire()
 
-    def notify(self):
+    def notify(self, n=1):
         assert self._lock._semlock._is_mine(), 'lock is not owned'
-        assert not self._wait_semaphore.acquire(False)
-
-        # to take account of timeouts since last notify() we subtract
-        # woken_count from sleeping_count and rezero woken_count
-        while self._woken_count.acquire(False):
-            res = self._sleeping_count.acquire(False)
-            assert res
-
-        if self._sleeping_count.acquire(False):  # try grabbing a sleeper
-            self._wait_semaphore.release()       # wake up one sleeper
-            self._woken_count.acquire()          # wait for sleeper to wake
-
-            # rezero _wait_semaphore in case a timeout just happened
-            self._wait_semaphore.acquire(False)
-
-    def notify_all(self):
-        assert self._lock._semlock._is_mine(), 'lock is not owned'
-        assert not self._wait_semaphore.acquire(False)
+        assert not self._wait_semaphore.acquire(
+            False), ('notify: Should not have been able to acquire'
+                     + '_wait_semaphore')
 
         # to take account of timeouts since last notify*() we subtract
         # woken_count from sleeping_count and rezero woken_count
         while self._woken_count.acquire(False):
             res = self._sleeping_count.acquire(False)
-            assert res
+            assert res, ('notify: Bug in sleeping_count.acquire'
+                         + '- res should not be False')
 
         sleepers = 0
-        while self._sleeping_count.acquire(False):
+        while sleepers < n and self._sleeping_count.acquire(False):
             self._wait_semaphore.release()        # wake up one sleeper
             sleepers += 1
 
@@ -329,29 +293,34 @@ class Condition(object):
             while self._wait_semaphore.acquire(False):
                 pass
 
+    def notify_all(self):
+        self.notify(n=sys.maxsize)
+
     def wait_for(self, predicate, timeout=None):
         result = predicate()
         if result:
             return result
         if timeout is not None:
-            endtime = monotonic() + timeout
+            endtime = time.monotonic() + timeout
         else:
             endtime = None
             waittime = None
         while not result:
             if endtime is not None:
-                waittime = endtime - monotonic()
+                waittime = endtime - time.monotonic()
                 if waittime <= 0:
                     break
             self.wait(waittime)
             result = predicate()
         return result
 
+#
+# Event
+#
 
 class Event(object):
 
-    def __init__(self, ctx=None):
-        assert ctx
+    def __init__(self, *, ctx):
         self._cond = ctx.Condition(ctx.Lock())
         self._flag = ctx.Semaphore(0)
 
@@ -388,50 +357,38 @@ class Event(object):
 # Barrier
 #
 
+class Barrier(threading.Barrier):
 
-if hasattr(threading, 'Barrier'):
+    def __init__(self, parties, action=None, timeout=None, *, ctx):
+        import struct
+        from .heap import BufferWrapper
+        wrapper = BufferWrapper(struct.calcsize('i') * 2)
+        cond = ctx.Condition()
+        self.__setstate__((parties, action, timeout, cond, wrapper))
+        self._state = 0
+        self._count = 0
 
-    class Barrier(threading.Barrier):
+    def __setstate__(self, state):
+        (self._parties, self._action, self._timeout,
+         self._cond, self._wrapper) = state
+        self._array = self._wrapper.create_memoryview().cast('i')
 
-        def __init__(self, parties, action=None, timeout=None, ctx=None):
-            assert ctx
-            import struct
-            from .heap import BufferWrapper
-            wrapper = BufferWrapper(struct.calcsize('i') * 2)
-            cond = ctx.Condition()
-            self.__setstate__((parties, action, timeout, cond, wrapper))
-            self._state = 0
-            self._count = 0
+    def __getstate__(self):
+        return (self._parties, self._action, self._timeout,
+                self._cond, self._wrapper)
 
-        def __setstate__(self, state):
-            (self._parties, self._action, self._timeout,
-             self._cond, self._wrapper) = state
-            self._array = self._wrapper.create_memoryview().cast('i')
+    @property
+    def _state(self):
+        return self._array[0]
 
-        def __getstate__(self):
-            return (self._parties, self._action, self._timeout,
-                    self._cond, self._wrapper)
+    @_state.setter
+    def _state(self, value):
+        self._array[0] = value
 
-        @property
-        def _state(self):
-            return self._array[0]
+    @property
+    def _count(self):
+        return self._array[1]
 
-        @_state.setter
-        def _state(self, value):  # noqa
-            self._array[0] = value
-
-        @property
-        def _count(self):
-            return self._array[1]
-
-        @_count.setter
-        def _count(self, value):  # noqa
-            self._array[1] = value
-
-
-else:
-
-    class Barrier(object):  # noqa
-
-        def __init__(self, *args, **kwargs):
-            raise NotImplementedError('Barrier only supported on Py3')
+    @_count.setter
+    def _count(self, value):
+        self._array[1] = value

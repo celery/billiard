@@ -1,13 +1,12 @@
 #
-# We use a background thread for sharing fds on Unix, and for sharing
-# sockets on Windows.
+# We use a background thread for sharing fds on Unix, and for sharing sockets on
+# Windows.
 #
 # A client which wants to pickle a resource registers it with the resource
 # sharer and gets an identifier in return.  The unpickling process will connect
 # to the resource sharer, sends the identifier and its pid, and then receives
 # the resource.
 #
-from __future__ import absolute_import
 
 import os
 import signal
@@ -16,7 +15,7 @@ import sys
 import threading
 
 from . import process
-from . import reduction
+from .context import reduction
 from . import util
 
 __all__ = ['stop']
@@ -27,10 +26,8 @@ if sys.platform == 'win32':
 
     class DupSocket(object):
         '''Picklable wrapper for a socket.'''
-
         def __init__(self, sock):
             new_sock = sock.dup()
-
             def send(conn, pid):
                 share = new_sock.share(pid)
                 conn.send_bytes(share)
@@ -49,10 +46,8 @@ else:
         '''Wrapper for fd which can be used at any time.'''
         def __init__(self, fd):
             new_fd = os.dup(fd)
-
             def send(conn, pid):
                 reduction.send_handle(conn, new_fd, pid)
-
             def close():
                 os.close(new_fd)
             self._id = _resource_sharer.register(send, close)
@@ -64,7 +59,7 @@ else:
 
 
 class _ResourceSharer(object):
-    '''Manager for resouces using background thread.'''
+    '''Manager for resources using background thread.'''
     def __init__(self):
         self._key = 0
         self._cache = {}
@@ -130,7 +125,7 @@ class _ResourceSharer(object):
 
     def _start(self):
         from .connection import Listener
-        assert self._listener is None
+        assert self._listener is None, "Already have Listener"
         util.debug('starting listener and thread for sending handles')
         self._listener = Listener(authkey=process.current_process().authkey)
         self._address = self._listener.address
@@ -141,7 +136,7 @@ class _ResourceSharer(object):
 
     def _serve(self):
         if hasattr(signal, 'pthread_sigmask'):
-            signal.pthread_sigmask(signal.SIG_BLOCK, range(1, signal.NSIG))
+            signal.pthread_sigmask(signal.SIG_BLOCK, signal.valid_signals())
         while 1:
             try:
                 with self._listener.accept() as conn:

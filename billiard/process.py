@@ -6,7 +6,9 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
+
+__all__ = ['BaseProcess', 'current_process', 'active_children',
+           'parent_process']
 
 #
 # Imports
@@ -16,25 +18,21 @@ import os
 import sys
 import signal
 import itertools
-import logging
 import threading
 from _weakrefset import WeakSet
 
-from multiprocessing import process as _mproc
-
-from .five import items, string_t
+#
+#
+#
 
 try:
     ORIGINAL_DIR = os.path.abspath(os.getcwd())
 except OSError:
     ORIGINAL_DIR = None
 
-__all__ = ['BaseProcess', 'Process', 'current_process', 'active_children']
-
 #
 # Public functions
 #
-
 
 def current_process():
     '''
@@ -42,11 +40,23 @@ def current_process():
     '''
     return _current_process
 
+def active_children():
+    '''
+    Return list of process objects corresponding to live child processes
+    '''
+    _cleanup()
+    return list(_children)
 
-def _set_current_process(process):
-    global _current_process
-    _current_process = _mproc._current_process = process
 
+def parent_process():
+    '''
+    Return process object representing the parent process
+    '''
+    return _parent_process
+
+#
+#
+#
 
 def _cleanup():
     # check for processes which have finished
@@ -54,57 +64,41 @@ def _cleanup():
         if p._popen.poll() is not None:
             _children.discard(p)
 
-
-def _maybe_flush(f):
-    try:
-        f.flush()
-    except (AttributeError, EnvironmentError, NotImplementedError):
-        pass
-
-
-def active_children(_cleanup=_cleanup):
-    '''
-    Return list of process objects corresponding to live child processes
-    '''
-    try:
-        _cleanup()
-    except TypeError:
-        # called after gc collect so _cleanup does not exist anymore
-        return []
-    return list(_children)
-
+#
+# The `Process` class
+#
 
 class BaseProcess(object):
     '''
     Process objects represent activity that is run in a separate process
 
-    The class is analagous to `threading.Thread`
+    The class is analogous to `threading.Thread`
     '''
-
     def _Popen(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
-    def __init__(self, group=None, target=None, name=None,
-                 args=(), kwargs={}, daemon=None, **_kw):
+    def __init__(self, group=None, target=None, name=None, args=(), kwargs={},
+                 *, daemon=None):
         assert group is None, 'group argument must be None for now'
         count = next(_process_counter)
-        self._identity = _current_process._identity + (count, )
+        self._identity = _current_process._identity + (count,)
         self._config = _current_process._config.copy()
         self._parent_pid = os.getpid()
+        self._parent_name = _current_process.name
         self._popen = None
+        self._closed = False
         self._target = target
         self._args = tuple(args)
         self._kwargs = dict(kwargs)
-        self._name = (
-            name or type(self).__name__ + '-' +
-            ':'.join(str(i) for i in self._identity)
-        )
+        self._name = name or type(self).__name__ + '-' + \
+                     ':'.join(str(i) for i in self._identity)
         if daemon is not None:
             self.daemon = daemon
-        if _dangling is not None:
-            _dangling.add(self)
-        
-        self._controlled_termination = False
+        _dangling.add(self)
+
+    def _check_closed(self):
+        if self._closed:
+            raise ValueError("process object is closed")
 
     def run(self):
         '''
@@ -117,63 +111,88 @@ class BaseProcess(object):
         '''
         Start child process
         '''
+        self._check_closed()
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
-            'can only start a process object created by current process'
+               'can only start a process object created by current process'
+        assert not _current_process._config.get('daemon'), \
+               'daemonic processes are not allowed to have children'
         _cleanup()
         self._popen = self._Popen(self)
         self._sentinel = self._popen.sentinel
+        # Avoid a refcycle if the target function holds an indirect
+        # reference to the process object (see bpo-30775)
+        del self._target, self._args, self._kwargs
         _children.add(self)
-
-    def close(self):
-        if self._popen is not None:
-            self._popen.close()
 
     def terminate(self):
         '''
         Terminate process; sends SIGTERM signal or uses TerminateProcess()
         '''
+        self._check_closed()
         self._popen.terminate()
-        
-    def terminate_controlled(self):
-        self._controlled_termination = True
-        self.terminate()
+
+    def kill(self):
+        '''
+        Terminate process; sends SIGKILL signal or uses TerminateProcess()
+        '''
+        self._check_closed()
+        self._popen.kill()
 
     def join(self, timeout=None):
         '''
         Wait until child process terminates
         '''
+        self._check_closed()
         assert self._parent_pid == os.getpid(), 'can only join a child process'
         assert self._popen is not None, 'can only join a started process'
         res = self._popen.wait(timeout)
         if res is not None:
             _children.discard(self)
-        self.close()
 
     def is_alive(self):
         '''
         Return whether process is alive
         '''
+        self._check_closed()
         if self is _current_process:
             return True
         assert self._parent_pid == os.getpid(), 'can only test a child process'
-        if self._popen is None:
-            return False
-        self._popen.poll()
-        return self._popen.returncode is None
 
-    def _is_alive(self):
         if self._popen is None:
             return False
-        return self._popen.poll() is None
+
+        returncode = self._popen.poll()
+        if returncode is None:
+            return True
+        else:
+            _children.discard(self)
+            return False
+
+    def close(self):
+        '''
+        Close the Process object.
+
+        This method releases resources held by the Process object.  It is
+        an error to call this method if the child process is still running.
+        '''
+        if self._popen is not None:
+            if self._popen.poll() is None:
+                raise ValueError("Cannot close a process while it is still running. "
+                                 "You should first call join() or terminate().")
+            self._popen.close()
+            self._popen = None
+            del self._sentinel
+            _children.discard(self)
+        self._closed = True
 
     @property
     def name(self):
         return self._name
 
     @name.setter
-    def name(self, name):   # noqa
-        assert isinstance(name, string_t), 'name must be a string'
+    def name(self, name):
+        assert isinstance(name, str), 'name must be a string'
         self._name = name
 
     @property
@@ -183,7 +202,7 @@ class BaseProcess(object):
         '''
         return self._config.get('daemon', False)
 
-    @daemon.setter  # noqa
+    @daemon.setter
     def daemon(self, daemonic):
         '''
         Set whether process is a daemon
@@ -195,7 +214,7 @@ class BaseProcess(object):
     def authkey(self):
         return self._config['authkey']
 
-    @authkey.setter  # noqa
+    @authkey.setter
     def authkey(self, authkey):
         '''
         Set authorization key of process
@@ -207,6 +226,7 @@ class BaseProcess(object):
         '''
         Return exit code of process or `None` if it has yet to stop
         '''
+        self._check_closed()
         if self._popen is None:
             return self._popen
         return self._popen.poll()
@@ -216,6 +236,7 @@ class BaseProcess(object):
         '''
         Return identifier (PID) of process or `None` if it has yet to start
         '''
+        self._check_closed()
         if self is _current_process:
             return os.getpid()
         else:
@@ -229,92 +250,57 @@ class BaseProcess(object):
         Return a file descriptor (Unix) or handle (Windows) suitable for
         waiting for process termination.
         '''
+        self._check_closed()
         try:
             return self._sentinel
         except AttributeError:
-            raise ValueError("process not started")
-
-    @property
-    def _counter(self):
-        # compat for 2.7
-        return _process_counter
-
-    @property
-    def _children(self):
-        # compat for 2.7
-        return _children
-
-    @property
-    def _authkey(self):
-        # compat for 2.7
-        return self.authkey
-
-    @property
-    def _daemonic(self):
-        # compat for 2.7
-        return self.daemon
-
-    @property
-    def _tempdir(self):
-        # compat for 2.7
-        return self._config.get('tempdir')
+            raise ValueError("process not started") from None
 
     def __repr__(self):
+        exitcode = None
         if self is _current_process:
             status = 'started'
+        elif self._closed:
+            status = 'closed'
         elif self._parent_pid != os.getpid():
             status = 'unknown'
         elif self._popen is None:
             status = 'initial'
         else:
-            if self._popen.poll() is not None:
-                status = self.exitcode
+            exitcode = self._popen.poll()
+            if exitcode is not None:
+                status = 'stopped'
             else:
                 status = 'started'
 
-        if type(status) is int:
-            if status == 0:
-                status = 'stopped'
-            else:
-                status = 'stopped[%s]' % _exitcode_to_name.get(status, status)
-
-        return '<%s(%s, %s%s)>' % (type(self).__name__, self._name,
-                                   status, self.daemon and ' daemon' or '')
+        info = [type(self).__name__, 'name=%r' % self._name]
+        if self._popen is not None:
+            info.append('pid=%s' % self._popen.pid)
+        info.append('parent=%s' % self._parent_pid)
+        info.append(status)
+        if exitcode is not None:
+            exitcode = _exitcode_to_name.get(exitcode, exitcode)
+            info.append('exitcode=%s' % exitcode)
+        if self.daemon:
+            info.append('daemon')
+        return '<%s>' % ' '.join(info)
 
     ##
 
-    def _bootstrap(self):
+    def _bootstrap(self, parent_sentinel=None):
         from . import util, context
-        global _current_process, _process_counter, _children
+        global _current_process, _parent_process, _process_counter, _children
 
         try:
             if self._start_method is not None:
                 context._force_start_method(self._start_method)
             _process_counter = itertools.count(1)
             _children = set()
-            if sys.stdin is not None:
-                try:
-                    sys.stdin.close()
-                    sys.stdin = open(os.devnull)
-                except (OSError, ValueError):
-                    pass
+            util._close_stdin()
             old_process = _current_process
-            _set_current_process(self)
-
-            # Re-init logging system.
-            # Workaround for https://bugs.python.org/issue6721/#msg140215
-            # Python logging module uses RLock() objects which are broken
-            # after fork. This can result in a deadlock (Celery Issue #496).
-            loggerDict = logging.Logger.manager.loggerDict
-            logger_names = list(loggerDict.keys())
-            logger_names.append(None)  # for root logger
-            for name in logger_names:
-                if not name or not isinstance(loggerDict[name],
-                                              logging.PlaceHolder):
-                    for handler in logging.getLogger(name).handlers:
-                        handler.createLock()
-            logging._lock = threading.RLock()
-
+            _current_process = self
+            _parent_process = _ParentProcess(
+                self._parent_name, self._parent_pid, parent_sentinel)
             try:
                 util._finalizer_registry.clear()
                 util._run_after_forkers()
@@ -322,32 +308,29 @@ class BaseProcess(object):
                 # delay finalization of the old process object until after
                 # _run_after_forkers() is executed
                 del old_process
-            util.info('child process %s calling self.run()', self.pid)
+            util.info('child process calling self.run()')
             try:
                 self.run()
                 exitcode = 0
             finally:
                 util._exit_function()
-        except SystemExit as exc:
-            if not exc.args:
+        except SystemExit as e:
+            if not e.args:
                 exitcode = 1
-            elif isinstance(exc.args[0], int):
-                exitcode = exc.args[0]
+            elif isinstance(e.args[0], int):
+                exitcode = e.args[0]
             else:
-                sys.stderr.write(str(exc.args[0]) + '\n')
-                _maybe_flush(sys.stderr)
-                exitcode = 0 if isinstance(exc.args[0], str) else 1
+                sys.stderr.write(str(e.args[0]) + '\n')
+                exitcode = 1
         except:
             exitcode = 1
-            if not util.error('Process %s', self.name, exc_info=True):
-                import traceback
-                sys.stderr.write('Process %s:\n' % self.name)
-                traceback.print_exc()
+            import traceback
+            sys.stderr.write('Process %s:\n' % self.name)
+            traceback.print_exc()
         finally:
-            util.info('process %s exiting with exitcode %d',
-                      self.pid, exitcode)
-            _maybe_flush(sys.stdout)
-            _maybe_flush(sys.stderr)
+            threading._shutdown()
+            util.info('process exiting with exitcode %d' % exitcode)
+            util._flush_std_streams()
 
         return exitcode
 
@@ -355,22 +338,53 @@ class BaseProcess(object):
 # We subclass bytes to avoid accidental transmission of auth keys over network
 #
 
-
 class AuthenticationString(bytes):
-
     def __reduce__(self):
         from .context import get_spawning_popen
-
         if get_spawning_popen() is None:
             raise TypeError(
                 'Pickling an AuthenticationString object is '
-                'disallowed for security reasons')
+                'disallowed for security reasons'
+                )
         return AuthenticationString, (bytes(self),)
+
+
+#
+# Create object representing the parent process
+#
+
+class _ParentProcess(BaseProcess):
+
+    def __init__(self, name, pid, sentinel):
+        self._identity = ()
+        self._name = name
+        self._pid = pid
+        self._parent_pid = None
+        self._popen = None
+        self._closed = False
+        self._sentinel = sentinel
+        self._config = {}
+
+    def is_alive(self):
+        from multiprocessing.connection import wait
+        return not wait([self._sentinel], timeout=0)
+
+    @property
+    def ident(self):
+        return self._pid
+
+    def join(self, timeout=None):
+        '''
+        Wait until parent process terminates
+        '''
+        from multiprocessing.connection import wait
+        wait([self._sentinel], timeout=timeout)
+
+    pid = ident
 
 #
 # Create object representing the main process
 #
-
 
 class _MainProcess(BaseProcess):
 
@@ -379,16 +393,28 @@ class _MainProcess(BaseProcess):
         self._name = 'MainProcess'
         self._parent_pid = None
         self._popen = None
+        self._closed = False
         self._config = {'authkey': AuthenticationString(os.urandom(32)),
                         'semprefix': '/mp'}
+        # Note that some versions of FreeBSD only allow named
+        # semaphores to have names of up to 14 characters.  Therefore
+        # we choose a short prefix.
+        #
+        # On MacOSX in a sandbox it may be necessary to use a
+        # different prefix -- see #19478.
+        #
+        # Everything in self._config will be inherited by descendant
+        # processes.
 
+    def close(self):
+        pass
+
+
+_parent_process = None
 _current_process = _MainProcess()
 _process_counter = itertools.count(1)
 _children = set()
 del _MainProcess
-
-
-Process = BaseProcess
 
 #
 # Give names to some return codes
@@ -396,9 +422,9 @@ Process = BaseProcess
 
 _exitcode_to_name = {}
 
-for name, signum in items(signal.__dict__):
-    if name[:3] == 'SIG' and '_' not in name:
-        _exitcode_to_name[-signum] = name
+for name, signum in list(signal.__dict__.items()):
+    if name[:3]=='SIG' and '_' not in name:
+        _exitcode_to_name[-signum] = f'-{name}'
 
 # For debug and leak testing
 _dangling = WeakSet()
