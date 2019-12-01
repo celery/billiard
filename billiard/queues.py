@@ -365,6 +365,19 @@ class _SimpleQueue(object):
         # serialize the data before acquiring the lock
         self.send_payload(ForkingPickler.dumps(obj))
 
+    def close(self):
+        if self._reader is not None:
+            try:
+                self._reader.close()
+            finally:
+                self._reader = None
+
+        if self._writer is not None:
+            try:
+                self._writer.close()
+            finally:
+                self._writer = None
+
 
 class SimpleQueue(_SimpleQueue):
 

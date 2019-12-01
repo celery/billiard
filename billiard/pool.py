@@ -1694,6 +1694,9 @@ class Pool(object):
                         p.join()
             debug('pool workers joined')
 
+        inqueue.close()
+        outqueue.close()
+
     @property
     def process_sentinels(self):
         return [w._popen.sentinel for w in self._pool]
