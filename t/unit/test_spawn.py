@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 
+import os
 import sys
-from billiard import get_context, Value, Process, Event
+from billiard import get_context, Process, Queue
 from billiard.util import set_pdeathsig, get_pdeathsig
 import pytest
 import psutil
@@ -20,14 +21,12 @@ class test_spawn:
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='set_pdeathsig() is supported only in Linux')
     def test_set_pdeathsig(self):
-        return_pid = Value('i')
-        p = Process(target=parent_task, args=(return_pid,))
+        q = Queue()
+        p = Process(target=parent_task, args=(q,))
         p.start()
-        sleep(3) # wait for setting pdeathsig
+        child_proc = psutil.Process(q.get(timeout=3))
         p.terminate()
-        sleep(3) # wait for process termination
-        with pytest.raises(psutil.NoSuchProcess):
-            proc = psutil.Process(return_pid.value)
+        assert child_proc.wait(3) is None
 
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='get_pdeathsig() is supported only in Linux')
@@ -38,16 +37,16 @@ class test_spawn:
         sig = get_pdeathsig()
         assert sig == signal.SIGTERM
 
-def child_process():
+def child_process(q):
     set_pdeathsig(signal.SIGTERM)
+    q.put(os.getpid())
     while True:
         sleep(1)
 
-def parent_task(return_pid):
-    p = Process(target=child_process)
+def parent_task(q):
+    p = Process(target=child_process, args=(q, ))
     p.start()
-    sleep(1) # Wait for starting process
-    return_pid.value = p.pid
+    p.join()
 
 def task_from_process(name):
     print('proc:', name)
