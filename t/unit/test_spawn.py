@@ -21,12 +21,16 @@ class test_spawn:
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='set_pdeathsig() is supported only in Linux')
     def test_set_pdeathsig(self):
+        success = "done"
         q = Queue()
-        p = Process(target=parent_task, args=(q,))
+        p = Process(target=parent_task, args=(q, success))
         p.start()
         child_proc = psutil.Process(q.get(timeout=3))
-        p.terminate()
-        assert child_proc.wait(3) is None
+        try:
+            p.terminate()
+            assert q.get(timeout=3) == success
+        finally:
+            child_proc.terminate()
 
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='get_pdeathsig() is supported only in Linux')
@@ -37,14 +41,26 @@ class test_spawn:
         sig = get_pdeathsig()
         assert sig == signal.SIGTERM
 
-def child_process(q):
-    set_pdeathsig(signal.SIGTERM)
-    q.put(os.getpid())
-    while True:
-        sleep(1)
+def child_process(q, success):
+    sig = signal.SIGUSR1
+    class ParentDeathError(Exception):
+        pass
 
-def parent_task(q):
-    p = Process(target=child_process, args=(q, ))
+    def handler(*args):
+        raise ParentDeathError()
+
+    signal.signal(sig, handler)
+    set_pdeathsig(sig)
+    q.put(os.getpid())
+    try:
+        while True:
+            sleep(1)
+    except ParentDeathError:
+        q.put(success)
+    sys.exit(0)
+
+def parent_task(q, success):
+    p = Process(target=child_process, args=(q, success))
     p.start()
     p.join()
 
