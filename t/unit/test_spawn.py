@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 
+import os
 import sys
-from billiard import get_context, Value, Process, Event
+from billiard import get_context, Process, Queue
 from billiard.util import set_pdeathsig, get_pdeathsig
 import pytest
 import psutil
@@ -20,14 +21,16 @@ class test_spawn:
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='set_pdeathsig() is supported only in Linux')
     def test_set_pdeathsig(self):
-        return_pid = Value('i')
-        p = Process(target=parent_task, args=(return_pid,))
+        success = "done"
+        q = Queue()
+        p = Process(target=parent_task, args=(q, success))
         p.start()
-        sleep(3) # wait for setting pdeathsig
-        p.terminate()
-        sleep(3) # wait for process termination
-        with pytest.raises(psutil.NoSuchProcess):
-            proc = psutil.Process(return_pid.value)
+        child_proc = psutil.Process(q.get(timeout=3))
+        try:
+            p.terminate()
+            assert q.get(timeout=3) == success
+        finally:
+            child_proc.terminate()
 
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='get_pdeathsig() is supported only in Linux')
@@ -38,16 +41,28 @@ class test_spawn:
         sig = get_pdeathsig()
         assert sig == signal.SIGTERM
 
-def child_process():
-    set_pdeathsig(signal.SIGTERM)
-    while True:
-        sleep(1)
+def child_process(q, success):
+    sig = signal.SIGUSR1
+    class ParentDeathError(Exception):
+        pass
 
-def parent_task(return_pid):
-    p = Process(target=child_process)
+    def handler(*args):
+        raise ParentDeathError()
+
+    signal.signal(sig, handler)
+    set_pdeathsig(sig)
+    q.put(os.getpid())
+    try:
+        while True:
+            sleep(1)
+    except ParentDeathError:
+        q.put(success)
+    sys.exit(0)
+
+def parent_task(q, success):
+    p = Process(target=child_process, args=(q, success))
     p.start()
-    sleep(1) # Wait for starting process
-    return_pid.value = p.pid
+    p.join()
 
 def task_from_process(name):
     print('proc:', name)
