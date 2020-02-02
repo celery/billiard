@@ -64,3 +64,8 @@ Bug reporting
 Please report bugs related to multiprocessing at the
 `Python bug tracker <https://bugs.python.org/>`_. Issues related to billiard
 should be reported at https://github.com/celery/billiard/issues.
+
+billiard as part of the Tidelift Subscription
+-------------
+
+The maintainers of billiard and thousands of other packages are working with Tidelift to deliver commercial support and maintenance for the open source dependencies you use to build your applications. Save time, reduce risk, and improve code health, while paying the maintainers of the exact dependencies you use. [Learn more.](https://tidelift.com/subscription/pkg/pypi-billiard?utm_source=pypi-billiard&utm_medium=referral&utm_campaign=readme&utm_term=repo)
