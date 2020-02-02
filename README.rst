@@ -1,7 +1,7 @@
 ========
 billiard
 ========
-:version: 3.6.0.0
+:version: 3.6.2.0
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
