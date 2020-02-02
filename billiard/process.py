@@ -296,7 +296,7 @@ class BaseProcess(object):
                 try:
                     sys.stdin.close()
                     sys.stdin = open(os.devnull)
-                except (OSError, ValueError):
+                except (EnvironmentError, OSError, ValueError):
                     pass
             old_process = _current_process
             _set_current_process(self)
