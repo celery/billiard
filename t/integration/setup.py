@@ -23,7 +23,7 @@ The billiard functional test suite cannot be installed.
 
 But you can execute the tests by running the command:
 
-    $ python setup.py test
+    $ tox -e py
 
 
 """)

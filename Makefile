@@ -115,7 +115,7 @@ test-all: clean-pyc
 	$(TOX)
 
 test:
-	$(PYTHON) setup.py test
+	tox -e py
 
 cov:
 	$(NOSETESTS) -xv --with-coverage --cover-html --cover-branch

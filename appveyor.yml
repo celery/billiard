@@ -53,12 +53,12 @@ init:
 
 install:
   - "powershell appveyor\\install.ps1"
-  - "%PYTHON%/Scripts/pip.exe install -U setuptools"
+  - "%PYTHON%/Scripts/pip.exe install tox"
 
 build: off
 
 test_script:
-  - "%WITH_COMPILER% %PYTHON%/python setup.py test"
+  - "%WITH_COMPILER% %PYTHON%/python -m tox -e py"
 
 after_test:
   - "%WITH_COMPILER% %PYTHON%/python setup.py bdist_wheel"
