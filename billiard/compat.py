@@ -220,10 +220,14 @@ else:
         passfds = sorted(passfds)
         errpipe_read, errpipe_write = os.pipe()
         try:
-            return _posixsubprocess.fork_exec(
+            args = [
                 args, [fsencode(path)], True, tuple(passfds), None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
-                False, False, None)
+                False, False]
+            if sys.version_info >= (3, 9):
+                args.extend((None, None, None, -1))  # group, extra_groups, user, umask
+            args.append(None)  # preexec_fn
+            return _posixsubprocess.fork_exec(*args)
         finally:
             os.close(errpipe_read)
             os.close(errpipe_write)
