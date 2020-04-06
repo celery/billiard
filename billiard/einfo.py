@@ -37,10 +37,6 @@ class _Frame(object):
             "__loader__": None,
         }
         self.f_locals = fl = {}
-        try:
-            fl["__traceback_hide__"] = frame.f_locals["__traceback_hide__"]
-        except KeyError:
-            pass
         self.f_back = None
         self.f_trace = None
         self.f_exc_traceback = None
