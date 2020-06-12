@@ -335,7 +335,12 @@ def _fixup_main_from_name(mod_name):
         return
 
     # If this process was forked, __main__ may already be populated
-    if getattr(current_main.__spec__, "name", None) == mod_name:
+    try:
+        current_main_name = current_main.__spec__.name
+    except AttributeError:
+        current_main_name = current_main.__name__
+
+    if current_main_name == mod_name:
         return
 
     # Otherwise, __main__ may contain some non-main code where we need to
