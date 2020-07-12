@@ -1263,8 +1263,8 @@ class Pool(object):
     def mark_as_worker_lost(self, job, exitcode):
         try:
             raise WorkerLostError(
-                'Worker exited prematurely: {0}.'.format(
-                    human_status(exitcode)),
+                'Worker exited prematurely: {0} Job: {1}.'.format(
+                    human_status(exitcode), job._job),
             )
         except WorkerLostError:
             job._set(None, (False, ExceptionInfo()))
