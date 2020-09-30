@@ -1,3 +1,6 @@
+arch: 
+     - ppc64le
+     - amd64
 language: python
 dist: xenial
 cache: pip
@@ -8,13 +11,11 @@ python:
   - '3.7'
   - '3.8'
   - 'nightly'
-  - 'pypy'
-  - 'pypy3'
-
+  
 matrix:
   allow_failures:
     - python: 'nightly'
-
+   
 install:
     - travis_retry pip install tox-travis
 script: tox
