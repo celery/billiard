@@ -15,6 +15,8 @@ python:
 matrix:
   allow_failures:
     - python: 'nightly'
+    - python: 'pypy'
+    - python: 'pypy3'
 
 install:
     - travis_retry pip install tox-travis
