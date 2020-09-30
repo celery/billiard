@@ -1,4 +1,6 @@
-arch: ppc64le
+arch: 
+     - ppc64le
+     - amd64
 language: python
 dist: xenial
 cache: pip
