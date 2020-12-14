@@ -1947,6 +1947,8 @@ class IMapIterator(object):
         return self
 
     def next(self, timeout=None):
+        if timeout is None:
+            timeout = self._lost_worker_timeout
         with self._cond:
             try:
                 item = self._items.popleft()
