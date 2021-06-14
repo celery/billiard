@@ -200,7 +200,6 @@ def run_setup(with_extensions=True):
         version=meta['VERSION'],
         description=meta['doc'],
         long_description=long_description,
-        long_description_content_type='text/markdown',
         packages=packages,
         ext_modules=extensions,
         author=meta['author'],
