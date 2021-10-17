@@ -556,8 +556,8 @@ class Supervisor(PoolThread):
                     pool._maintain_pool()
                     time.sleep(0.1)
 
-            # Keep maintaing workers until the cache gets drained, unless
-            # the pool is termianted
+            # Keep maintaining workers until the cache gets drained, unless
+            # the pool is terminated
             pool.restart_state = prev_state
             while self._state == RUN and pool._state == RUN:
                 pool._maintain_pool()

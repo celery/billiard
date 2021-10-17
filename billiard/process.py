@@ -78,7 +78,7 @@ class BaseProcess(object):
     '''
     Process objects represent activity that is run in a separate process
 
-    The class is analagous to `threading.Thread`
+    The class is analogous to `threading.Thread`
     '''
 
     def _Popen(self):

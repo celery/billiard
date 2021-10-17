@@ -1001,7 +1001,7 @@ else:
                 timeout = deadline - monotonic()
 
 #
-# Make connection and socket objects sharable if possible
+# Make connection and socket objects shareable if possible
 #
 
 if sys.platform == 'win32':

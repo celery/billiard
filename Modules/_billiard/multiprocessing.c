@@ -323,7 +323,7 @@ bail:
 static PyMethodDef Billiard_module_methods[] = {
     {"address_of_buffer", Billiard_multiprocessing_address_of_buffer, METH_O,
      "address_of_buffer(obj) -> int\n\n"
-     "Return address of obj assuming obj supports buffer inteface"},
+     "Return address of obj assuming obj supports buffer interface"},
 #if HAVE_FD_TRANSFER
     {"sendfd", Billiard_multiprocessing_sendfd, METH_VARARGS,
      "sendfd(sockfd, fd) -> None\n\n"
