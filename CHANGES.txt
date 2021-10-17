@@ -169,7 +169,7 @@
 3.3.0.13 - 2013-12-13
 ---------------------
 
-- Fixes compatability with Python < 2.7.6
+- Fixes compatibility with Python < 2.7.6
 
 - No longer attempts to handle ``SIGBUS``
 
