@@ -3,10 +3,10 @@ from __future__ import absolute_import
 import pytest
 import signal
 
-from case import skip
 from billiard.util import set_pdeathsig, get_pdeathsig
 
 from billiard.compat import _winapi
+from t import skip
 
 
 @skip.unless_win32()
