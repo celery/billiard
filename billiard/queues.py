@@ -19,7 +19,8 @@ from . import connection
 from . import context
 
 from .compat import get_errno
-from .five import monotonic, Empty, Full
+from time import monotonic
+from queue import Empty, Full
 from .util import (
     debug, error, info, Finalize, register_after_fork, is_exiting,
 )

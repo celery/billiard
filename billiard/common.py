@@ -8,28 +8,18 @@ import os
 import signal
 import sys
 
-import pickle as pypickle
-try:
-    import cPickle as cpickle
-except ImportError:  # pragma: no cover
-    cpickle = None   # noqa
+import pickle
 
 from .exceptions import RestartFreqExceeded
-from .five import monotonic
+from time import monotonic
 
-pickle = cpickle or pypickle
 pickle_load = pickle.load
 pickle_loads = pickle.loads
 
 # cPickle.loads does not support buffer() objects,
 # but we can just create a StringIO and use load.
-if sys.version_info[0] == 3:
-    from io import BytesIO
-else:
-    try:
-        from cStringIO import StringIO as BytesIO  # noqa
-    except ImportError:
-        from StringIO import StringIO as BytesIO  # noqa
+from io import BytesIO
+
 
 SIGMAP = dict(
     (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')

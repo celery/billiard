@@ -22,8 +22,6 @@ from _weakrefset import WeakSet
 
 from multiprocessing import process as _mproc
 
-from .five import items, string_t
-
 try:
     ORIGINAL_DIR = os.path.abspath(os.getcwd())
 except OSError:
@@ -173,7 +171,7 @@ class BaseProcess(object):
 
     @name.setter
     def name(self, name):   # noqa
-        assert isinstance(name, string_t), 'name must be a string'
+        assert isinstance(name, str), 'name must be a string'
         self._name = name
 
     @property
@@ -396,7 +394,7 @@ Process = BaseProcess
 
 _exitcode_to_name = {}
 
-for name, signum in items(signal.__dict__):
+for name, signum in signal.__dict__.items():
     if name[:3] == 'SIG' and '_' not in name:
         _exitcode_to_name[-signum] = name
 

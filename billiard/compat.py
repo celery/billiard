@@ -5,7 +5,7 @@ import numbers
 import os
 import sys
 
-from .five import range, zip_longest
+from itertools import zip_longest
 
 if sys.platform == 'win32':
     try:
@@ -20,31 +20,15 @@ try:
 except ImportError:  # pragma: no cover
     resource = None
 
-try:
-    from io import UnsupportedOperation
-    FILENO_ERRORS = (AttributeError, ValueError, UnsupportedOperation)
-except ImportError:  # pragma: no cover
-    # Py2
-    FILENO_ERRORS = (AttributeError, ValueError)  # noqa
+from io import UnsupportedOperation
+FILENO_ERRORS = (AttributeError, ValueError, UnsupportedOperation)
 
-
-if sys.version_info > (2, 7, 5):
-    buf_t, is_new_buffer = memoryview, True  # noqa
-else:
-    buf_t, is_new_buffer = buffer, False  # noqa
 
 if hasattr(os, 'write'):
     __write__ = os.write
 
-    if is_new_buffer:
-
-        def send_offset(fd, buf, offset):
-            return __write__(fd, buf[offset:])
-
-    else:  # Py<2.7.6
-
-        def send_offset(fd, buf, offset):  # noqa
-            return __write__(fd, buf_t(buf, offset))
+    def send_offset(fd, buf, offset):
+        return __write__(fd, buf[offset:])
 
 else:  # non-posix platform
 
@@ -97,21 +81,6 @@ except AttributeError:
 
     fsencode, fsdecode = _fscodec()
     del _fscodec
-
-
-if sys.version_info[0] == 3:
-    bytes = bytes
-else:
-    _bytes = bytes
-
-    # the 'bytes' alias in Python2 does not support an encoding argument.
-
-    class bytes(_bytes):  # noqa
-
-        def __new__(cls, *args):
-            if len(args) > 1:
-                return _bytes(args[0]).encode(*args[1:])
-            return _bytes(*args)
 
 
 def maybe_fileno(f):
@@ -191,13 +160,8 @@ def get_errno(exc):
     try:
         return exc.errno
     except AttributeError:
-        try:
-            # e.args = (errno, reason)
-            if isinstance(exc.args, tuple) and len(exc.args) == 2:
-                return exc.args[0]
-        except AttributeError:
-            pass
-    return 0
+        return 0
+
 
 try:
     import _posixsubprocess

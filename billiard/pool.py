@@ -43,7 +43,8 @@ from .exceptions import (
     TimeoutError,
     WorkerLostError,
 )
-from .five import Empty, Queue, range, values, reraise, monotonic
+from time import monotonic
+from queue import Queue, Empty
 from .util import Finalize, debug, warning
 
 MAXMEM_USED_FMT = """\
@@ -1240,7 +1241,7 @@ class Pool(object):
                     elif sched_for and not sched_for._is_alive():
                         self.on_job_process_down(job, sched_for.pid)
 
-            for worker in values(cleaned):
+            for worker in cleaned.values():
                 if self.on_process_down:
                     if not shutdown:
                         self._process_cleanup_queues(worker)
@@ -1355,9 +1356,7 @@ class Pool(object):
                 raise
             except OSError as exc:
                 if get_errno(exc) == errno.ENOMEM:
-                    reraise(MemoryError,
-                            MemoryError(str(exc)),
-                            sys.exc_info()[2])
+                    raise MemoryError from exc
                 raise
 
     def _setup_queues(self):
