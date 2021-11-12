@@ -27,7 +27,8 @@ from . import reduction
 from . import util
 from . import get_context
 
-from .five import Queue, items, monotonic
+from queue import Queue
+from time import monotonic
 
 __all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
@@ -641,7 +642,7 @@ class BaseManager(object):
         )
 
         if method_to_typeid:
-            for key, value in items(method_to_typeid):
+            for key, value in method_to_typeid.items():
                 assert type(key) is str, '%r is not a string' % key
                 assert type(value) is str, '%r is not a string' % value
 
@@ -931,9 +932,9 @@ class Namespace(object):
         self.__dict__.update(kwds)
 
     def __repr__(self):
-        items = list(self.__dict__.items())
+        _items = list(self.__dict__.items())
         temp = []
-        for name, value in items:
+        for name, value in _items:
             if not name.startswith('_'):
                 temp.append('%s=%r' % (name, value))
         temp.sort()

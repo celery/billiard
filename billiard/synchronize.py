@@ -18,7 +18,7 @@ from . import process
 from . import util
 
 from ._ext import _billiard, ensure_SemLock
-from .five import range, monotonic
+from time import monotonic
 
 __all__ = [
     'Lock', 'RLock', 'Semaphore', 'BoundedSemaphore', 'Condition', 'Event',

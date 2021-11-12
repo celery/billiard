@@ -45,7 +45,7 @@ import array
 from threading import Lock, RLock, Semaphore, BoundedSemaphore
 from threading import Event
 
-from billiard.five import Queue
+from queue import Queue
 
 from billiard.connection import Pipe
 

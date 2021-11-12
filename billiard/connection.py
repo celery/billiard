@@ -26,7 +26,7 @@ from . import util
 from . import AuthenticationError, BufferTooShort
 from ._ext import _billiard
 from .compat import setblocking, send_offset
-from .five import monotonic
+from time import monotonic
 from .reduction import ForkingPickler
 
 try:
