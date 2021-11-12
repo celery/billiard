@@ -33,7 +33,7 @@
 #
 from __future__ import absolute_import
 
-from billiard.five import Queue
+from queue import Queue
 
 __all__ = ['Client', 'Listener', 'Pipe']
 
