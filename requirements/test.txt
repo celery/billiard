@@ -1,3 +1,2 @@
-pytest<6.2
-# psutil is pinned since this is the last version that supports pypy2
-psutil==5.8.0
+pytest>=6.2
+psutil>=5.8.0
