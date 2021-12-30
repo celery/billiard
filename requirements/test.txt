@@ -1,2 +1,2 @@
 pytest>=6.2
-psutil>=5.8.0
+psutil>=5.9.0
