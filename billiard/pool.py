@@ -1749,7 +1749,7 @@ class ApplyResult(object):
         )
 
     def ready(self):
-        return self._event.isSet()
+        return self._event.is_set()
 
     def accepted(self):
         return self._accepted
