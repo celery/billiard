@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import billiard.pool
 
 class test_pool:
