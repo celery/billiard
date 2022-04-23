@@ -17,7 +17,6 @@ if sys.platform == 'win32':
     # distutils.msvc9compiler can raise IOError if the compiler is missing
     ext_errors += (IOError, )
 
-is_jython = sys.platform.startswith('java')
 is_pypy = hasattr(sys, 'pypy_version_info')
 is_py3k = sys.version_info[0] == 3
 
@@ -158,7 +157,6 @@ long_description = open(os.path.join(HERE, 'README.rst')).read()
 # -*- Installation Requires -*-
 
 py_version = sys.version_info
-is_jython = sys.platform.startswith('java')
 is_pypy = hasattr(sys, 'pypy_version_info')
 
 
@@ -230,7 +228,7 @@ def run_setup(with_extensions=True):
     )
 
 try:
-    run_setup(not (is_jython or is_pypy or is_py3k))
+    run_setup(not (is_pypy or is_py3k))
 except BaseException:
     if _is_build_command(sys.argv):
         import traceback
