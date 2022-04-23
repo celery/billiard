@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.7,3.8,3.9]
+        python-version: [3.7,3.8,3.9,3.10]
     steps:
       - name: Install system packages
         run: sudo apt update && sudo apt-get install libcurl4-openssl-dev libssl-dev
@@ -18,6 +18,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
-        run: pip install --upgrade pip setuptools wheel tox tox-docker
+        run: pip install --upgrade pip setuptools wheel tox tox-gh-actions tox-docker
       - name: Run unittest
-        run: tox -v -e ${{ matrix.python-version }}-linux-unit -- -v
+        run: tox -v -e ${{ matrix.python-version }}-unit -- -v
