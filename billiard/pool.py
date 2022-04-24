@@ -210,7 +210,7 @@ class MaybeEncodingError(Exception):
     def __init__(self, exc, value):
         self.exc = repr(exc)
         self.value = repr(value)
-        super(MaybeEncodingError, self).__init__(self.exc, self.value)
+        super().__init__(self.exc, self.value)
 
     def __repr__(self):
         return "<%s: %s>" % (self.__class__.__name__, str(self))
@@ -232,7 +232,7 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-class Worker(object):
+class Worker:
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
@@ -535,7 +535,7 @@ class Supervisor(PoolThread):
 
     def __init__(self, pool):
         self.pool = pool
-        super(Supervisor, self).__init__()
+        super().__init__()
 
     def body(self):
         debug('worker handler starting')
@@ -576,7 +576,7 @@ class TaskHandler(PoolThread):
         self.outqueue = outqueue
         self.pool = pool
         self.cache = cache
-        super(TaskHandler, self).__init__()
+        super().__init__()
 
     def body(self):
         cache = self.cache
@@ -651,7 +651,7 @@ class TimeoutHandler(PoolThread):
         self.t_soft = t_soft
         self.t_hard = t_hard
         self._it = None
-        super(TimeoutHandler, self).__init__()
+        super().__init__()
 
     def _process_by_pid(self, pid):
         return next((
@@ -792,7 +792,7 @@ class ResultHandler(PoolThread):
         self.on_job_ready = on_job_ready
         self.on_ready_counters = on_ready_counters
         self._make_methods()
-        super(ResultHandler, self).__init__()
+        super().__init__()
 
     def on_stop_not_started(self):
         # used when pool started without result handler thread.
@@ -959,7 +959,7 @@ class ResultHandler(PoolThread):
               len(cache), self._state)
 
 
-class Pool(object):
+class Pool:
     '''
     Class which supports an async version of applying functions to arguments.
     '''
@@ -1705,7 +1705,7 @@ class Pool(object):
 #
 
 
-class ApplyResult(object):
+class ApplyResult:
     _worker_lost = None
     _write_to = None
     _scheduled_for = None
@@ -1924,7 +1924,7 @@ class MapResult(ApplyResult):
 #
 
 
-class IMapIterator(object):
+class IMapIterator:
     _worker_lost = None
 
     def __init__(self, cache, lost_worker_timeout=LOST_WORKER_TIMEOUT):

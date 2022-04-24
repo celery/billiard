@@ -56,7 +56,7 @@ def _semname(sl):
         pass
 
 
-class SemLock(object):
+class SemLock:
     _rand = tempfile._RandomNameSequence()
 
     def __init__(self, kind, value, maxvalue, ctx=None):
@@ -223,7 +223,7 @@ class RLock(SemLock):
         return '<%s(%s, %s)>' % (self.__class__.__name__, name, count)
 
 
-class Condition(object):
+class Condition:
     '''
     Condition variable
     '''
@@ -347,7 +347,7 @@ class Condition(object):
         return result
 
 
-class Event(object):
+class Event:
 
     def __init__(self, ctx=None):
         assert ctx
@@ -430,7 +430,7 @@ if hasattr(threading, 'Barrier'):
 
 else:
 
-    class Barrier(object):  # noqa
+    class Barrier:  # noqa
 
         def __init__(self, *args, **kwargs):
             raise NotImplementedError('Barrier only supported on Py3')

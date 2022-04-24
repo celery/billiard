@@ -70,7 +70,7 @@ def active_children(_cleanup=_cleanup):
     return list(_children)
 
 
-class BaseProcess(object):
+class BaseProcess:
     '''
     Process objects represent activity that is run in a separate process
 

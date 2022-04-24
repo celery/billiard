@@ -32,7 +32,7 @@ PY3 = sys.version_info[0] == 3
 
 if sys.platform == 'win32':
 
-    class Arena(object):
+    class Arena:
 
         _rand = tempfile._RandomNameSequence()
 
@@ -66,7 +66,7 @@ if sys.platform == 'win32':
 
 else:
 
-    class Arena(object):
+    class Arena:
 
         def __init__(self, size, fd=-1):
             self.size = size
@@ -118,7 +118,7 @@ else:
 #
 
 
-class Heap(object):
+class Heap:
 
     _alignment = 8
 
@@ -264,7 +264,7 @@ class Heap(object):
 #
 
 
-class BufferWrapper(object):
+class BufferWrapper:
 
     _heap = Heap()
 

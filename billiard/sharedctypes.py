@@ -195,7 +195,7 @@ class_cache = weakref.WeakKeyDictionary()
 #
 
 
-class SynchronizedBase(object):
+class SynchronizedBase:
 
     def __init__(self, obj, lock=None, ctx=None):
         self._obj = obj
