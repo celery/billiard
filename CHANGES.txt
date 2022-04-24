@@ -1,3 +1,12 @@
+4.0.0 - 2022-04-24
+--------------------
+- Support Sphinx 4.x.
+- Remove dependency to case.
+- Drop support of Python < 3.7.
+- Update to psutil 5.9.0.
+- Add python_requires to enforce Python version.
+- Replace deprecated threading Event.isSet with Event.is_set.
+
 3.6.4.0 - 2021-04-01
 --------------------
 - Issue #309: Add Python 3.9 support to spawnv_passfds()
