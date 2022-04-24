@@ -27,7 +27,7 @@ from .compat import spawnv_passfds
 __all__ = ['ensure_running', 'register', 'unregister']
 
 
-class SemaphoreTracker(object):
+class SemaphoreTracker:
 
     def __init__(self):
         self._lock = threading.Lock()

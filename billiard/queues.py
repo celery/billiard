@@ -28,7 +28,7 @@ from .reduction import ForkingPickler
 __all__ = ['Queue', 'SimpleQueue', 'JoinableQueue']
 
 
-class Queue(object):
+class Queue:
     '''
     Queue type using a pipe, buffer and thread
     '''
@@ -329,7 +329,7 @@ class JoinableQueue(Queue):
                 self._cond.wait()
 
 
-class _SimpleQueue(object):
+class _SimpleQueue:
     '''
     Simplified Queue type -- really just a locked pipe
     '''

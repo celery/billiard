@@ -33,7 +33,7 @@ from .exceptions import (  # noqa
 # Base type for contexts
 #
 
-class BaseContext(object):
+class BaseContext:
 
     ProcessError = ProcessError
     BufferTooShort = BufferTooShort

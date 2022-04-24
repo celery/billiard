@@ -135,7 +135,7 @@ if sys.platform == 'win32':
         '''Receive a handle over a local connection.'''
         return conn.recv().detach()
 
-    class DupHandle(object):
+    class DupHandle:
         '''Picklable wrapper for a handle.'''
         def __init__(self, handle, access, pid=None):
             if pid is None:

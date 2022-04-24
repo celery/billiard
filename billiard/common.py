@@ -130,7 +130,7 @@ def reset_signals(handler=_shutdown_cleanup, full=False):
             maybe_setsignal(num, signal.SIG_IGN)
 
 
-class restart_state(object):
+class restart_state:
     RestartFreqExceeded = RestartFreqExceeded
 
     def __init__(self, maxR, maxT):

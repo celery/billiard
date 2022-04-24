@@ -11,7 +11,7 @@ __all__ = ['Popen']
 #
 
 
-class Popen(object):
+class Popen:
     method = 'fork'
     sentinel = None
 

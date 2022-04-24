@@ -31,7 +31,7 @@ UNSIGNED_STRUCT = struct.Struct('Q')     # large enough for pid_t
 #
 
 
-class ForkServer(object):
+class ForkServer:
 
     def __init__(self):
         self._forkserver_address = None

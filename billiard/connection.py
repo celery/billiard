@@ -126,13 +126,13 @@ def address_type(address):
 #
 
 
-class _SocketContainer(object):
+class _SocketContainer:
 
     def __init__(self, sock):
         self.sock = sock
 
 
-class _ConnectionBase(object):
+class _ConnectionBase:
     _handle = None
 
     def __init__(self, handle, readable=True, writable=True):
@@ -465,7 +465,7 @@ class Connection(_ConnectionBase):
 # Public functions
 #
 
-class Listener(object):
+class Listener:
     '''
     Returns a listener object.
 
@@ -622,7 +622,7 @@ else:
 #
 
 
-class SocketListener(object):
+class SocketListener:
     '''
     Representation of a socket which is bound to an address and listening
     '''
@@ -688,7 +688,7 @@ def SocketClient(address):
 
 if sys.platform == 'win32':
 
-    class PipeListener(object):
+    class PipeListener:
         '''
         Representation of a named pipe
         '''
@@ -813,7 +813,7 @@ def answer_challenge(connection, authkey):
 #
 
 
-class ConnectionWrapper(object):
+class ConnectionWrapper:
 
     def __init__(self, conn, dumps, loads):
         self._conn = conn
