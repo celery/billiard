@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
 """
 This module contains utilities added by billiard, to keep
 "non-core" functionality out of ``.util``."""
-from __future__ import absolute_import
 
 import os
 import signal

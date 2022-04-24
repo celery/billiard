@@ -6,7 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 import sys
 import errno

@@ -7,7 +7,6 @@
 # to the resource sharer, sends the identifier and its pid, and then receives
 # the resource.
 #
-from __future__ import absolute_import
 
 import os
 import signal

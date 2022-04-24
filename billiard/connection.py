@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # A higher level module for using sockets (or Windows named pipes)
 #
@@ -7,8 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-
-from __future__ import absolute_import
 
 import errno
 import io

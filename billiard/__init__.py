@@ -17,7 +17,6 @@
 # Licensed to PSF under a Contributor Agreement.
 #
 
-from __future__ import absolute_import
 
 import sys
 from . import context
