@@ -1,6 +1,7 @@
 import errno
 import numbers
 import os
+import subprocess
 import sys
 
 from itertools import zip_longest
@@ -186,9 +187,13 @@ else:
                 args, [fsencode(path)], True, tuple(passfds), None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
                 False, False]
+            if sys.version_info >= (3, 11):
+                args.append(-1)  # process_group
             if sys.version_info >= (3, 9):
                 args.extend((None, None, None, -1))  # group, extra_groups, user, umask
             args.append(None)  # preexec_fn
+            if sys.version_info >= (3, 11):
+                args.append(subprocess._USE_VFORK)
             return _posixsubprocess.fork_exec(*args)
         finally:
             os.close(errpipe_read)
