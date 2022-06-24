@@ -1785,7 +1785,7 @@ class ApplyResult:
         if self._success:
             return self._value
         else:
-            raise self._value.exception
+            raise self._value.exception.with_traceback(self._value.tb)
 
     def safe_apply_callback(self, fun, *args, **kwargs):
         if fun:
