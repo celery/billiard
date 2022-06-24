@@ -1,12 +1,13 @@
 import billiard.pool
-import billiard.einfo
 import time
 import pytest
+
 
 def func(x):
     if x == 2:
         raise ValueError
     return x
+
 
 class test_pool:
     def test_raises(self):
@@ -33,9 +34,8 @@ class test_pool:
         pool.close()
         pool.join()
         pool.terminate()
-        
+
         for i, res in enumerate(results):
             if i == 2:
-                with pytest.raises(billiard.einfo.BilliardException):
+                with pytest.raises(ValueError):
                     res.get()
-        

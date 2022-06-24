@@ -88,6 +88,24 @@ class Traceback:
                 self.tb_next = _Truncated()
 
 
+class RemoteTraceback(Exception):
+    def __init__(self, tb):
+        self.tb = tb
+    def __str__(self):
+        return self.tb
+
+class ExceptionWithTraceback:
+    def __init__(self, exc, tb):
+        self.exc = exc
+        self.tb = '\n"""\n%s"""' % tb
+    def __reduce__(self):
+        return rebuild_exc, (self.exc, self.tb)
+
+def rebuild_exc(exc, tb):
+    exc.__cause__ = RemoteTraceback(tb)
+    return exc
+
+
 class ExceptionInfo:
     """Exception wrapping an exception and its traceback.
 
@@ -112,15 +130,16 @@ class ExceptionInfo:
     internal = False
 
     def __init__(self, exc_info=None, internal=False):
-        self.type, self.exception, tb = exc_info or sys.exc_info()
+        self.type, exception, tb = exc_info or sys.exc_info()
         try:
             self.tb = Traceback(tb)
             self.traceback = ''.join(
-                traceback.format_exception(self.type, self.exception, tb),
+                traceback.format_exception(self.type, exception, tb),
             )
             self.internal = internal
         finally:
-            del(tb)
+            del tb
+        self.exception = ExceptionWithTraceback(exception, self.traceback)
 
     def __str__(self):
         return self.traceback
@@ -130,19 +149,4 @@ class ExceptionInfo:
 
     @property
     def exc_info(self):
-        return self.type, self.exception, self.raw_tb
-
-
-class BilliardException(Exception):
-
-    def __init__(self, exc_info):
-        super().__init__()
-        self.cause = exc_info.exception
-        self.tb = exc_info.tb
-        self.traceback = exc_info.traceback
-
-    def __str__(self):
-        return self.traceback
-
-    def __repr__(self):
-        return "<BilliardException: %r>" % self.cause
+        return self.type, self.exception, self.tb
