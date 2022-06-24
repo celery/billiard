@@ -130,4 +130,19 @@ class ExceptionInfo:
 
     @property
     def exc_info(self):
-        return self.type, self.exception, self.tb
+        return self.type, self.exception, self.raw_tb
+
+
+class BilliardException(Exception):
+
+    def __init__(self, exc_info):
+        super().__init__()
+        self.cause = exc_info.exception
+        self.tb = exc_info.tb
+        self.traceback = exc_info.traceback
+
+    def __str__(self):
+        return self.traceback
+
+    def __repr__(self):
+        return "<BilliardException: %r>" % self.cause

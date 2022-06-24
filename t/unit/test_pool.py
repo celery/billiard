@@ -1,4 +1,12 @@
 import billiard.pool
+import billiard.einfo
+import time
+import pytest
+
+def func(x):
+    if x == 2:
+        raise ValueError
+    return x
 
 class test_pool:
     def test_raises(self):
@@ -16,3 +24,18 @@ class test_pool:
         timeout_handler = pool.TimeoutHandler(pool._pool, cache, 0, 0)
         # If I call to handle the timeouts I expect no exception
         next(timeout_handler.handle_timeouts())
+
+    def test_exception_traceback_present(self):
+        pool = billiard.pool.Pool(1)
+        results = [pool.apply_async(func, (i,)) for i in range(3)]
+
+        time.sleep(1)
+        pool.close()
+        pool.join()
+        pool.terminate()
+        
+        for i, res in enumerate(results):
+            if i == 2:
+                with pytest.raises(billiard.einfo.BilliardException):
+                    res.get()
+        

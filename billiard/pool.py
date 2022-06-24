@@ -30,7 +30,7 @@ from .common import (
     TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
 )
 from .compat import get_errno, mem_rss, send_offset
-from .einfo import ExceptionInfo
+from .einfo import ExceptionInfo, BilliardException
 from .dummy import DummyProcess
 from .exceptions import (
     CoroStop,
@@ -1785,7 +1785,7 @@ class ApplyResult:
         if self._success:
             return self._value
         else:
-            raise self._value.exception.with_traceback(self._value.tb)
+            raise BilliardException(self._value) from self._value.exception
 
     def safe_apply_callback(self, fun, *args, **kwargs):
         if fun:
