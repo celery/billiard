@@ -1,3 +1,9 @@
+4.0.1 - 2022-08-01
+--------------------
+- Add support for Python 3.11 _posixsubprocess.fork_exec() arguments.
+- Keep exception traceback somehow (#368).
+
+
 4.0.0 - 2022-04-24
 --------------------
 - Support Sphinx 4.x.
@@ -6,6 +12,10 @@
 - Update to psutil 5.9.0.
 - Add python_requires to enforce Python version.
 - Replace deprecated threading Event.isSet with Event.is_set.
+- Prevent segmentation fault in get_pdeathsig while using ctypes (#361).
+- Migrated CI to Github actions.
+- Python 3.10 support added.
+
 
 3.6.4.0 - 2021-04-01
 --------------------
