@@ -91,15 +91,23 @@ class Traceback:
 class RemoteTraceback(Exception):
     def __init__(self, tb):
         self.tb = tb
+
     def __str__(self):
         return self.tb
 
-class ExceptionWithTraceback:
+
+class ExceptionWithTraceback(Exception):
     def __init__(self, exc, tb):
         self.exc = exc
         self.tb = '\n"""\n%s"""' % tb
+        super().__init__()
+
+    def __str__(self):
+        return self.tb
+
     def __reduce__(self):
         return rebuild_exc, (self.exc, self.tb)
+
 
 def rebuild_exc(exc, tb):
     exc.__cause__ = RemoteTraceback(tb)
