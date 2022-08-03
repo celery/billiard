@@ -1,3 +1,7 @@
+4.0.2 - 2022-08-03
+--------------------
+- ExceptionWithTraceback should be an exception.
+
 4.0.1 - 2022-08-01
 --------------------
 - Add support for Python 3.11 _posixsubprocess.fork_exec() arguments.
