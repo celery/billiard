@@ -1307,7 +1307,7 @@ class Pool:
                 yield worker
 
     def _worker_active(self, worker):
-        for job in values(self._cache):
+        for job in self._cache.values():
             if worker.pid in job.worker_pids():
                 return True
         return False
