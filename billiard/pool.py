@@ -1625,7 +1625,7 @@ class Pool:
         debug('pool join complete')
 
     def restart(self):
-        for e in values(self._poolctrl):
+        for e in self._poolctrl.values():
             e.set()
 
     @staticmethod
