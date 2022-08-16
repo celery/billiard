@@ -1307,7 +1307,7 @@ class Pool:
                 yield worker
 
     def _worker_active(self, worker):
-        for job in values(self._cache):
+        for job in self._cache.values():
             if worker.pid in job.worker_pids():
                 return True
         return False
@@ -1625,7 +1625,7 @@ class Pool:
         debug('pool join complete')
 
     def restart(self):
-        for e in values(self._poolctrl):
+        for e in self._poolctrl.values():
             e.set()
 
     @staticmethod
