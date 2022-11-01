@@ -20,7 +20,8 @@ class _Code:
         self.co_lnotab = b''
         self.co_names = code.co_names
         self.co_nlocals = code.co_nlocals
-        self.co_positions = code.co_positions
+        if hasattr(code, "co_positions"):
+            self.co_positions = code.co_positions
         self.co_stacksize = code.co_stacksize
         self.co_varnames = ()
 
