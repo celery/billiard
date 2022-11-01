@@ -22,6 +22,13 @@ class _Code:
         self.co_nlocals = code.co_nlocals
         self.co_stacksize = code.co_stacksize
         self.co_varnames = ()
+        if sys.version_info >= (3, 11):
+            self._co_positions = list(code.co_positions())
+
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self._co_positions.__iter__
 
 
 class _Frame:
