@@ -5,11 +5,11 @@ billiard
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
-.. |build-status-lin| image:: https://secure.travis-ci.org/celery/billiard.png?branch=master
+.. |build-status-lin| image:: https://github.com/celery/billiard/actions/workflows/ci.yaml/badge.svg
     :alt: Build status on Linux
-    :target: https://travis-ci.org/celery/billiard
+    :target: https://github.com/celery/billiard/actions/workflows/ci.yaml
 
-.. |build-status-win| image:: https://ci.appveyor.com/api/projects/status/github/celery/billiard?png=true&branch=master
+.. |build-status-win| image:: https://ci.appveyor.com/api/projects/status/github/celery/billiard?png=true&branch=main
     :alt: Build status on Windows
     :target: https://ci.appveyor.com/project/ask/billiard
 
