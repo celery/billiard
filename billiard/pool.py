@@ -1741,8 +1741,8 @@ class ApplyResult:
         cache[self._job] = self
 
     def __repr__(self):
-        return '<%s: {id} ack:{ack} ready:{ready}>'.format(
-            self.__class__.__name__,
+        return '<{name}: {id} ack:{ack} ready:{ready}>'.format(
+            name=self.__class__.__name__,
             id=self._job, ack=self._accepted, ready=self.ready(),
         )
 
