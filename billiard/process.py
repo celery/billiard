@@ -144,7 +144,7 @@ class BaseProcess:
         res = self._popen.wait(timeout)
         if res is not None:
             _children.discard(self)
-        self.close()
+            self.close()
 
     def is_alive(self):
         '''
