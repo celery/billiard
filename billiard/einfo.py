@@ -1,5 +1,6 @@
 import sys
 import traceback
+import types
 
 __all__ = ['ExceptionInfo', 'Traceback']
 
@@ -24,6 +25,10 @@ class _Code:
         self.co_varnames = ()
         if sys.version_info >= (3, 11):
             self._co_positions = list(code.co_positions())
+
+    @property
+    def __class__(self):
+        return types.CodeType
 
     if sys.version_info >= (3, 11):
         @property
@@ -57,6 +62,10 @@ class _Frame:
         # don't want to hit https://bugs.python.org/issue21967
         self.f_restricted = False
 
+    @property
+    def __class__(self):
+        return types.FrameType
+
 
 class _Object:
 
@@ -79,6 +88,10 @@ class _Truncated:
         self.tb_next = None
         self.tb_lasti = 0
 
+    @property
+    def __class__(self):
+        return types.TracebackType
+
 
 class Traceback:
     Frame = _Frame
@@ -93,6 +106,10 @@ class Traceback:
                 self.tb_next = Traceback(tb.tb_next, max_frames, depth + 1)
             else:
                 self.tb_next = _Truncated()
+
+    @property
+    def __class__(self):
+        return types.TracebackType
 
 
 class RemoteTraceback(Exception):
