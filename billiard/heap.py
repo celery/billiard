@@ -90,15 +90,12 @@ else:
                         f.write(b'\0' * (size % bs))
                         assert f.tell() == size
                 else:
-                    name = tempfile.mktemp(
+                    self.fd, name = tempfile.mkstemp(
                         prefix='pym-%d-' % (os.getpid(),),
                         dir=util.get_temp_dir(),
                     )
-                    self.fd = os.open(
-                        name, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600,
-                    )
-                    util.Finalize(self, os.close, (self.fd,))
                     os.unlink(name)
+                    util.Finalize(self, os.close, (self.fd,))
                     os.ftruncate(self.fd, size)
             self.buffer = mmap.mmap(self.fd, self.size)
 
