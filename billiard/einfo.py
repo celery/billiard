@@ -57,11 +57,31 @@ class _Frame:
         # don't want to hit https://bugs.python.org/issue21967
         self.f_restricted = False
 
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self.f_code.co_positions
+
 
 class _Object:
 
     def __init__(self, **kw):
         [setattr(self, k, v) for k, v in kw.items()]
+
+    if sys.version_info >= (3, 11):
+        __default_co_positions__ = ((None, None, None, None),)
+
+        @property
+        def co_positions(self):
+            return getattr(
+                self,
+                "_co_positions",
+                self.__default_co_positions__
+            ).__iter__
+
+        @co_positions.setter
+        def co_positions(self, value):
+            self._co_positions = value  # noqa
 
 
 class _Truncated:
@@ -78,6 +98,11 @@ class _Truncated:
         )
         self.tb_next = None
         self.tb_lasti = 0
+
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self.tb_frame.co_positions
 
 
 class Traceback:
