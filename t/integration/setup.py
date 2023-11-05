@@ -40,9 +40,9 @@ setup(
     data_files=[],
     zip_safe=False,
     cmdclass={'install': no_install},
-    test_suite='nose.collector',
+    test_suite='pytest',
     build_requires=[
-        'nose',
+        'pytest',
         'coverage>=3.0',
     ],
     classifiers=[
