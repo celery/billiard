@@ -13,13 +13,15 @@ import gc
 import array
 import random
 import logging
-from nose import SkipTest
-from test import test_support
 from StringIO import StringIO
+
+import pytest
+from test import test_support
+
 try:
     from billiard._ext import _billiard
 except ImportError as exc:
-    raise SkipTest(exc)
+    raise pytest.skip(exc)
 # import threading after _billiard to raise a more revelant error
 # message: "No module named _billiard". _billiard is not compiled
 # without thread support.
@@ -29,7 +31,7 @@ import threading
 try:
     import billiard.synchronize
 except ImportError as exc:
-    raise SkipTest(exc)
+    raise pytest.skip(exc)
 
 import billiard.dummy
 import billiard.connection
@@ -508,7 +510,7 @@ class _TestQueue(BaseTestCase):
         queue = self.JoinableQueue()
 
         if sys.version_info < (2, 5) and not hasattr(queue, 'task_done'):
-            self.skipTest("requires 'queue.task_done()' method")
+            pytest.skip("requires 'queue.task_done()' method")
 
         workers = [self.Process(target=self._test_task_done, args=(queue,))
                    for i in xrange(4)]
@@ -1987,7 +1989,7 @@ def test_main(run=None):
         try:
             billiard.RLock()
         except OSError:
-            raise SkipTest("OSError raises on RLock creation, see issue 3111!")
+            raise pytest.skip("OSError raises on RLock creation, see issue 3111!")
 
     if run is None:
         from test.test_support import run_unittest as run
