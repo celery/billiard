@@ -21,7 +21,7 @@
 import sys
 from . import context
 
-VERSION = (4, 1, 0)
+VERSION = (4, 2, 0)
 __version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
