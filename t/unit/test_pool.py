@@ -1,4 +1,5 @@
 import billiard.pool
+from billiard import get_context
 import time
 import pytest
 
@@ -7,6 +8,12 @@ def func(x):
     if x == 2:
         raise ValueError
     return x
+
+
+def get_on_ready_count():
+    import inspect
+    worker = inspect.stack()[1].frame.f_locals['self']
+    return worker.on_ready_counter.value
 
 
 class test_pool:
@@ -39,3 +46,13 @@ class test_pool:
             if i == 2:
                 with pytest.raises(ValueError):
                     res.get()
+
+    def test_on_ready_counter_is_synchronized(self):
+        for ctx in ('spawn', 'fork', 'forkserver'):
+            pool = billiard.pool.Pool(processes=1, context=get_context(ctx))
+            pool.apply_async(func, (1,)).get(1)
+            on_ready_counter = pool.apply_async(get_on_ready_count, ).get(1)
+            assert on_ready_counter == 1
+            pool.close()
+            pool.join()
+            pool.terminate()
