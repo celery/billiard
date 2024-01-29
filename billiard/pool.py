@@ -271,6 +271,7 @@ class Worker:
             self.inq, self.outq, self.synq, self.initializer,
             self.initargs, self.maxtasks, self._shutdown, self.on_exit,
             self.sigprotection, self.wrap_exception, self.max_memory_per_child,
+            self.on_ready_counter
         )
 
     def __call__(self):
