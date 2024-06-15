@@ -128,7 +128,12 @@ def get_logger():
     global _logger
     import logging
 
-    logging._acquireLock()
+    try:
+        # Python 3.13+
+        acquire, release = logging._prepareFork, logging._afterFork
+    except AttributeError:
+        acquire, release = logging._acquireLock, logging._releaseLock
+    acquire()
     try:
         if not _logger:
 
@@ -145,7 +150,7 @@ def get_logger():
                 atexit._exithandlers.remove((_exit_function, (), {}))
                 atexit._exithandlers.append((_exit_function, (), {}))
     finally:
-        logging._releaseLock()
+        release()
 
     return _logger
 
