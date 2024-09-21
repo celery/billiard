@@ -1,3 +1,11 @@
+4.2.1 - 2024-09-21
+--------------------
+- Remove `SIGUSR2` from `TERMSIGS_DEAULT`
+- Add on_ready_counter to Worker.__reduce__.
+- Adapt for logging lock internal changes in Python3.13
+- blacksmith.sh: Migrate workflows to blacksmith
+- Prepare for release: v4.2.1
+
 4.2.0 - 2023-11-06
 --------------------
 - Update process.py to close during join only if process has completed.

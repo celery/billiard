@@ -1,7 +1,7 @@
 ========
 billiard
 ========
-:version: 4.2.0
+:version: 4.2.1
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
