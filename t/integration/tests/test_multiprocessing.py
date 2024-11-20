@@ -22,7 +22,7 @@ try:
     from billiard._ext import _billiard
 except ImportError as exc:
     raise pytest.skip(exc)
-# import threading after _billiard to raise a more revelant error
+# import threading after _billiard to raise a more relevant error
 # message: "No module named _billiard". _billiard is not compiled
 # without thread support.
 import threading
@@ -750,7 +750,7 @@ class _TestEvent(BaseTestCase):
         event = self.Event()
         wait = TimingWrapper(event.wait)
 
-        # Removed temporaily, due to API shear, this does not
+        # Removed temporarily, due to API shear, this does not
         # work with threading._Event objects. is_set == isSet
         self.assertEqual(event.is_set(), False)
 
