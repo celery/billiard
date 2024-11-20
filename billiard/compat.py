@@ -100,16 +100,36 @@ def get_fdmax(default=None):
                       descriptor limit.
 
     """
-    try:
-        return os.sysconf('SC_OPEN_MAX')
-    except:
-        pass
-    if resource is None:  # Windows
-        return default
-    fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-    if fdmax == resource.RLIM_INFINITY:
-        return default
-    return fdmax
+    # Some system might be "mis"configured and allow for ulimit -n
+    # of e.g. 1073741816 which would be infeasible to sweep through.
+    def _get_fdmax():
+        try:
+            return os.sysconf('SC_OPEN_MAX')
+        except:
+            pass
+        if resource is None:  # Windows
+            return default
+        fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        if fdmax == resource.RLIM_INFINITY:
+            return default
+        return fdmax
+    
+    value = _get_fdmax()
+    if value != default and value >= 1e5 :
+        # limiting value is ad-hoc and already more than sensible
+        import warnings
+        if default:
+            new_value = default
+            msg = "default"
+        else:
+            new_value = 10000
+            msg = "new smaller"
+        warnings.warn(UserWarning(
+           f"System set max number of open files is way too high and set to {value}."
+           f"Will use {msg} value of {new_value}"))
+        return new_value
+    else:
+        return value
 
 
 def uniq(it):
