@@ -23,6 +23,7 @@ class _Code:
         self.co_stacksize = code.co_stacksize
         self.co_varnames = ()
         if sys.version_info >= (3, 11):
+            self.co_qualname = code.co_qualname
             self._co_positions = list(code.co_positions())
 
     if sys.version_info >= (3, 11):
