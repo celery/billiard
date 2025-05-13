@@ -166,6 +166,42 @@ def _is_build_command(argv=sys.argv, cmds=('install', 'build', 'bdist')):
             return arg
 
 
+def _strip_comments(l):
+    return l.split('#', 1)[0].strip()
+
+
+def _pip_requirement(req):
+    if req.startswith('-r '):
+        _, path = req.split()
+        return reqs(*path.split('/'))
+    return [req]
+
+
+def _reqs(*f):
+    return [
+        _pip_requirement(r) for r in (
+            _strip_comments(l) for l in open(
+                os.path.join(os.getcwd(), 'requirements', *f)).readlines()
+        ) if r]
+
+
+def reqs(*f):
+    """Parse requirement file.
+
+    Example:
+        reqs('default.txt')          # requirements/default.txt
+        reqs('extras', 'redis.txt')  # requirements/extras/redis.txt
+    Returns:
+        List[str]: list of requirements specified in the file.
+    """
+    return [req for subreq in _reqs(*f) for req in subreq]
+
+
+def install_requires():
+    """Get list of requirements required for installation."""
+    return reqs('default.txt')
+
+
 def run_setup(with_extensions=True):
     extensions = []
     if with_extensions:
@@ -204,6 +240,7 @@ def run_setup(with_extensions=True):
         maintainer=meta['maintainer'],
         maintainer_email=meta['contact'],
         url=meta['homepage'],
+        install_requires=install_requires(),
         zip_safe=False,
         license='BSD',
         python_requires='>=3.7',
