@@ -1,9 +1,14 @@
 ========
 billiard
 ========
-:version: 4.2.1
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
+
+:Version: 4.2.1
+:Web: https://billiard.readthedocs.io
+:Download: https://pypi.org/project/billiard/
+:Source: https://github.com/celery/billiard/
+:DeepWiki: |deepwiki|
 
 .. |build-status-lin| image:: https://github.com/celery/billiard/actions/workflows/ci.yaml/badge.svg
     :alt: Build status on Linux
@@ -28,6 +33,11 @@ billiard
 .. |pyimp| image:: https://img.shields.io/pypi/implementation/billiard.svg
     :alt: Support Python implementations.
     :target: https://pypi.org/project/billiard/
+
+.. |deepwiki| image:: https://devin.ai/assets/deepwiki-badge.png
+    :alt: Ask http://DeepWiki.com
+    :target: https://deepwiki.com/celery/billiard
+    :width: 125px
 
 About
 -----
