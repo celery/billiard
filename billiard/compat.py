@@ -107,7 +107,7 @@ def get_fdmax(default=None):
     except:
         fdmax = None
 
-    if not fdmax:
+    if fdmax is None:
         if resource is None:  # Windows
             return default
         fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
