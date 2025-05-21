@@ -123,9 +123,10 @@ def get_fdmax(default=None):
         else:
             fdmax_limited = 10000
             msg = "a new smaller"
-        warnings.warn(UserWarning(
+        warnings.warn(
            f"System set max number of open files ({fdmax}) is way too high. "
-           f"Will use {msg} value of {fdmax_limited}"))
+           f"Will use {msg} value of {fdmax_limited}",
+           UserWarning)
         return fdmax_limited
     else:
         return fdmax
