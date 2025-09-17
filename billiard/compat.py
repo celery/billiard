@@ -192,7 +192,7 @@ else:
             if sys.version_info >= (3, 9):
                 args.extend((None, None, None, -1))  # group, extra_groups, user, umask
             args.append(None)  # preexec_fn
-            if sys.version_info >= (3, 11):
+            if (3, 11) <= sys.version_info < (3, 14):
                 args.append(subprocess._USE_VFORK)
             return _posixsubprocess.fork_exec(*args)
         finally:
