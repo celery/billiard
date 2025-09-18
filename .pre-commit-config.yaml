@@ -1,0 +1,13 @@
+# Learn more about this config here: https://pre-commit.com/
+
+# To enable these pre-commit hooks run: `uv tool install pre-commit`
+# or `pipx install pre-commit` or `brew install pre-commit`
+# Then in the project root directory run `pre-commit install`
+
+repos:
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell # See pyproject.toml for args
+        additional_dependencies:
+          - tomli
