@@ -1,3 +1,15 @@
+4.2.2 - 2025-09-20
+--------------------
+- Add codespell support (config, workflow to detect/not fix) and make it fix few typos
+- initial python 3.13 support
+- Copy `code.co_qualname` on Python >= 3.11
+- Added DeepWiki to README
+- Fix the failing pre-commit.ci job
+- GitHub Actions: Test on Python 3.14 release candidate 2
+- Keep GitHub Actions up to date with GitHub's Dependabot
+- Bump the github-actions group with 2 updates
+- Prepare for release: v4.2.2
+
 4.2.1 - 2024-09-21
 --------------------
 - Remove `SIGUSR2` from `TERMSIGS_DEAULT`
@@ -49,22 +61,22 @@
 3.6.4.0 - 2021-04-01
 --------------------
 - Issue #309: Add Python 3.9 support to spawnv_passfds()
-- fix #314 
+- fix #314
 
 3.6.1 - 2019-08-14
 --------------------
 
 - Logging max memory reached at INFO rather than WARNING (#255)
 
--  Pass arguments when wrapping sys.exit (#275) 
+-  Pass arguments when wrapping sys.exit (#275)
 
--  Remove win32/py2k special (#276) 
+-  Remove win32/py2k special (#276)
 
 - Ensure READY messages sent out by exiting worker are consumed prior to it actually existing.
 
 - Pass max_memory_per_child to child worker process (#251)
 
-- Fix compatibility with Python 2.7 on Windows (#283) 
+- Fix compatibility with Python 2.7 on Windows (#283)
 
 3.6.0.0 - 2019-02-04
 --------------------
