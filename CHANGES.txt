@@ -1,3 +1,8 @@
+4.2.3 - 2025-11-16
+--------------------
+- Ensure that task results are delivered during pool shutdown (#435)
+- Prepare for release: v4.2.3 (#436)
+
 4.2.2 - 2025-09-20
 --------------------
 - Add codespell support (config, workflow to detect/not fix) and make it fix few typos
