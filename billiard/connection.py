@@ -340,7 +340,7 @@ if _winapi:
                             waitres = _winapi.WaitForMultipleObjects(
                                 [ov.event], False, INFINITE)
                             assert waitres == WAIT_OBJECT_0
-                    except BaseException as e:
+                    except Exception as e:
                         ov.cancel()
                         exc_to_raise = e
                     finally:
