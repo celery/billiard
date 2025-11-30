@@ -1852,6 +1852,7 @@ class ApplyResult:
                     self._accept_callback(pid, time_accepted)
                 except self._propagate_errors:
                     response = NACK
+                    raise
                 except Exception:
                     response = NACK
                     # ignore other errors
