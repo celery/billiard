@@ -333,22 +333,28 @@ if _winapi:
                     ov, err = _winapi.ReadFile(
                         self._handle, bsize, overlapped=True,
                     )
+                    result = None
+                    exc_to_raise = None
                     try:
                         if err == _winapi.ERROR_IO_PENDING:
                             waitres = _winapi.WaitForMultipleObjects(
                                 [ov.event], False, INFINITE)
                             assert waitres == WAIT_OBJECT_0
-                    except:
+                    except Exception as e:
                         ov.cancel()
-                        raise
+                        exc_to_raise = e
                     finally:
                         nread, err = ov.GetOverlappedResult(True)
                         if err == 0:
                             f = io.BytesIO()
                             f.write(ov.getbuffer())
-                            return f
+                            result = f
                         elif err == _winapi.ERROR_MORE_DATA:
-                            return self._get_more_data(ov, maxsize)
+                            result = self._get_more_data(ov, maxsize)
+                    if result is not None:
+                        return result
+                    if exc_to_raise is not None:
+                        raise exc_to_raise
                 except OSError as e:
                     if e.winerror == _winapi.ERROR_BROKEN_PIPE:
                         raise EOFError

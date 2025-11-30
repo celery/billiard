@@ -1856,13 +1856,8 @@ class ApplyResult:
                 except Exception:
                     response = NACK
                     # ignore other errors
-                finally:
-                    if self._send_ack and synqW_fd:
-                        return self._send_ack(
-                            response, pid, self._job, synqW_fd
-                        )
             if self._send_ack and synqW_fd:
-                self._send_ack(response, pid, self._job, synqW_fd)
+                return self._send_ack(response, pid, self._job, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
