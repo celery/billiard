@@ -1,3 +1,8 @@
+4.2.4 - 2025-11-30
+--------------------
+- Eliminate usage of 'return' in 'finally' blocks (#438)
+- Prepare for release: v4.2.4 (#439)
+
 4.2.3 - 2025-11-16
 --------------------
 - Ensure that task results are delivered during pool shutdown (#435)
