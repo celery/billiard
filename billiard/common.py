@@ -6,6 +6,7 @@ import os
 import signal
 import sys
 
+import dill
 import pickle
 
 from .exceptions import RestartFreqExceeded
@@ -13,6 +14,9 @@ from time import monotonic
 
 pickle_load = pickle.load
 pickle_loads = pickle.loads
+
+dill_load = dill.load
+dill_loads = dill.loads
 
 # cPickle.loads does not support buffer() objects,
 # but we can just create a StringIO and use load.

@@ -27,7 +27,7 @@ from functools import partial
 from . import cpu_count, get_context
 from . import util
 from .common import (
-    TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
+    TERM_SIGNAL, human_status, dill_loads, reset_signals, restart_state,
 )
 from .compat import get_errno, mem_rss, send_offset
 from .einfo import ExceptionInfo
@@ -441,7 +441,7 @@ class Worker:
             if hasattr(conn, 'get_payload') and conn.get_payload:
                 get_payload = conn.get_payload
 
-                def _recv(timeout, loads=pickle_loads):
+                def _recv(timeout, loads=dill_loads):
                     return True, loads(get_payload())
             else:
                 def _recv(timeout):  # noqa
@@ -456,7 +456,7 @@ class Worker:
                     return False, None
         return _recv
 
-    def _make_child_methods(self, loads=pickle_loads):
+    def _make_child_methods(self, loads=dill_loads):
         self.wait_for_job = self._make_protected_receive(self.inq)
         self.wait_for_syn = (self._make_protected_receive(self.synq)
                              if self.synq else None)

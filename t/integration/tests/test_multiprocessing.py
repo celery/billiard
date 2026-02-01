@@ -13,6 +13,8 @@ import gc
 import array
 import random
 import logging
+
+import dill
 from StringIO import StringIO
 
 import pytest
@@ -1409,6 +1411,36 @@ class _TestConnection(BaseTestCase):
         self.assertRaises(ValueError, a.send_bytes, msg, 26, 1)
         self.assertRaises(ValueError, a.send_bytes, msg, -1)
         self.assertRaises(ValueError, a.send_bytes, msg, 4, -1)
+
+    def test_sendlocals(self):
+        # We test sending and receiving <locals> variables (i.e. lambdas or instances of dynamically generated classes)
+        if self.TYPE != 'processes':
+            return
+
+        a, b = self.Pipe()
+
+        initial_lambda_function = lambda x: x + 1
+        a.send_bytes(dill.dumps(obj=initial_lambda_function))
+        received_lambda_function = dill.loads(b.recv_bytes())
+        self.assertEqual(initial_lambda_function(0), received_lambda_function(0))
+
+        class ClassGenerator:
+            @staticmethod
+            def generate(generated_class_id: int) -> type:
+                class GeneratedClass:
+                    class_id: int = generated_class_id
+
+                    def __init__(self, instance_id: int):
+                        self.instance_id: int = instance_id
+
+                    def __eq__(self, other) -> bool:
+                        return self.class_id == other.class_id and self.instance_id == other.instance_id
+                return GeneratedClass
+        generated_class: type = ClassGenerator.generate(generated_class_id=0)
+        initial_generated_class_instance: generated_class = generated_class(instance_id=1)
+        a.send_bytes(dill.dumps(obj=initial_generated_class_instance))
+        received_generated_class_instance = dill.loads(b.recv_bytes())
+        self.assertEqual(initial_generated_class_instance, received_generated_class_instance)
 
 
 class _TestListenerClient(BaseTestCase):
