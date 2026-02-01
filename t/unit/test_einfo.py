@@ -179,7 +179,8 @@ def test_pickle():
     assert type(code2) == type(code)
     assert code2.co_name == code.co_name
 
-class test_inspect:
+
+class TestInspect:
     def test_istraceback(self):
         tb = Traceback(tb=make_python_tb())
         assert inspect.istraceback(tb)
