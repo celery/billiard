@@ -164,7 +164,7 @@ def test_pickle():
     tb = Traceback(tb=make_python_tb())
     tb2 = repickle(tb)
 
-    assert type(tb2) == type(tb2)
+    assert type(tb2) == type(tb)
     assert tb2.tb_lineno == tb.tb_lineno
 
     frame = tb.tb_frame
