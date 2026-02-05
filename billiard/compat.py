@@ -130,27 +130,17 @@ except AttributeError:
                 if exc.errno != errno.EBADF:
                     raise
 
-    def close_open_fds(keep=None):
-        # must make sure this is 0-inclusive (Issue #celery/1882)
-        keep = list(uniq(sorted(
-            f for f in map(maybe_fileno, keep or []) if f is not None
-        )))
-        maxfd = get_fdmax(default=2048)
-        kL, kH = iter([-1] + keep), iter(keep + [maxfd])
-        for low, high in zip_longest(kL, kH):
-            if low + 1 != high:
-                closerange(low + 1, high)
-else:
-    def close_open_fds(keep=None):  # noqa
-        keep = [maybe_fileno(f)
-                for f in (keep or []) if maybe_fileno(f) is not None]
-        for fd in reversed(range(get_fdmax(default=2048))):
-            if fd not in keep:
-                try:
-                    os.close(fd)
-                except OSError as exc:
-                    if exc.errno != errno.EBADF:
-                        raise
+
+def close_open_fds(keep=None):
+    # must make sure this is 0-inclusive (Issue #celery/1882)
+    keep = list(uniq(sorted(
+        f for f in map(maybe_fileno, keep or []) if f is not None
+    )))
+    maxfd = get_fdmax(default=2048)
+    kL, kH = iter([-1] + keep), iter(keep + [maxfd])
+    for low, high in zip_longest(kL, kH):
+        if low + 1 != high:
+            closerange(low + 1, high)
 
 
 def get_errno(exc):
