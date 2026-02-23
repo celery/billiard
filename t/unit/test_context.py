@@ -1,56 +1,55 @@
-import importlib
-
-from unittest.mock import patch
-
-import billiard.context
+import subprocess
+import sys
 
 
-def _reload_context_with_platform(platform):
-    """Reload billiard.context with a patched sys.platform.
+def _get_default_context_attr(platform, attr):
+    """Run a subprocess that patches sys.platform before importing billiard.
 
-    Returns the module-level _default_context after re-evaluation.
+    This exercises the actual import-time conditional without corrupting
+    the module state of the current process.
     """
-    with patch('sys.platform', platform):
-        importlib.reload(billiard.context)
-        return billiard.context._default_context
+    result = subprocess.run(
+        [sys.executable, '-c',
+         'import unittest.mock; '
+         f'unittest.mock.patch("sys.platform", {platform!r}).start(); '
+         'import billiard.context; '
+         f'print(getattr(billiard.context._default_context, {attr!r})())'],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
 
 
 class test_default_context_darwin:
     """Tests that macOS defaults to spawn, matching CPython (bpo-33725)."""
 
     def test_default_start_method_is_spawn_on_darwin(self):
-        try:
-            ctx = _reload_context_with_platform('darwin')
-            assert ctx.get_start_method() == 'spawn'
-        finally:
-            importlib.reload(billiard.context)
+        method = _get_default_context_attr('darwin', 'get_start_method')
+        assert method == 'spawn'
 
     def test_default_start_method_is_fork_on_linux(self):
-        try:
-            ctx = _reload_context_with_platform('linux')
-            assert ctx.get_start_method() == 'fork'
-        finally:
-            importlib.reload(billiard.context)
+        method = _get_default_context_attr('linux', 'get_start_method')
+        assert method == 'fork'
 
     def test_set_start_method_override_on_darwin(self):
-        try:
-            ctx = _reload_context_with_platform('darwin')
-            assert ctx.get_start_method() == 'spawn'
-            ctx.set_start_method('fork', force=True)
-            assert ctx.get_start_method() == 'fork'
-        finally:
-            importlib.reload(billiard.context)
+        result = subprocess.run(
+            [sys.executable, '-c',
+             'import unittest.mock; '
+             'unittest.mock.patch("sys.platform", "darwin").start(); '
+             'import billiard.context; '
+             'ctx = billiard.context._default_context; '
+             'assert ctx.get_start_method() == "spawn"; '
+             'ctx.set_start_method("fork", force=True); '
+             'print(ctx.get_start_method())'],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == 'fork'
 
     def test_forking_is_enabled_false_on_darwin(self):
-        try:
-            ctx = _reload_context_with_platform('darwin')
-            assert ctx.forking_is_enabled() is False
-        finally:
-            importlib.reload(billiard.context)
+        enabled = _get_default_context_attr('darwin', 'forking_is_enabled')
+        assert enabled == 'False'
 
     def test_forking_is_enabled_true_on_linux(self):
-        try:
-            ctx = _reload_context_with_platform('linux')
-            assert ctx.forking_is_enabled() is True
-        finally:
-            importlib.reload(billiard.context)
+        enabled = _get_default_context_attr('linux', 'forking_is_enabled')
+        assert enabled == 'True'
