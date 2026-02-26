@@ -23,7 +23,7 @@ import sys
 
 from . import context
 
-__version__ = '4.2.4'
+__version__ = '4.3.0rc1'
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
 __maintainer__ = 'Asif Saif Uddin'
