@@ -18,12 +18,12 @@
 #
 
 
+import re
 import sys
 
 from . import context
 
-VERSION = (4, 2, 4)
-__version__ = '.'.join(map(str, VERSION[0:4])) + "".join(VERSION[4:])
+__version__ = '4.2.4'
 __author__ = 'R Oudkerk / Python Software Foundation'
 __author_email__ = 'python-dev@python.org'
 __maintainer__ = 'Asif Saif Uddin'
@@ -32,6 +32,14 @@ __homepage__ = "https://github.com/celery/billiard"
 __docformat__ = "restructuredtext"
 
 # -eof meta-
+
+# bumpversion can only search for {current_version}
+# so we have to parse the version here.
+_temp = re.match(
+    r'(\d+)\.(\d+)\.(\d+)(.+)?', __version__).groups()
+VERSION = (int(_temp[0]), int(_temp[1]), int(_temp[2]), _temp[3] or '')
+del _temp
+del re
 
 #
 # Copy stuff from default context
