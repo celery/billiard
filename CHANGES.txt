@@ -1,3 +1,13 @@
+4.3.0rc1 - 2026-02-26
+--------------------
+- Fix pytest deprecation warning (#440)
+- Make einfo compatible with inspect (fixes #176) (#392)
+- Update CI workflow to use Python 3.10 and above (#441)
+- Update tox.ini to remove older Python versions (#442)
+- Fix macOS fork-safety crash: default to spawn on darwin (#443)
+- Prepare for (pre) release: v4.3.0rc1 (#445)
+
+
 4.2.4 - 2025-11-30
 --------------------
 - Eliminate usage of 'return' in 'finally' blocks (#438)
