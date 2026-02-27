@@ -64,7 +64,7 @@ class Popen:
                     spawn.get_executable(), cmd,
                     None, None, False, 0, None, None, None)
                 close_thread_handle(ht)
-            except:
+            except Exception:
                 _winapi.CloseHandle(rhandle)
                 raise
 

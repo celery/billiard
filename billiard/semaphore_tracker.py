@@ -59,7 +59,7 @@ class SemaphoreTracker:
                 args = [exe] + util._args_from_interpreter_flags()
                 args += ['-c', cmd % r]
                 spawnv_passfds(exe, args, fds_to_pass)
-            except:
+            except Exception:
                 os.close(w)
                 raise
             else:
@@ -121,7 +121,7 @@ def main(fd):
                 except Exception:
                     try:
                         sys.excepthook(*sys.exc_info())
-                    except:
+                    except Exception:
                         pass
     finally:
         # all processes have terminated; cleanup any remaining semaphores

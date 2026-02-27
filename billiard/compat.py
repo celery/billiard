@@ -102,7 +102,7 @@ def get_fdmax(default=None):
     """
     try:
         return os.sysconf('SC_OPEN_MAX')
-    except:
+    except Exception:
         pass
     if resource is None:  # Windows
         return default

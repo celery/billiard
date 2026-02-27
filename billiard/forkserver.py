@@ -75,7 +75,7 @@ class ForkServer:
             try:
                 reduction.sendfds(client, allfds)
                 return parent_r, parent_w
-            except:
+            except Exception:
                 os.close(parent_r)
                 os.close(parent_w)
                 raise
@@ -124,7 +124,7 @@ class ForkServer:
                     args = [exe] + util._args_from_interpreter_flags()
                     args += ['-c', cmd]
                     spawnv_passfds(exe, args, fds_to_pass)
-                except:
+                except Exception:
                     os.close(alive_w)
                     raise
                 finally:

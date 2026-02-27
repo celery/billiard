@@ -333,7 +333,7 @@ class BaseProcess:
                 sys.stderr.write(str(exc.args[0]) + '\n')
                 _maybe_flush(sys.stderr)
                 exitcode = 0 if isinstance(exc.args[0], str) else 1
-        except:
+        except Exception:
             exitcode = 1
             if not util.error('Process %s', self.name, exc_info=True):
                 import traceback

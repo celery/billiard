@@ -348,7 +348,7 @@ class Server:
         try:
             util.debug('Manager received shutdown message')
             c.send(('#RETURN', None))
-        except:
+        except Exception:
             import traceback
             traceback.print_exc()
         finally:

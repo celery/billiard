@@ -153,7 +153,7 @@ class _ResourceSharer:
                         send(conn, destination_pid)
                     finally:
                         close()
-            except:
+            except Exception:
                 if not util.is_exiting():
                     sys.excepthook(*sys.exc_info())
 

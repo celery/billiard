@@ -315,7 +315,7 @@ if _winapi:
 
                         [ov.event], False, INFINITE)
                     assert waitres == WAIT_OBJECT_0
-            except:
+            except Exception:
                 ov.cancel()
                 raise
             finally:
@@ -735,7 +735,7 @@ if sys.platform == 'win32':
                 try:
                     _winapi.WaitForMultipleObjects(
                         [ov.event], False, INFINITE)
-                except:
+                except Exception:
                     ov.cancel()
                     _winapi.CloseHandle(handle)
                     raise
