@@ -3,6 +3,7 @@ import numbers
 import os
 import subprocess
 import sys
+import warnings
 
 from itertools import zip_longest
 
@@ -100,16 +101,35 @@ def get_fdmax(default=None):
                       descriptor limit.
 
     """
+
     try:
-        return os.sysconf('SC_OPEN_MAX')
+        fdmax = os.sysconf('SC_OPEN_MAX')
     except:
-        pass
-    if resource is None:  # Windows
-        return default
-    fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
-    if fdmax == resource.RLIM_INFINITY:
-        return default
-    return fdmax
+        fdmax = None
+
+    if fdmax is None:
+        if resource is None:  # Windows
+            return default
+        fdmax = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+        if fdmax == resource.RLIM_INFINITY:
+            return default
+    # Some system might be "mis"configured and allow for ulimit -n
+    # of e.g. 1073741816 which would be infeasible to sweep through.
+    if fdmax >= 1e5:
+        # limiting value is ad-hoc and already more than sensible
+        if default:
+            fdmax_limited = default
+            msg = "the default"
+        else:
+            fdmax_limited = 10000
+            msg = "a new smaller"
+        warnings.warn(
+           f"System set max number of open files ({fdmax}) is way too high. "
+           f"Will use {msg} value of {fdmax_limited}",
+           UserWarning)
+        return fdmax_limited
+    else:
+        return fdmax
 
 
 def uniq(it):
