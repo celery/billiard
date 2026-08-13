@@ -1797,6 +1797,8 @@ class ApplyResult:
         if fun:
             try:
                 fun(*args, **kwargs)
+            except MemoryError:
+                raise
             except self._callbacks_propagate:
                 raise
             except Exception as exc:

@@ -19,6 +19,15 @@ def simple_task(x):
     return x * 2
 
 class test_pool:
+    def test_memory_error_from_callback_propagates(self):
+        def callback(value):
+            raise MemoryError(value)
+
+        result = billiard.pool.ApplyResult({}, callback)
+
+        with pytest.raises(MemoryError, match='out of memory'):
+            result._set(None, (True, 'out of memory'))
+
     def test_raises(self):
         pool = billiard.pool.Pool()
         assert pool.did_start_ok() is True
