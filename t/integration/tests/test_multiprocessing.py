@@ -1749,7 +1749,7 @@ class _TestLogging(BaseTestCase):
 #         logger.addHandler(handler)
 #         logger.propagate = False
 #
-#         logger.warn('foo')
+#         logger.warning('foo')
 #         assert self.__handled
 
 #
