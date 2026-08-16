@@ -360,7 +360,7 @@ class Worker:
                             continue  # received NACK
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except Exception:
+                    except BaseException:
                         result = (False, ExceptionInfo())
                     try:
                         put((READY, (job, i, result, inqW_fd)))
