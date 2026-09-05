@@ -360,7 +360,7 @@ class Worker:
                             continue  # received NACK
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except Exception:
+                    except BaseException:
                         result = (False, ExceptionInfo())
                     try:
                         put((READY, (job, i, result, inqW_fd)))
@@ -1659,7 +1659,12 @@ class Pool:
         debug('helping task handler/workers to finish')
         cls._help_stuff_finish(*help_stuff_finish_args)
 
-        result_handler.terminate()
+        # Send the sentinel to the result handler but don't terminate the
+        # result handler thread. This allows the thread to continue
+        # processing results in ResultHandler.finish_at_shutdown() until
+        # the cache is drained, ensuring that all task results are properly
+        # stored. A call to ResultHandler.terminate() is not necessary here
+        # because the thread will exit naturally when the cache becomes empty.
         cls._set_result_sentinel(outqueue, pool)
 
         if timeout_handler is not None:
@@ -1792,6 +1797,8 @@ class ApplyResult:
         if fun:
             try:
                 fun(*args, **kwargs)
+            except MemoryError:
+                raise
             except self._callbacks_propagate:
                 raise
             except Exception as exc:
@@ -1851,13 +1858,8 @@ class ApplyResult:
                 except Exception:
                     response = NACK
                     # ignore other errors
-                finally:
-                    if self._send_ack and synqW_fd:
-                        return self._send_ack(
-                            response, pid, self._job, synqW_fd
-                        )
             if self._send_ack and synqW_fd:
-                self._send_ack(response, pid, self._job, synqW_fd)
+                return self._send_ack(response, pid, self._job, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`

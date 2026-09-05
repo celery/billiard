@@ -46,7 +46,6 @@ extras = {}
 
 import re
 re_meta = re.compile(r'__(\w+?)__\s*=\s*(.*)')
-re_vers = re.compile(r'VERSION\s*=\s*\((.*?)\)')
 re_doc = re.compile(r'^"""(.+?)"""')
 rq = lambda s: s.strip("\"'")
 
@@ -56,16 +55,10 @@ def add_default(m):
     return ((attr_name, rq(attr_value)), )
 
 
-def add_version(m):
-    v = list(map(rq, m.groups()[0].split(', ')))
-    return (('VERSION', '.'.join(v[0:4]) + ''.join(v[4:])), )
-
-
 def add_doc(m):
     return (('doc', m.groups()[0]), )
 
 pats = {re_meta: add_default,
-        re_vers: add_version,
         re_doc: add_doc}
 here = os.path.abspath(os.path.dirname(__file__))
 meta_fh = open(os.path.join(here, 'billiard/__init__.py'))
@@ -193,7 +186,7 @@ def run_setup(with_extensions=True):
     packages = setuptools.find_packages(exclude=['ez_setup', 't', 't.*'])
     setuptools.setup(
         name='billiard',
-        version=meta['VERSION'],
+        version=meta['version'],
         description=meta['doc'],
         long_description=long_description,
         packages=packages,
