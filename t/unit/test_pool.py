@@ -18,7 +18,19 @@ def get_on_ready_count():
 def simple_task(x):
     return x * 2
 
+def raise_base_exception():
+    raise BaseException("base exception test")
+
 class test_pool:
+    def test_memory_error_from_callback_propagates(self):
+        def callback(value):
+            raise MemoryError(value)
+
+        result = billiard.pool.ApplyResult({}, callback)
+
+        with pytest.raises(MemoryError, match='out of memory'):
+            result._set(None, (True, 'out of memory'))
+
     def test_raises(self):
         pool = billiard.pool.Pool()
         assert pool.did_start_ok() is True
@@ -48,6 +60,17 @@ class test_pool:
             if i == 2:
                 with pytest.raises(ValueError):
                     res.get()
+
+    def test_base_exception_propagates(self):
+        pool = billiard.pool.Pool(1)
+        result = pool.apply_async(raise_base_exception)
+
+        with pytest.raises(BaseException, match="base exception test"):
+            result.get(timeout=10)
+
+        pool.close()
+        pool.join()
+        pool.terminate()
 
     def test_on_ready_counter_is_synchronized(self):
         for ctx in ('spawn', 'fork', 'forkserver'):

@@ -360,7 +360,7 @@ class Worker:
                             continue  # received NACK
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except Exception:
+                    except BaseException:
                         result = (False, ExceptionInfo())
                     try:
                         put((READY, (job, i, result, inqW_fd)))
@@ -1797,6 +1797,8 @@ class ApplyResult:
         if fun:
             try:
                 fun(*args, **kwargs)
+            except MemoryError:
+                raise
             except self._callbacks_propagate:
                 raise
             except Exception as exc:
