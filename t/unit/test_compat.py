@@ -110,7 +110,8 @@ class test_open_fds:
     def test_lists_a_descriptor_this_process_opened(self):
         with tempfile.TemporaryFile() as fh:
             fds = compat._open_fds()
-            assert fds is not None
+            if fds is None:
+                pytest.skip(f'fd directory {compat._FD_DIR!r} not available on this system')
             assert fh.fileno() in fds
 
     def test_returns_none_when_fd_dir_is_missing(self):
