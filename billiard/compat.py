@@ -122,7 +122,7 @@ def uniq(it):
 # macOS, FreeBSD and DragonFly, /proc/self/fd elsewhere.  On FreeBSD and
 # DragonFly it is only trusted when fdescfs is mounted, see _open_fds().
 _BSD_WITH_FDESCFS = ('freebsd', 'dragonfly')
-if sys.platform == 'darwin' or sys.platform.startswith(_BSD_WITH_FDESCFS):
+if sys.platform.startswith(('cygwin', 'darwin') + _BSD_WITH_FDESCFS):
     _FD_DIR = '/dev/fd'
 else:
     _FD_DIR = '/proc/self/fd'

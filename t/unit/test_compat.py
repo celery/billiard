@@ -101,7 +101,7 @@ class test_open_fds:
     def test_fd_dir_matches_this_platform(self):
         if sys.platform == 'darwin':
             assert compat._FD_DIR == '/dev/fd'
-        elif sys.platform.startswith(('freebsd', 'dragonfly')):
+        elif sys.platform.startswith(('cygwin', 'freebsd', 'dragonfly')):
             assert compat._FD_DIR == '/dev/fd'
         else:
             assert compat._FD_DIR == '/proc/self/fd'
