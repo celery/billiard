@@ -117,11 +117,61 @@ def uniq(it):
     return (seen.add(obj) or obj for obj in it if obj not in seen)
 
 
+# Directory listing the descriptors open in the calling process.  Same
+# choice as CPython's FD_DIR (Modules/_posixsubprocess.c): /dev/fd on
+# macOS, FreeBSD and DragonFly, /proc/self/fd elsewhere.  On FreeBSD and
+# DragonFly it is only trusted when fdescfs is mounted, see _open_fds().
+_BSD_WITH_FDESCFS = ('freebsd', 'dragonfly')
+if sys.platform == 'darwin' or sys.platform.startswith(_BSD_WITH_FDESCFS):
+    _FD_DIR = '/dev/fd'
+else:
+    _FD_DIR = '/proc/self/fd'
+
+
+def _dev_fd_is_fdescfs():
+    # devfs alone creates only /dev/fd/0-2, while fdescfs creates entries for
+    # every descriptor the process has open.  Same check as CPython's
+    # _is_fdescfs_mounted_on_dev_fd().
+    try:
+        return os.stat('/dev').st_dev != os.stat(_FD_DIR).st_dev
+    except OSError:
+        return False
+
+
+def _open_fds():
+    """Return the descriptors open in this process, or None.
+
+    None means this platform has no directory listing them, and the caller
+    has to fall back to a numeric range.
+    """
+    if sys.platform.startswith(_BSD_WITH_FDESCFS) and not _dev_fd_is_fdescfs():
+        return None
+    try:
+        names = os.listdir(_FD_DIR)
+    except OSError:
+        return None
+    return sorted(int(name) for name in names if name.isdigit())
+
+
 def close_open_fds(keep=None):
     # must make sure this is 0-inclusive (Issue #celery/1882)
     keep = list(uniq(sorted(
         f for f in map(maybe_fileno, keep or []) if f is not None
     )))
+    fds = _open_fds()
+    if fds is not None:
+        # Only the descriptors actually open are touched, so the cost does
+        # not depend on RLIMIT_NOFILE (celery/celery#9886).
+        keep = set(keep)
+        for fd in fds:
+            if fd in keep:
+                continue
+            try:
+                os.close(fd)
+            except OSError:
+                # Same as os.closerange() below: closing is best effort.
+                pass
+        return
     maxfd = get_fdmax(default=2048)
     kL, kH = iter([-1] + keep), iter(keep + [maxfd])
     for low, high in zip_longest(kL, kH):
