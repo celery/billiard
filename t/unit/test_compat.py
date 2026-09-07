@@ -43,9 +43,11 @@ class test_close_open_fds:
         """The limit is irrelevant when the open descriptors can be listed."""
         with patch('billiard.compat._open_fds', return_value=[0, 1, 2]), \
                 patch('billiard.compat.get_fdmax') as get_fdmax, \
-                patch('os.close'):
+                patch('os.close'), \
+                patch('os.closerange') as closerange:
             close_open_fds([0, 1, 2])
         get_fdmax.assert_not_called()
+        closerange.assert_not_called()
 
 
 class test_close_open_fds_fallback:
@@ -111,7 +113,8 @@ class test_open_fds:
         with tempfile.TemporaryFile() as fh:
             fds = compat._open_fds()
             if fds is None:
-                pytest.skip(f'fd directory {compat._FD_DIR!r} not available on this system')
+                pytest.skip(
+                    f'fd directory {compat._FD_DIR!r} not available here')
             assert fh.fileno() in fds
 
     def test_returns_none_when_fd_dir_is_missing(self):
