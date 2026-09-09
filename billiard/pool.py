@@ -358,10 +358,16 @@ class Worker:
                         confirm = wait_for_syn(job)
                         if not confirm:
                             continue  # received NACK
+                    exit_exc = None
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except BaseException:
+                    except BaseException as exc:
                         result = (False, ExceptionInfo())
+                        if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                            # The worker was told to exit (e.g. SIGTERM from a
+                            # hard time limit): report the result, then leave
+                            # instead of re-entering the shared inqueue.
+                            exit_exc = exc
                     try:
                         put((READY, (job, i, result, inqW_fd)))
                     except Exception as exc:
@@ -375,6 +381,8 @@ class Worker:
                         finally:
                             del(tb)
                     completed += 1
+                    if exit_exc is not None:
+                        raise exit_exc
                     if max_memory_per_child > 0:
                         used_kb = mem_rss()
                         if used_kb <= 0:

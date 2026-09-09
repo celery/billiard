@@ -1,7 +1,12 @@
+import os
+import signal
+import time
+
+import pytest
+
 import billiard.pool
 from billiard import get_context
-import time
-import pytest
+from billiard.exceptions import TimeLimitExceeded
 
 
 def func(x):
@@ -20,6 +25,10 @@ def simple_task(x):
 
 def raise_base_exception():
     raise BaseException("base exception test")
+
+
+def raise_system_exit():
+    raise SystemExit(1)
 
 class test_pool:
     def test_memory_error_from_callback_propagates(self):
@@ -71,6 +80,50 @@ class test_pool:
         pool.close()
         pool.join()
         pool.terminate()
+
+    def test_system_exit_from_task_replaces_worker(self):
+        pool = billiard.pool.Pool(1)
+        try:
+            pid_before = pool.apply_async(os.getpid).get(timeout=10)
+            result = pool.apply_async(raise_system_exit)
+            with pytest.raises(SystemExit):
+                result.get(timeout=10)
+            pid_after = pool.apply_async(os.getpid).get(timeout=10)
+            assert pid_after != pid_before
+        finally:
+            pool.terminate()
+            pool.join()
+
+    def test_hard_timeout_does_not_stall_pool(self):
+        pool = billiard.pool.Pool(1, timeout=1)
+        try:
+            pid_before = pool.apply_async(os.getpid).get(timeout=10)
+            result = pool.apply_async(time.sleep, (30,))
+            with pytest.raises(Exception) as excinfo:
+                result.get(timeout=10)
+            exc = getattr(excinfo.value, 'exc', excinfo.value)
+            assert isinstance(exc, TimeLimitExceeded)
+            # Only submit again once the killed worker has been replaced;
+            # otherwise the job may still be picked up by the dying worker.
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if pid_before not in [w.pid for w in pool._pool]:
+                    break
+                time.sleep(0.1)
+            assert pool.apply_async(simple_task, (21,)).get(timeout=10) == 42
+        except BaseException:
+            # A stalled pool cannot be terminated either (terminate() blocks
+            # on the same inqueue lock), so kill the workers outright and
+            # skip the terminate-at-exit finalizer.
+            for worker in pool._pool:
+                try:
+                    os.kill(worker.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+            pool._terminate.cancel()
+            raise
+        pool.terminate()
+        pool.join()
 
     def test_on_ready_counter_is_synchronized(self):
         for ctx in ('spawn', 'fork', 'forkserver'):
