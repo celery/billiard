@@ -1,7 +1,10 @@
-Unreleased
-----------
+4.3.0 - 2026-09-26
+------------------
+- Propagate MemoryError from pool callbacks
 - Propagate `BaseException` raised in pool workers instead of raising
   `WorkerLostError` (#427)
+- Bind the closerange-based close_open_fds() on Python 3
+- List the fd directory in close_open_fds() instead of walking the limit (#456)
 - Exit the pool worker after a task raises `SystemExit` or `KeyboardInterrupt`
   (for example the SIGTERM sent by a hard time limit) instead of returning to
   the shared inqueue, which left the blocking pool stalled once the worker was
