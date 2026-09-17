@@ -4,7 +4,7 @@ billiard
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
-:Version: 4.3.0rc1
+:Version: 4.3.0
 :Web: https://billiard.readthedocs.io
 :Download: https://pypi.org/project/billiard/
 :Source: https://github.com/celery/billiard/
