@@ -75,8 +75,8 @@ finally:
     meta_fh.close()
 
 
-if sys.version_info < (3, 7):
-    raise ValueError('Versions of Python before 3.7 are not supported')
+if sys.version_info < (3, 10):
+    raise ValueError('Versions of Python before 3.10 are not supported')
 
 if sys.platform == 'win32':  # Windows
     macros = dict()
@@ -199,19 +199,18 @@ def run_setup(with_extensions=True):
         url=meta['homepage'],
         zip_safe=False,
         license='BSD',
-        python_requires='>=3.7',
+        python_requires='>=3.10',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',
             'Programming Language :: Python',
             'Programming Language :: C',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.12',
-            'Programming Language :: Python :: 3.8',
-            'Programming Language :: Python :: 3.9',
             'Programming Language :: Python :: 3.10',
             'Programming Language :: Python :: 3.11',
+            'Programming Language :: Python :: 3.12',
             'Programming Language :: Python :: 3.13',
+            'Programming Language :: Python :: 3.14',
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
             'Operating System :: Microsoft :: Windows',
