@@ -998,6 +998,23 @@ class Pool:
                  max_memory_per_child=None,
                  enable_timeouts=False,
                  **kwargs):
+        # bool subclasses int; processes=True would silently spawn 1 worker,
+        # and timeout/soft_timeout/lost_worker_timeout=True would become 1s.
+        for name, value in (
+            ("processes", processes),
+            ("maxtasksperchild", maxtasksperchild),
+            ("timeout", timeout),
+            ("soft_timeout", soft_timeout),
+            ("lost_worker_timeout", lost_worker_timeout),
+            ("max_memory_per_child", max_memory_per_child),
+            ("max_restarts", max_restarts),
+            ("max_restart_freq", max_restart_freq),
+        ):
+            if isinstance(value, bool):
+                raise TypeError(
+                    f"{name} must be an int or float, not bool (got {value!r})"
+                )
+
         self._ctx = context or get_context()
         self.synack = synack
         self._setup_queues()
