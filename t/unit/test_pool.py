@@ -184,3 +184,20 @@ class test_pool:
         # retrieved.
         for i, result in enumerate(results):
             assert result.get() == i * 2
+
+
+    def test_rejects_bool_for_numeric_pool_args(self):
+        """bool subclasses int; processes=True must not silently spawn 1 worker."""
+        for kwargs in (
+            {"processes": True},
+            {"processes": False},
+            {"maxtasksperchild": True},
+            {"timeout": True},
+            {"soft_timeout": True},
+            {"lost_worker_timeout": True},
+            {"max_memory_per_child": True},
+            {"max_restarts": True},
+            {"max_restart_freq": True},
+        ):
+            with pytest.raises(TypeError, match="bool"):
+                billiard.pool.Pool(**kwargs)
