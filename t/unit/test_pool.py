@@ -186,6 +186,11 @@ class test_pool:
             assert result.get() == i * 2
 
 
+    def test_rejects_fewer_than_one_process(self):
+        for processes in (0, -1):
+            with pytest.raises(ValueError, match="at least 1"):
+                billiard.pool.Pool(processes=processes)
+
     def test_rejects_bool_for_numeric_pool_args(self):
         """bool subclasses int; processes=True must not silently spawn 1 worker."""
         for kwargs in (

@@ -1014,6 +1014,8 @@ class Pool:
                 raise TypeError(
                     f"{name} must be an int or float, not bool (got {value!r})"
                 )
+        if processes is not None and processes < 1:
+            raise ValueError("Number of processes must be at least 1")
 
         self._ctx = context or get_context()
         self.synack = synack
