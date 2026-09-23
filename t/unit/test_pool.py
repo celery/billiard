@@ -6,7 +6,7 @@ import pytest
 
 import billiard.pool
 from billiard import get_context
-from billiard.exceptions import TimeLimitExceeded
+from billiard.exceptions import TimeLimitExceeded, WorkerLostError
 
 
 def func(x):
@@ -29,6 +29,12 @@ def raise_base_exception():
 
 def raise_system_exit():
     raise SystemExit(1)
+
+
+def announce_then_sleep(marker):
+    with open(marker, 'w') as fh:
+        fh.write('started')
+    time.sleep(30)
 
 class test_pool:
     def test_memory_error_from_callback_propagates(self):
@@ -90,6 +96,38 @@ class test_pool:
                 result.get(timeout=10)
             pid_after = pool.apply_async(os.getpid).get(timeout=10)
             assert pid_after != pid_before
+        finally:
+            pool.terminate()
+            pool.join()
+
+    def test_worker_terminated_mid_job_is_lost_not_completed(self, tmp_path):
+        """A worker told to exit did not finish its job.
+
+        The SystemExit that terminates a worker is raised by billiard's own
+        signal handler, inside whatever the worker happened to be running. If
+        the worker reports that as the job's result, the job looks completed
+        (with a failure) rather than interrupted -- and a caller that
+        acknowledges work only once it is done, such as Celery with
+        task_acks_late, then acknowledges a job nothing ever ran to the end.
+        """
+        pool = billiard.pool.Pool(1)
+        try:
+            marker = str(tmp_path / 'started')
+            result = pool.apply_async(announce_then_sleep, (marker,))
+            worker_pid = pool._pool[0].pid
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline and not os.path.exists(marker):
+                time.sleep(0.1)
+            assert os.path.exists(marker), 'worker never started the job'
+
+            os.kill(worker_pid, billiard.pool.TERM_SIGNAL)
+
+            # Generous: the parent notices the dead worker from its
+            # supervisor loop, so this bounds a failure rather than a wait.
+            with pytest.raises(Exception) as excinfo:
+                result.get(timeout=30)
+            exc = getattr(excinfo.value, 'exc', excinfo.value)
+            assert isinstance(exc, WorkerLostError)
         finally:
             pool.terminate()
             pool.join()
