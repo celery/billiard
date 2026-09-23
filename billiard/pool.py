@@ -28,6 +28,7 @@ from . import cpu_count, get_context
 from . import util
 from .common import (
     TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
+    terminating,
 )
 from .compat import get_errno, mem_rss, send_offset
 from .einfo import ExceptionInfo
@@ -362,11 +363,25 @@ class Worker:
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
                     except BaseException as exc:
+                        if isinstance(exc, SystemExit) and terminating():
+                            # Raised by our own signal handler, inside
+                            # whatever this worker was running -- see
+                            # common._shutdown_cleanup. The job did not
+                            # finish, so there is no result to report: say
+                            # nothing and let the process go, and the parent
+                            # accounts for the job as lost with the worker.
+                            # Reporting it would make an interrupted job look
+                            # completed-with-failure, and a caller that
+                            # acknowledges work only once it is done -- Celery
+                            # with task_acks_late -- would then acknowledge a
+                            # task nothing ever ran to the end.
+                            raise
                         result = (False, ExceptionInfo())
                         if isinstance(exc, (SystemExit, KeyboardInterrupt)):
-                            # The worker was told to exit (e.g. SIGTERM from a
-                            # hard time limit): report the result, then leave
-                            # instead of re-entering the shared inqueue.
+                            # Raised by the job itself: a result, and one the
+                            # caller should see rather than a WorkerLostError
+                            # (#427). Report it, then leave instead of
+                            # re-entering the shared inqueue.
                             exit_exc = exc
                     try:
                         put((READY, (job, i, result, inqW_fd)))

@@ -74,6 +74,16 @@ TERMSIGS_FULL = {
 _should_have_exited = [False]
 
 
+def terminating():
+    """Has this process's own terminate-signal handler already fired?
+
+    A `SystemExit` seen after that point was raised by
+    :func:`_shutdown_cleanup`, not by whatever the process happened to be
+    running, and means the process is on its way out.
+    """
+    return _should_have_exited[0]
+
+
 def human_status(status):
     if (status or 0) < 0:
         try:
@@ -118,6 +128,9 @@ def _should_override_term_signal(sig, current):
 
 
 def reset_signals(handler=_shutdown_cleanup, full=False):
+    # A fresh process installing its own terminate handlers has not yet run
+    # one, whatever it inherited across the fork from a parent that had.
+    _should_have_exited[0] = False
     for sig in TERMSIGS_FULL if full else TERMSIGS_DEFAULT:
         num = signum(sig)
         if num:
