@@ -120,7 +120,7 @@ class test_pool:
                 time.sleep(0.1)
             assert os.path.exists(marker), 'worker never started the job'
 
-            os.kill(worker_pid, signal.SIGTERM)
+            os.kill(worker_pid, billiard.pool.TERM_SIGNAL)
 
             # Generous: the parent notices the dead worker from its
             # supervisor loop, so this bounds a failure rather than a wait.
