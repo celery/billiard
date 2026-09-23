@@ -219,7 +219,7 @@ def set_pdeathsig(sig):
             libc = ctypes.cdll.LoadLibrary("libc.so.6")
             libc.prctl(PR_SET_PDEATHSIG, ctypes.c_int(sig))
     except Exception as e:
-        raise OSError("An error occured while setting pdeathsig") from e
+        raise OSError("An error occurred while setting pdeathsig") from e
 
 def _eintr_retry(func):
     '''

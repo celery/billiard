@@ -1,4 +1,3 @@
-import errno
 import numbers
 import os
 import subprocess
@@ -118,39 +117,67 @@ def uniq(it):
     return (seen.add(obj) or obj for obj in it if obj not in seen)
 
 
-try:
-    closerange = os.closerange
-except AttributeError:
+# Directory listing the descriptors open in the calling process.  Same
+# choice as CPython's FD_DIR (Modules/_posixsubprocess.c, Cygwin added in
+# gh-148575): /dev/fd on macOS, Cygwin, FreeBSD and DragonFly, /proc/self/fd
+# elsewhere.  On FreeBSD and DragonFly it is only trusted when fdescfs is
+# mounted, see _open_fds().
+_BSD_WITH_FDESCFS = ('freebsd', 'dragonfly')
+if sys.platform.startswith(('cygwin', 'darwin') + _BSD_WITH_FDESCFS):
+    _FD_DIR = '/dev/fd'
+else:
+    _FD_DIR = '/proc/self/fd'
 
-    def closerange(fd_low, fd_high):  # noqa
-        for fd in reversed(range(fd_low, fd_high)):
+
+def _dev_fd_is_fdescfs():
+    # devfs alone creates only /dev/fd/0-2, while fdescfs creates entries for
+    # every descriptor the process has open.  Same check as CPython's
+    # _is_fdescfs_mounted_on_dev_fd().
+    try:
+        return os.stat('/dev').st_dev != os.stat(_FD_DIR).st_dev
+    except OSError:
+        return False
+
+
+def _open_fds():
+    """Return the descriptors open in this process, or None.
+
+    None means this platform has no directory listing them, and the caller
+    has to fall back to a numeric range.
+    """
+    if sys.platform.startswith(_BSD_WITH_FDESCFS) and not _dev_fd_is_fdescfs():
+        return None
+    try:
+        names = os.listdir(_FD_DIR)
+    except OSError:
+        return None
+    return sorted(int(name) for name in names if name.isdigit())
+
+
+def close_open_fds(keep=None):
+    # must make sure this is 0-inclusive (Issue #celery/1882)
+    keep = list(uniq(sorted(
+        f for f in map(maybe_fileno, keep or []) if f is not None
+    )))
+    fds = _open_fds()
+    if fds is not None:
+        # Only the descriptors actually open are touched, so the cost does
+        # not depend on RLIMIT_NOFILE (celery/celery#9886).
+        keep = set(keep)
+        for fd in fds:
+            if fd in keep:
+                continue
             try:
                 os.close(fd)
-            except OSError as exc:
-                if exc.errno != errno.EBADF:
-                    raise
-
-    def close_open_fds(keep=None):
-        # must make sure this is 0-inclusive (Issue #celery/1882)
-        keep = list(uniq(sorted(
-            f for f in map(maybe_fileno, keep or []) if f is not None
-        )))
-        maxfd = get_fdmax(default=2048)
-        kL, kH = iter([-1] + keep), iter(keep + [maxfd])
-        for low, high in zip_longest(kL, kH):
-            if low + 1 != high:
-                closerange(low + 1, high)
-else:
-    def close_open_fds(keep=None):  # noqa
-        keep = [maybe_fileno(f)
-                for f in (keep or []) if maybe_fileno(f) is not None]
-        for fd in reversed(range(get_fdmax(default=2048))):
-            if fd not in keep:
-                try:
-                    os.close(fd)
-                except OSError as exc:
-                    if exc.errno != errno.EBADF:
-                        raise
+            except OSError:
+                # Same as os.closerange() below: closing is best effort.
+                pass
+        return
+    maxfd = get_fdmax(default=2048)
+    kL, kH = iter([-1] + keep), iter(keep + [maxfd])
+    for low, high in zip_longest(kL, kH):
+        if low + 1 != high:
+            os.closerange(low + 1, high)
 
 
 def get_errno(exc):
@@ -192,7 +219,7 @@ else:
             if sys.version_info >= (3, 9):
                 args.extend((None, None, None, -1))  # group, extra_groups, user, umask
             args.append(None)  # preexec_fn
-            if sys.version_info >= (3, 11):
+            if (3, 11) <= sys.version_info < (3, 14):
                 args.append(subprocess._USE_VFORK)
             return _posixsubprocess.fork_exec(*args)
         finally:

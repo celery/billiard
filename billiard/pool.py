@@ -358,10 +358,16 @@ class Worker:
                         confirm = wait_for_syn(job)
                         if not confirm:
                             continue  # received NACK
+                    exit_exc = None
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except Exception:
+                    except BaseException as exc:
                         result = (False, ExceptionInfo())
+                        if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                            # The worker was told to exit (e.g. SIGTERM from a
+                            # hard time limit): report the result, then leave
+                            # instead of re-entering the shared inqueue.
+                            exit_exc = exc
                     try:
                         put((READY, (job, i, result, inqW_fd)))
                     except Exception as exc:
@@ -375,6 +381,8 @@ class Worker:
                         finally:
                             del(tb)
                     completed += 1
+                    if exit_exc is not None:
+                        raise exit_exc
                     if max_memory_per_child > 0:
                         used_kb = mem_rss()
                         if used_kb <= 0:
@@ -990,6 +998,25 @@ class Pool:
                  max_memory_per_child=None,
                  enable_timeouts=False,
                  **kwargs):
+        # bool subclasses int; processes=True would silently spawn 1 worker,
+        # and timeout/soft_timeout/lost_worker_timeout=True would become 1s.
+        for name, value in (
+            ("processes", processes),
+            ("maxtasksperchild", maxtasksperchild),
+            ("timeout", timeout),
+            ("soft_timeout", soft_timeout),
+            ("lost_worker_timeout", lost_worker_timeout),
+            ("max_memory_per_child", max_memory_per_child),
+            ("max_restarts", max_restarts),
+            ("max_restart_freq", max_restart_freq),
+        ):
+            if isinstance(value, bool):
+                raise TypeError(
+                    f"{name} must be an int or float, not bool (got {value!r})"
+                )
+        if processes is not None and processes < 1:
+            raise ValueError("Number of processes must be at least 1")
+
         self._ctx = context or get_context()
         self.synack = synack
         self._setup_queues()
@@ -1659,7 +1686,12 @@ class Pool:
         debug('helping task handler/workers to finish')
         cls._help_stuff_finish(*help_stuff_finish_args)
 
-        result_handler.terminate()
+        # Send the sentinel to the result handler but don't terminate the
+        # result handler thread. This allows the thread to continue
+        # processing results in ResultHandler.finish_at_shutdown() until
+        # the cache is drained, ensuring that all task results are properly
+        # stored. A call to ResultHandler.terminate() is not necessary here
+        # because the thread will exit naturally when the cache becomes empty.
         cls._set_result_sentinel(outqueue, pool)
 
         if timeout_handler is not None:
@@ -1792,6 +1824,8 @@ class ApplyResult:
         if fun:
             try:
                 fun(*args, **kwargs)
+            except MemoryError:
+                raise
             except self._callbacks_propagate:
                 raise
             except Exception as exc:
@@ -1851,13 +1885,8 @@ class ApplyResult:
                 except Exception:
                     response = NACK
                     # ignore other errors
-                finally:
-                    if self._send_ack and synqW_fd:
-                        return self._send_ack(
-                            response, pid, self._job, synqW_fd
-                        )
             if self._send_ack and synqW_fd:
-                self._send_ack(response, pid, self._job, synqW_fd)
+                return self._send_ack(response, pid, self._job, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
