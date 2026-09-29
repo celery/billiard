@@ -123,6 +123,10 @@ class BaseProcess:
 
     def close(self):
         if self._popen is not None:
+            if self._popen.poll() is None:
+                raise ValueError(
+                    "Cannot close a process while it is still running. "
+                    "You should first call join() or terminate().")
             self._popen.close()
 
     def terminate(self):
