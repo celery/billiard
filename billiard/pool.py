@@ -1031,6 +1031,9 @@ class Pool:
                 )
         if processes is not None and processes < 1:
             raise ValueError("Number of processes must be at least 1")
+        if maxtasksperchild is not None and (
+                not isinstance(maxtasksperchild, int) or maxtasksperchild < 1):
+            raise ValueError("maxtasksperchild must be a positive int or None")
 
         self._ctx = context or get_context()
         self.synack = synack
