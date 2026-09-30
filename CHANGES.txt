@@ -1,3 +1,15 @@
+Unreleased
+----------
+- `Queue.put()`, `Queue.get()` and `JoinableQueue.put()` raise `ValueError`
+  when the queue is closed, as in `multiprocessing`, instead of an
+  `AssertionError` (or, under `python -O`, silently dropping the item) and an
+  `OSError`. The check runs when the call starts: a thread that is already
+  blocked in `get()` when another thread closes the queue still gets the
+  `OSError` from the closed reader, as in CPython.
+- `Queue.join_thread()` raises `ValueError` instead of an `AssertionError`
+  when the queue has not been closed.
+
+
 4.3.0 - 2026-09-26
 ------------------
 - Propagate MemoryError from pool callbacks

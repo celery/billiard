@@ -150,7 +150,8 @@ class Queue:
 
     def join_thread(self):
         debug('Queue.join_thread()')
-        assert self._closed
+        if not self._closed:
+            raise ValueError(f"Queue {self!r} not closed")
         if self._jointhread:
             self._jointhread()
 

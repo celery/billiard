@@ -26,3 +26,11 @@ class test_closed_queue:
             q.get(timeout=0.1)
         with pytest.raises(ValueError, match='is closed'):
             q.get_nowait()
+
+    @pytest.mark.parametrize('queue_type', [Queue, JoinableQueue])
+    def test_join_thread_requires_closed_queue(self, queue_type):
+        q = queue_type()
+        with pytest.raises(ValueError, match='not closed'):
+            q.join_thread()
+        q.close()
+        q.join_thread()
