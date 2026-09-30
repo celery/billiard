@@ -88,6 +88,7 @@ class BaseProcess:
         self._config = _current_process._config.copy()
         self._parent_pid = os.getpid()
         self._popen = None
+        self._closed = False
         self._target = target
         self._args = tuple(args)
         self._kwargs = dict(kwargs)
@@ -102,6 +103,10 @@ class BaseProcess:
         
         self._controlled_termination = False
 
+    def _check_closed(self):
+        if self._closed:
+            raise ValueError("process object is closed")
+
     def run(self):
         '''
         Method to be run in sub-process; can be overridden in sub-class
@@ -113,6 +118,7 @@ class BaseProcess:
         '''
         Start child process
         '''
+        self._check_closed()
         assert self._popen is None, 'cannot start a process twice'
         assert self._parent_pid == os.getpid(), \
             'can only start a process object created by current process'
@@ -122,13 +128,32 @@ class BaseProcess:
         _children.add(self)
 
     def close(self):
+        '''
+        Close the Process object and release the resources it holds.
+
+        It is an error to call this method while the child is still running.
+        Other methods and properties then raise ValueError.
+        '''
         if self._popen is not None:
+            # poll() also reports None when the child was already reaped by
+            # someone else (ECHILD, e.g. a SIGCHLD handler calling
+            # waitpid(-1)), so such a process can never be closed; this is
+            # the same in multiprocessing.
+            if self._popen.poll() is None:
+                raise ValueError(
+                    "Cannot close a process while it is still running. "
+                    "You should first call join() or terminate().")
             self._popen.close()
+            self._popen = None
+            del self._sentinel
+            _children.discard(self)
+        self._closed = True
 
     def terminate(self):
         '''
         Terminate process; sends SIGTERM signal or uses TerminateProcess()
         '''
+        self._check_closed()
         self._popen.terminate()
         
     def terminate_controlled(self):
@@ -139,17 +164,20 @@ class BaseProcess:
         '''
         Wait until child process terminates
         '''
+        self._check_closed()
         assert self._parent_pid == os.getpid(), 'can only join a child process'
         assert self._popen is not None, 'can only join a started process'
         res = self._popen.wait(timeout)
         if res is not None:
             _children.discard(self)
-            self.close()
+            # only release the sentinel: callers still read exitcode after join
+            self._popen.close()
 
     def is_alive(self):
         '''
         Return whether process is alive
         '''
+        self._check_closed()
         if self is _current_process:
             return True
         assert self._parent_pid == os.getpid(), 'can only test a child process'
@@ -203,6 +231,7 @@ class BaseProcess:
         '''
         Return exit code of process or `None` if it has yet to stop
         '''
+        self._check_closed()
         if self._popen is None:
             return self._popen
         return self._popen.poll()
@@ -212,6 +241,7 @@ class BaseProcess:
         '''
         Return identifier (PID) of process or `None` if it has yet to start
         '''
+        self._check_closed()
         if self is _current_process:
             return os.getpid()
         else:
@@ -225,6 +255,7 @@ class BaseProcess:
         Return a file descriptor (Unix) or handle (Windows) suitable for
         waiting for process termination.
         '''
+        self._check_closed()
         try:
             return self._sentinel
         except AttributeError:
@@ -258,6 +289,8 @@ class BaseProcess:
     def __repr__(self):
         if self is _current_process:
             status = 'started'
+        elif self._closed:
+            status = 'closed'
         elif self._parent_pid != os.getpid():
             status = 'unknown'
         elif self._popen is None:
@@ -375,6 +408,7 @@ class _MainProcess(BaseProcess):
         self._name = 'MainProcess'
         self._parent_pid = None
         self._popen = None
+        self._closed = False
         self._config = {'authkey': AuthenticationString(os.urandom(32)),
                         'semprefix': '/mp'}
 
