@@ -74,6 +74,32 @@ TERMSIGS_FULL = {
 _should_have_exited = [False]
 
 
+def terminate_handler_fired():
+    """Has this process's own terminate-signal handler already fired?
+
+    A `SystemExit` seen after that point was raised by
+    :func:`_shutdown_cleanup`, not by whatever the process happened to be
+    running, and means the process is on its way out.
+
+    Strictly about *this* process having already run the handler -- a
+    process that has been sent a terminate signal but has not yet handled
+    it answers False, which is why this is not named ``terminating()``.
+    """
+    return _should_have_exited[0]
+
+
+def clear_terminate_handler_fired():
+    """Forget that a terminate handler ran -- for use after :func:`fork`.
+
+    The flag is a module global and so is inherited across ``fork()``. A
+    fresh child has not run a terminate handler, whatever it inherited from
+    a parent that had, and must say so before it runs any user code: a
+    stale True makes :func:`_shutdown_cleanup` take its "something is very
+    wrong" :func:`os._exit` branch on the child's first terminate signal.
+    """
+    _should_have_exited[0] = False
+
+
 def human_status(status):
     if (status or 0) < 0:
         try:
