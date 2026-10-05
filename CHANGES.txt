@@ -1,13 +1,11 @@
-Unreleased
-----------
-- `Queue.put()`, `Queue.get()` and `JoinableQueue.put()` raise `ValueError`
-  when the queue is closed, as in `multiprocessing`, instead of an
-  `AssertionError` (or, under `python -O`, silently dropping the item) and an
-  `OSError`. The check runs when the call starts: a thread that is already
-  blocked in `get()` when another thread closes the queue still gets the
-  `OSError` from the closed reader, as in CPython.
-- `Queue.join_thread()` raises `ValueError` instead of an `AssertionError`
-  when the queue has not been closed.
+4.3.1 - 2026-10-05
+------------------
+- Reject bool for Pool numeric args (processes, timeouts, limits) - #460
+- Reject fewer than one pool process - #462
+- Reject a non-positive maxtasksperchild in Pool - #465
+- Refuse to close a Process that is still running -(#467)
+- Raise ValueError when using a closed Queue (#466)
+- Do not report a shutdown SystemExit as the job's result (#464)
 
 
 4.3.0 - 2026-09-26
