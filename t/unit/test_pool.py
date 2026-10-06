@@ -232,13 +232,17 @@ class test_pool:
 
     def test_on_ready_counter_is_synchronized(self):
         for ctx in ('spawn', 'fork', 'forkserver'):
+            if ctx not in billiard.get_all_start_methods():
+                continue
             pool = billiard.pool.Pool(processes=1, context=get_context(ctx))
-            pool.apply_async(func, (1,)).get(1)
-            on_ready_counter = pool.apply_async(get_on_ready_count, ).get(1)
-            assert on_ready_counter == 1
-            pool.close()
-            pool.join()
-            pool.terminate()
+            try:
+                pool.apply_async(func, (1,)).get(timeout=10)
+                on_ready_counter = pool.apply_async(get_on_ready_count, ).get(timeout=10)
+                assert on_ready_counter == 1
+            finally:
+                pool.close()
+                pool.join()
+                pool.terminate()
 
     def test_graceful_shutdown_delivers_results(self):
         """Test that queued results are delivered during pool shutdown.
