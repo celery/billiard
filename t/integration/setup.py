@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 
 try:
     from setuptools import setup
@@ -41,9 +40,9 @@ setup(
     data_files=[],
     zip_safe=False,
     cmdclass={'install': no_install},
-    test_suite='nose.collector',
+    test_suite='pytest',
     build_requires=[
-        'nose',
+        'pytest',
         'coverage>=3.0',
     ],
     classifiers=[

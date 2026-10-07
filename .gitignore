@@ -25,3 +25,5 @@ cover/
 htmlcov/
 .cache/
 .coverage
+.vscode/
+.python-version

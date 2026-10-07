@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """
     billiard._win
     ~~~~~~~~~~~~~
@@ -6,7 +5,6 @@
     Windows utilities to terminate process groups.
 
 """
-from __future__ import absolute_import
 
 import os
 

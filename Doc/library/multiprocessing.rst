@@ -2100,7 +2100,7 @@ Below is an example session with logging turned on::
 
 In addition to having these two logging functions, the multiprocessing also
 exposes two additional logging level attributes. These are  :const:`SUBWARNING`
-and :const:`SUBDEBUG`. The table below illustrates where theses fit in the
+and :const:`SUBDEBUG`. The table below illustrates where these fit in the
 normal level hierarchy.
 
 +----------------+----------------+

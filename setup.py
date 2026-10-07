@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import os
 import sys
 import glob
@@ -19,7 +17,6 @@ if sys.platform == 'win32':
     # distutils.msvc9compiler can raise IOError if the compiler is missing
     ext_errors += (IOError, )
 
-is_jython = sys.platform.startswith('java')
 is_pypy = hasattr(sys, 'pypy_version_info')
 is_py3k = sys.version_info[0] == 3
 
@@ -49,7 +46,6 @@ extras = {}
 
 import re
 re_meta = re.compile(r'__(\w+?)__\s*=\s*(.*)')
-re_vers = re.compile(r'VERSION\s*=\s*\((.*?)\)')
 re_doc = re.compile(r'^"""(.+?)"""')
 rq = lambda s: s.strip("\"'")
 
@@ -59,16 +55,10 @@ def add_default(m):
     return ((attr_name, rq(attr_value)), )
 
 
-def add_version(m):
-    v = list(map(rq, m.groups()[0].split(', ')))
-    return (('VERSION', '.'.join(v[0:4]) + ''.join(v[4:])), )
-
-
 def add_doc(m):
     return (('doc', m.groups()[0]), )
 
 pats = {re_meta: add_default,
-        re_vers: add_version,
         re_doc: add_doc}
 here = os.path.abspath(os.path.dirname(__file__))
 meta_fh = open(os.path.join(here, 'billiard/__init__.py'))
@@ -85,8 +75,8 @@ finally:
     meta_fh.close()
 
 
-if sys.version_info < (2, 7):
-    raise ValueError('Versions of Python before 2.7 are not supported')
+if sys.version_info < (3, 10):
+    raise ValueError('Versions of Python before 3.10 are not supported')
 
 if sys.platform == 'win32':  # Windows
     macros = dict()
@@ -160,7 +150,6 @@ long_description = open(os.path.join(HERE, 'README.rst')).read()
 # -*- Installation Requires -*-
 
 py_version = sys.version_info
-is_jython = sys.platform.startswith('java')
 is_pypy = hasattr(sys, 'pypy_version_info')
 
 
@@ -197,10 +186,9 @@ def run_setup(with_extensions=True):
     packages = setuptools.find_packages(exclude=['ez_setup', 't', 't.*'])
     setuptools.setup(
         name='billiard',
-        version=meta['VERSION'],
+        version=meta['version'],
         description=meta['doc'],
         long_description=long_description,
-        long_description_content_type='text/markdown',
         packages=packages,
         ext_modules=extensions,
         author=meta['author'],
@@ -211,18 +199,18 @@ def run_setup(with_extensions=True):
         url=meta['homepage'],
         zip_safe=False,
         license='BSD',
+        python_requires='>=3.10',
         classifiers=[
             'Development Status :: 5 - Production/Stable',
             'Intended Audience :: Developers',
             'Programming Language :: Python',
             'Programming Language :: C',
-            'Programming Language :: Python :: 2',
-            'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
-            'Programming Language :: Python :: 3.7',
-            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
+            'Programming Language :: Python :: 3.12',
+            'Programming Language :: Python :: 3.13',
+            'Programming Language :: Python :: 3.14',
             'Programming Language :: Python :: Implementation :: CPython',
             'Programming Language :: Python :: Implementation :: PyPy',
             'Operating System :: Microsoft :: Windows',
@@ -235,7 +223,7 @@ def run_setup(with_extensions=True):
     )
 
 try:
-    run_setup(not (is_jython or is_pypy or is_py3k))
+    run_setup(not (is_pypy or is_py3k))
 except BaseException:
     if _is_build_command(sys.argv):
         import traceback

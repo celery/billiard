@@ -1,5 +1,3 @@
-from __future__ import absolute_import, print_function
-
 import errno
 import os
 import selectors
@@ -33,7 +31,7 @@ UNSIGNED_STRUCT = struct.Struct('Q')     # large enough for pid_t
 #
 
 
-class ForkServer(object):
+class ForkServer:
 
     def __init__(self):
         self._forkserver_address = None

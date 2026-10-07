@@ -1,18 +1,19 @@
-from __future__ import absolute_import
-
 import os
 import pytest
 import signal
 
 from contextlib import contextmanager
 from time import time
+from unittest.mock import patch, Mock, call
 
-from case import Mock, call, patch, skip
+from t import skip
 
 from billiard.common import (
     _shutdown_cleanup,
+    clear_terminate_handler_fired,
     reset_signals,
     restart_state,
+    terminate_handler_fired,
 )
 
 
@@ -78,6 +79,44 @@ class test_reset_signals:
                         call(signo(sig)) for sig in default
                     ])
                     yield GET, SET
+
+
+@skip.if_win32()
+class test_terminate_handler_fired:
+    """The whole contract of the flag the workloop branches on.
+
+    ``_should_have_exited`` is restored around every test by the autouse
+    fixture in ``t/unit/conftest.py``; without it the first assertion here
+    would depend on which tests ran before.
+    """
+
+    def test_false_before_any_handler_runs(self):
+        assert terminate_handler_fired() is False
+
+    def test_true_after_shutdown_cleanup(self):
+        with patch('sys.exit'):
+            _shutdown_cleanup(signal.SIGTERM, Mock())
+        assert terminate_handler_fired() is True
+
+    def test_false_again_after_clear(self):
+        with patch('sys.exit'):
+            _shutdown_cleanup(signal.SIGTERM, Mock())
+        clear_terminate_handler_fired()
+        assert terminate_handler_fired() is False
+
+    def test_reset_signals_does_not_clear_it(self):
+        """Clearing is a separate, explicitly called concern.
+
+        A child clears the flag via clear_terminate_handler_fired() at the
+        top of Worker.after_fork(), not as a hidden side effect of
+        installing signal handlers. Downstream callers of reset_signals()
+        should not have shutdown state changed underneath them.
+        """
+        with patch('sys.exit'):
+            _shutdown_cleanup(signal.SIGTERM, Mock())
+        with patch('signal.signal'), patch('signal.getsignal'):
+            reset_signals()
+        assert terminate_handler_fired() is True
 
 
 class test_restart_state:

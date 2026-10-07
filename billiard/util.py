@@ -6,7 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk --- see COPYING.txt
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 import sys
 import errno
@@ -129,7 +128,12 @@ def get_logger():
     global _logger
     import logging
 
-    logging._acquireLock()
+    try:
+        # Python 3.13+
+        acquire, release = logging._prepareFork, logging._afterFork
+    except AttributeError:
+        acquire, release = logging._acquireLock, logging._releaseLock
+    acquire()
     try:
         if not _logger:
 
@@ -146,7 +150,7 @@ def get_logger():
                 atexit._exithandlers.remove((_exit_function, (), {}))
                 atexit._exithandlers.append((_exit_function, (), {}))
     finally:
-        logging._releaseLock()
+        release()
 
     return _logger
 
@@ -204,7 +208,7 @@ def set_pdeathsig(sig):
     """
     if not sys.platform.startswith('linux'):
         # currently we support only linux platform.
-        raise OSError()
+        raise OSError("pdeathsig is only supported on linux")
     try:
         if 'cffi' in sys.modules:
             ffi = cffi.FFI()
@@ -213,9 +217,9 @@ def set_pdeathsig(sig):
             C.prctl(PR_SET_PDEATHSIG, ffi.cast("int", sig))
         else:
             libc = ctypes.cdll.LoadLibrary("libc.so.6")
-            libc.prctl(PR_SET_PDEATHSIG, sig)
-    except Exception:
-        raise OSError()
+            libc.prctl(PR_SET_PDEATHSIG, ctypes.c_int(sig))
+    except Exception as e:
+        raise OSError("An error occurred while setting pdeathsig") from e
 
 def _eintr_retry(func):
     '''

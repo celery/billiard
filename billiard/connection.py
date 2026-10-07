@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # A higher level module for using sockets (or Windows named pipes)
 #
@@ -7,8 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-
-from __future__ import absolute_import
 
 import errno
 import io
@@ -26,7 +23,7 @@ from . import util
 from . import AuthenticationError, BufferTooShort
 from ._ext import _billiard
 from .compat import setblocking, send_offset
-from .five import monotonic
+from time import monotonic
 from .reduction import ForkingPickler
 
 try:
@@ -129,13 +126,13 @@ def address_type(address):
 #
 
 
-class _SocketContainer(object):
+class _SocketContainer:
 
     def __init__(self, sock):
         self.sock = sock
 
 
-class _ConnectionBase(object):
+class _ConnectionBase:
     _handle = None
 
     def __init__(self, handle, readable=True, writable=True):
@@ -336,22 +333,28 @@ if _winapi:
                     ov, err = _winapi.ReadFile(
                         self._handle, bsize, overlapped=True,
                     )
+                    result = None
+                    exc_to_raise = None
                     try:
                         if err == _winapi.ERROR_IO_PENDING:
                             waitres = _winapi.WaitForMultipleObjects(
                                 [ov.event], False, INFINITE)
                             assert waitres == WAIT_OBJECT_0
-                    except:
+                    except Exception as e:
                         ov.cancel()
-                        raise
+                        exc_to_raise = e
                     finally:
                         nread, err = ov.GetOverlappedResult(True)
                         if err == 0:
                             f = io.BytesIO()
                             f.write(ov.getbuffer())
-                            return f
+                            result = f
                         elif err == _winapi.ERROR_MORE_DATA:
-                            return self._get_more_data(ov, maxsize)
+                            result = self._get_more_data(ov, maxsize)
+                    if result is not None:
+                        return result
+                    if exc_to_raise is not None:
+                        raise exc_to_raise
                 except OSError as e:
                     if e.winerror == _winapi.ERROR_BROKEN_PIPE:
                         raise EOFError
@@ -468,7 +471,7 @@ class Connection(_ConnectionBase):
 # Public functions
 #
 
-class Listener(object):
+class Listener:
     '''
     Returns a listener object.
 
@@ -625,7 +628,7 @@ else:
 #
 
 
-class SocketListener(object):
+class SocketListener:
     '''
     Representation of a socket which is bound to an address and listening
     '''
@@ -691,7 +694,7 @@ def SocketClient(address):
 
 if sys.platform == 'win32':
 
-    class PipeListener(object):
+    class PipeListener:
         '''
         Representation of a named pipe
         '''
@@ -816,7 +819,7 @@ def answer_challenge(connection, authkey):
 #
 
 
-class ConnectionWrapper(object):
+class ConnectionWrapper:
 
     def __init__(self, conn, dumps, loads):
         self._conn = conn
@@ -1001,7 +1004,7 @@ else:
                 timeout = deadline - monotonic()
 
 #
-# Make connection and socket objects sharable if possible
+# Make connection and socket objects shareable if possible
 #
 
 if sys.platform == 'win32':

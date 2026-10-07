@@ -1,14 +1,13 @@
-from __future__ import absolute_import
-
 import sys
 import traceback
+import types
 
 __all__ = ['ExceptionInfo', 'Traceback']
 
 DEFAULT_MAX_FRAMES = sys.getrecursionlimit() // 8
 
 
-class _Code(object):
+class _Code:
 
     def __init__(self, code):
         self.co_filename = code.co_filename
@@ -24,9 +23,24 @@ class _Code(object):
         self.co_nlocals = code.co_nlocals
         self.co_stacksize = code.co_stacksize
         self.co_varnames = ()
+        if sys.version_info >= (3, 11):
+            self.co_qualname = code.co_qualname
+            self._co_positions = list(code.co_positions())
+
+    @property
+    def __class__(self):
+        return types.CodeType
+
+    def __reduce__(self):
+        return _Code.__new__, (_Code,), self.__dict__
+
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self._co_positions.__iter__
 
 
-class _Frame(object):
+class _Frame:
     Code = _Code
 
     def __init__(self, frame):
@@ -48,14 +62,41 @@ class _Frame(object):
         # don't want to hit https://bugs.python.org/issue21967
         self.f_restricted = False
 
+    @property
+    def __class__(self):
+        return types.FrameType
 
-class _Object(object):
+    def __reduce__(self):
+        return _Frame.__new__, (_Frame,), self.__dict__
+
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self.f_code.co_positions
+
+
+class _Object:
 
     def __init__(self, **kw):
         [setattr(self, k, v) for k, v in kw.items()]
 
+    if sys.version_info >= (3, 11):
+        __default_co_positions__ = ((None, None, None, None),)
 
-class _Truncated(object):
+        @property
+        def co_positions(self):
+            return getattr(
+                self,
+                "_co_positions",
+                self.__default_co_positions__
+            ).__iter__
+
+        @co_positions.setter
+        def co_positions(self, value):
+            self._co_positions = value  # noqa
+
+
+class _Truncated:
 
     def __init__(self):
         self.tb_lineno = -1
@@ -70,8 +111,20 @@ class _Truncated(object):
         self.tb_next = None
         self.tb_lasti = 0
 
+    @property
+    def __class__(self):
+        return types.TracebackType
 
-class Traceback(object):
+    def __reduce__(self):
+        return _Truncated.__new__, (_Truncated,), self.__dict__
+
+    if sys.version_info >= (3, 11):
+        @property
+        def co_positions(self):
+            return self.tb_frame.co_positions
+
+
+class Traceback:
     Frame = _Frame
 
     def __init__(self, tb, max_frames=DEFAULT_MAX_FRAMES, depth=0):
@@ -85,8 +138,41 @@ class Traceback(object):
             else:
                 self.tb_next = _Truncated()
 
+    @property
+    def __class__(self):
+        return types.TracebackType
 
-class ExceptionInfo(object):
+    def __reduce__(self):
+        return Traceback.__new__, (Traceback,), self.__dict__
+
+
+class RemoteTraceback(Exception):
+    def __init__(self, tb):
+        self.tb = tb
+
+    def __str__(self):
+        return self.tb
+
+
+class ExceptionWithTraceback(Exception):
+    def __init__(self, exc, tb):
+        self.exc = exc
+        self.tb = '\n"""\n%s"""' % tb
+        super().__init__()
+
+    def __str__(self):
+        return self.tb
+
+    def __reduce__(self):
+        return rebuild_exc, (self.exc, self.tb)
+
+
+def rebuild_exc(exc, tb):
+    exc.__cause__ = RemoteTraceback(tb)
+    return exc
+
+
+class ExceptionInfo:
     """Exception wrapping an exception and its traceback.
 
     :param exc_info: The exception info tuple as returned by
@@ -110,15 +196,16 @@ class ExceptionInfo(object):
     internal = False
 
     def __init__(self, exc_info=None, internal=False):
-        self.type, self.exception, tb = exc_info or sys.exc_info()
+        self.type, exception, tb = exc_info or sys.exc_info()
         try:
             self.tb = Traceback(tb)
             self.traceback = ''.join(
-                traceback.format_exception(self.type, self.exception, tb),
+                traceback.format_exception(self.type, exception, tb),
             )
             self.internal = internal
         finally:
-            del(tb)
+            del tb
+        self.exception = ExceptionWithTraceback(exception, self.traceback)
 
     def __str__(self):
         return self.traceback

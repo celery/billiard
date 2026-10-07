@@ -1,35 +1,23 @@
-# -*- coding: utf-8 -*-
 """
 This module contains utilities added by billiard, to keep
 "non-core" functionality out of ``.util``."""
-from __future__ import absolute_import
 
 import os
 import signal
 import sys
 
-import pickle as pypickle
-try:
-    import cPickle as cpickle
-except ImportError:  # pragma: no cover
-    cpickle = None   # noqa
+import pickle
 
 from .exceptions import RestartFreqExceeded
-from .five import monotonic
+from time import monotonic
 
-pickle = cpickle or pypickle
 pickle_load = pickle.load
 pickle_loads = pickle.loads
 
 # cPickle.loads does not support buffer() objects,
 # but we can just create a StringIO and use load.
-if sys.version_info[0] == 3:
-    from io import BytesIO
-else:
-    try:
-        from cStringIO import StringIO as BytesIO  # noqa
-    except ImportError:
-        from StringIO import StringIO as BytesIO  # noqa
+from io import BytesIO
+
 
 SIGMAP = dict(
     (getattr(signal, n), n) for n in dir(signal) if n.startswith('SIG')
@@ -59,7 +47,6 @@ TERMSIGS_DEFAULT = {
     'SIGQUIT',
     TERM_SIGNAME,
     'SIGUSR1',
-    'SIGUSR2'
 }
 
 TERMSIGS_FULL = {
@@ -85,6 +72,32 @@ TERMSIGS_FULL = {
 #: went wrong while terminating the process, and :func:`os._exit`
 #: must be called ASAP.
 _should_have_exited = [False]
+
+
+def terminate_handler_fired():
+    """Has this process's own terminate-signal handler already fired?
+
+    A `SystemExit` seen after that point was raised by
+    :func:`_shutdown_cleanup`, not by whatever the process happened to be
+    running, and means the process is on its way out.
+
+    Strictly about *this* process having already run the handler -- a
+    process that has been sent a terminate signal but has not yet handled
+    it answers False, which is why this is not named ``terminating()``.
+    """
+    return _should_have_exited[0]
+
+
+def clear_terminate_handler_fired():
+    """Forget that a terminate handler ran -- for use after :func:`fork`.
+
+    The flag is a module global and so is inherited across ``fork()``. A
+    fresh child has not run a terminate handler, whatever it inherited from
+    a parent that had, and must say so before it runs any user code: a
+    stale True makes :func:`_shutdown_cleanup` take its "something is very
+    wrong" :func:`os._exit` branch on the child's first terminate signal.
+    """
+    _should_have_exited[0] = False
 
 
 def human_status(status):
@@ -142,7 +155,7 @@ def reset_signals(handler=_shutdown_cleanup, full=False):
             maybe_setsignal(num, signal.SIG_IGN)
 
 
-class restart_state(object):
+class restart_state:
     RestartFreqExceeded = RestartFreqExceeded
 
     def __init__(self, maxR, maxT):

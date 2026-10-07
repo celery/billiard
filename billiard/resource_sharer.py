@@ -7,7 +7,6 @@
 # to the resource sharer, sends the identifier and its pid, and then receives
 # the resource.
 #
-from __future__ import absolute_import
 
 import os
 import signal
@@ -25,7 +24,7 @@ __all__ = ['stop']
 if sys.platform == 'win32':
     __all__ += ['DupSocket']
 
-    class DupSocket(object):
+    class DupSocket:
         '''Picklable wrapper for a socket.'''
 
         def __init__(self, sock):
@@ -45,7 +44,7 @@ if sys.platform == 'win32':
 else:
     __all__ += ['DupFd']
 
-    class DupFd(object):
+    class DupFd:
         '''Wrapper for fd which can be used at any time.'''
         def __init__(self, fd):
             new_fd = os.dup(fd)
@@ -63,8 +62,8 @@ else:
                 return reduction.recv_handle(conn)
 
 
-class _ResourceSharer(object):
-    '''Manager for resouces using background thread.'''
+class _ResourceSharer:
+    '''Manager for resources using background thread.'''
     def __init__(self):
         self._key = 0
         self._cache = {}

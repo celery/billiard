@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-from __future__ import absolute_import
+#!/usr/bin/env python3
 
 #
 # Unit tests for the multiprocessing package
@@ -15,14 +13,16 @@ import gc
 import array
 import random
 import logging
-from nose import SkipTest
-from test import test_support
 from StringIO import StringIO
+
+import pytest
+from test import test_support
+
 try:
     from billiard._ext import _billiard
 except ImportError as exc:
-    raise SkipTest(exc)
-# import threading after _billiard to raise a more revelant error
+    raise pytest.skip(exc)
+# import threading after _billiard to raise a more relevant error
 # message: "No module named _billiard". _billiard is not compiled
 # without thread support.
 import threading
@@ -31,7 +31,7 @@ import threading
 try:
     import billiard.synchronize
 except ImportError as exc:
-    raise SkipTest(exc)
+    raise pytest.skip(exc)
 
 import billiard.dummy
 import billiard.connection
@@ -83,7 +83,7 @@ except ImportError:
     ctypes_copy = None
 
 
-class TimingWrapper(object):
+class TimingWrapper:
     """Creates a wrapper for a function which records the
     time it takes to finish"""
 
@@ -99,7 +99,7 @@ class TimingWrapper(object):
             self.elapsed = time.time() - t
 
 
-class BaseTestCase(object):
+class BaseTestCase:
     """Base class for test cases"""
     ALLOWED_TYPES = ('processes', 'manager', 'threads')
 
@@ -170,30 +170,30 @@ class _TestProcesses(BaseTestCase):
         current = self.current_process()
 
         if self.TYPE != 'threads':
-            self.assertEquals(p.authkey, current.authkey)
-        self.assertEquals(p.is_alive(), False)
-        self.assertEquals(p.daemon, True)
+            self.assertEqual(p.authkey, current.authkey)
+        self.assertEqual(p.is_alive(), False)
+        self.assertEqual(p.daemon, True)
         self.assertNotIn(p, self.active_children())
         self.assertTrue(type(self.active_children()) is list)
         self.assertEqual(p.exitcode, None)
 
         p.start()
 
-        self.assertEquals(p.exitcode, None)
-        self.assertEquals(p.is_alive(), True)
+        self.assertEqual(p.exitcode, None)
+        self.assertEqual(p.is_alive(), True)
         self.assertIn(p, self.active_children())
 
-        self.assertEquals(q.get(), args[1:])
-        self.assertEquals(q.get(), kwargs)
-        self.assertEquals(q.get(), p.name)
+        self.assertEqual(q.get(), args[1:])
+        self.assertEqual(q.get(), kwargs)
+        self.assertEqual(q.get(), p.name)
         if self.TYPE != 'threads':
-            self.assertEquals(q.get(), current.authkey)
-            self.assertEquals(q.get(), p.pid)
+            self.assertEqual(q.get(), current.authkey)
+            self.assertEqual(q.get(), p.pid)
 
         p.join()
 
-        self.assertEquals(p.exitcode, 0)
-        self.assertEquals(p.is_alive(), False)
+        self.assertEqual(p.exitcode, 0)
+        self.assertEqual(p.is_alive(), False)
         self.assertNotIn(p, self.active_children())
 
     def _test_terminate(self):
@@ -510,7 +510,7 @@ class _TestQueue(BaseTestCase):
         queue = self.JoinableQueue()
 
         if sys.version_info < (2, 5) and not hasattr(queue, 'task_done'):
-            self.skipTest("requires 'queue.task_done()' method")
+            pytest.skip("requires 'queue.task_done()' method")
 
         workers = [self.Process(target=self._test_task_done, args=(queue,))
                    for i in xrange(4)]
@@ -750,7 +750,7 @@ class _TestEvent(BaseTestCase):
         event = self.Event()
         wait = TimingWrapper(event.wait)
 
-        # Removed temporaily, due to API shear, this does not
+        # Removed temporarily, due to API shear, this does not
         # work with threading._Event objects. is_set == isSet
         self.assertEqual(event.is_set(), False)
 
@@ -1103,7 +1103,7 @@ class _TestZZZNumberOfObjects(BaseTestCase):
 from billiard.managers import BaseManager, BaseProxy, RemoteError  # noqa
 
 
-class FooBar(object):
+class FooBar:
 
     def f(self):
         return 'f()'
@@ -1796,7 +1796,7 @@ def create_test_cases(Mixin, type):
     return result
 
 
-class ProcessesMixin(object):
+class ProcessesMixin:
     TYPE = 'processes'
     Process = billiard.Process
     locals().update(get_attributes(billiard, (
@@ -1810,7 +1810,7 @@ testcases_processes = create_test_cases(ProcessesMixin, type='processes')
 globals().update(testcases_processes)
 
 
-class ManagerMixin(object):
+class ManagerMixin:
     TYPE = 'manager'
     Process = billiard.Process
     manager = object.__new__(billiard.managers.SyncManager)
@@ -1824,7 +1824,7 @@ testcases_manager = create_test_cases(ManagerMixin, type='manager')
 globals().update(testcases_manager)
 
 
-class ThreadsMixin(object):
+class ThreadsMixin:
     TYPE = 'threads'
     Process = billiard.dummy.Process
     locals().update(get_attributes(billiard.dummy, (
@@ -1855,7 +1855,7 @@ class OtherTest(unittest.TestCase):
 
     def test_answer_challenge_auth_failure(self):
 
-        class _FakeConnection(object):
+        class _FakeConnection:
 
             def __init__(self):
                 self.count = 0
@@ -1936,7 +1936,7 @@ def pool_in_process():
     pool.map(_afunc, [1, 2, 3, 4, 5, 6, 7])
 
 
-class _file_like(object):
+class _file_like:
     def __init__(self, delegate):
         self._delegate = delegate
         self._pid = None
@@ -1989,7 +1989,7 @@ def test_main(run=None):
         try:
             billiard.RLock()
         except OSError:
-            raise SkipTest("OSError raises on RLock creation, see issue 3111!")
+            raise pytest.skip("OSError raises on RLock creation, see issue 3111!")
 
     if run is None:
         from test.test_support import run_unittest as run

@@ -7,7 +7,6 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 #
 # Imports
@@ -27,7 +26,8 @@ from . import reduction
 from . import util
 from . import get_context
 
-from .five import Queue, items, monotonic
+from queue import Queue
+from time import monotonic
 
 __all__ = ['BaseManager', 'SyncManager', 'BaseProxy', 'Token']
 
@@ -60,9 +60,9 @@ if view_types[0] is not list:  # only needed in Py3.0
 #
 
 
-class Token(object):
+class Token:
     '''
-    Type to uniquely indentify a shared object
+    Type to uniquely identify a shared object
     '''
     __slots__ = ('typeid', 'address', 'id')
 
@@ -141,7 +141,7 @@ def public_methods(obj):
 #
 
 
-class Server(object):
+class Server:
     '''
     Server class which runs in a process controlled by a manager object
     '''
@@ -420,7 +420,7 @@ class Server(object):
 #
 
 
-class State(object):
+class State:
     __slots__ = ['value']
     INITIAL = 0
     STARTED = 1
@@ -440,7 +440,7 @@ listener_client = {
 #
 
 
-class BaseManager(object):
+class BaseManager:
     '''
     Base class for managers
     '''
@@ -641,7 +641,7 @@ class BaseManager(object):
         )
 
         if method_to_typeid:
-            for key, value in items(method_to_typeid):
+            for key, value in method_to_typeid.items():
                 assert type(key) is str, '%r is not a string' % key
                 assert type(value) is str, '%r is not a string' % value
 
@@ -681,7 +681,7 @@ class ProcessLocalSet(set):
 #
 
 
-class BaseProxy(object):
+class BaseProxy:
     '''
     A base for proxies of shared objects
     '''
@@ -925,22 +925,22 @@ def AutoProxy(token, serializer, manager=None, authkey=None,
 #
 
 
-class Namespace(object):
+class Namespace:
 
     def __init__(self, **kwds):
         self.__dict__.update(kwds)
 
     def __repr__(self):
-        items = list(self.__dict__.items())
+        _items = list(self.__dict__.items())
         temp = []
-        for name, value in items:
+        for name, value in _items:
             if not name.startswith('_'):
                 temp.append('%s=%r' % (name, value))
         temp.sort()
         return '%s(%s)' % (self.__class__.__name__, ', '.join(temp))
 
 
-class Value(object):
+class Value:
 
     def __init__(self, typecode, value, lock=True):
         self._typecode = typecode

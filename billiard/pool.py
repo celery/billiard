@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # Module providing the `Pool` class for managing a process pool
 #
@@ -7,7 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 #
 # Imports
@@ -29,7 +27,8 @@ from functools import partial
 from . import cpu_count, get_context
 from . import util
 from .common import (
-    TERM_SIGNAL, human_status, pickle_loads, reset_signals, restart_state,
+    TERM_SIGNAL, clear_terminate_handler_fired, human_status, pickle_loads,
+    reset_signals, restart_state, terminate_handler_fired,
 )
 from .compat import get_errno, mem_rss, send_offset
 from .einfo import ExceptionInfo
@@ -43,7 +42,8 @@ from .exceptions import (
     TimeoutError,
     WorkerLostError,
 )
-from .five import Empty, Queue, range, values, reraise, monotonic
+from time import monotonic
+from queue import Queue, Empty
 from .util import Finalize, debug, warning
 
 MAXMEM_USED_FMT = """\
@@ -211,7 +211,7 @@ class MaybeEncodingError(Exception):
     def __init__(self, exc, value):
         self.exc = repr(exc)
         self.value = repr(value)
-        super(MaybeEncodingError, self).__init__(self.exc, self.value)
+        super().__init__(self.exc, self.value)
 
     def __repr__(self):
         return "<%s: %s>" % (self.__class__.__name__, str(self))
@@ -233,7 +233,7 @@ def soft_timeout_sighandler(signum, frame):
 #
 
 
-class Worker(object):
+class Worker:
 
     def __init__(self, inq, outq, synq=None, initializer=None, initargs=(),
                  maxtasks=None, sentinel=None, on_exit=None,
@@ -272,6 +272,7 @@ class Worker(object):
             self.inq, self.outq, self.synq, self.initializer,
             self.initargs, self.maxtasks, self._shutdown, self.on_exit,
             self.sigprotection, self.wrap_exception, self.max_memory_per_child,
+            self.on_ready_counter
         )
 
     def __call__(self):
@@ -358,10 +359,55 @@ class Worker(object):
                         confirm = wait_for_syn(job)
                         if not confirm:
                             continue  # received NACK
+                    exit_exc = None
                     try:
                         result = (True, prepare_result(fun(*args, **kwargs)))
-                    except Exception:
+                    except BaseException as exc:
+                        if terminate_handler_fired():
+                            # Our own signal handler has already run in this
+                            # process -- see common._shutdown_cleanup -- so we
+                            # are unwinding towards exit and this job did not
+                            # finish. There is no result to report: say
+                            # nothing and let the process go, and the parent
+                            # accounts for the job as lost with the worker.
+                            # Reporting it would make an interrupted job look
+                            # completed-with-failure, and a caller that
+                            # acknowledges work only once it is done -- Celery
+                            # with task_acks_late -- would then acknowledge a
+                            # task nothing ever ran to the end.
+                            #
+                            # Deliberately not narrowed to SystemExit. If the
+                            # job's own cleanup raises while that SystemExit
+                            # unwinds -- a finally, or an __exit__ that fails,
+                            # say a rollback on a connection the teardown has
+                            # already closed -- the exception arriving here is
+                            # that new error, and the job is every bit as
+                            # unfinished (reported by @kratos0718 on #464).
+                            #
+                            # Known limitation, in the safer direction: a job
+                            # that *swallows* the shutdown SystemExit leaves
+                            # this flag set with the worker still alive, so a
+                            # later job's own exception is reported as a lost
+                            # worker rather than as itself. A spurious loss is
+                            # redelivered rather than silently acked, and such
+                            # a job has already defeated shutdown. Do not put
+                            # the isinstance check back without first handling
+                            # the cleanup-raises case above.
+                            raise
                         result = (False, ExceptionInfo())
+                        if isinstance(exc, (SystemExit, KeyboardInterrupt)):
+                            # Raised by the job itself: a result, and one the
+                            # caller should see rather than a WorkerLostError
+                            # (#427). Report it, then leave instead of
+                            # re-entering the shared inqueue.
+                            #
+                            # Reached only when the flag is clear, so these
+                            # really are the job's own: _shutdown_cleanup
+                            # raises SystemExit and sets the flag first, and
+                            # after_fork sets SIGINT to SIG_IGN, so a worker's
+                            # KeyboardInterrupt can only have come from the
+                            # job.
+                            exit_exc = exc
                     try:
                         put((READY, (job, i, result, inqW_fd)))
                     except Exception as exc:
@@ -375,6 +421,8 @@ class Worker(object):
                         finally:
                             del(tb)
                     completed += 1
+                    if exit_exc is not None:
+                        raise exit_exc
                     if max_memory_per_child > 0:
                         used_kb = mem_rss()
                         if used_kb <= 0:
@@ -412,6 +460,14 @@ class Worker(object):
         return False
 
     def after_fork(self):
+        # First, before self.initializer runs any user code: this child has
+        # not handled a terminate signal, whatever it inherited across the
+        # fork. Doing this here rather than as a side effect of
+        # reset_signals() below also closes the window where a signal
+        # arriving during a slow initializer (Celery's process_initializer)
+        # would be handled with the inherited flag still set.
+        clear_terminate_handler_fired()
+
         if hasattr(self.inq, '_writer'):
             self.inq._writer.close()
         if hasattr(self.outq, '_reader'):
@@ -536,7 +592,7 @@ class Supervisor(PoolThread):
 
     def __init__(self, pool):
         self.pool = pool
-        super(Supervisor, self).__init__()
+        super().__init__()
 
     def body(self):
         debug('worker handler starting')
@@ -556,8 +612,8 @@ class Supervisor(PoolThread):
                     pool._maintain_pool()
                     time.sleep(0.1)
 
-            # Keep maintaing workers until the cache gets drained, unless
-            # the pool is termianted
+            # Keep maintaining workers until the cache gets drained, unless
+            # the pool is terminated
             pool.restart_state = prev_state
             while self._state == RUN and pool._state == RUN:
                 pool._maintain_pool()
@@ -577,7 +633,7 @@ class TaskHandler(PoolThread):
         self.outqueue = outqueue
         self.pool = pool
         self.cache = cache
-        super(TaskHandler, self).__init__()
+        super().__init__()
 
     def body(self):
         cache = self.cache
@@ -652,7 +708,7 @@ class TimeoutHandler(PoolThread):
         self.t_soft = t_soft
         self.t_hard = t_hard
         self._it = None
-        super(TimeoutHandler, self).__init__()
+        super().__init__()
 
     def _process_by_pid(self, pid):
         return next((
@@ -793,7 +849,7 @@ class ResultHandler(PoolThread):
         self.on_job_ready = on_job_ready
         self.on_ready_counters = on_ready_counters
         self._make_methods()
-        super(ResultHandler, self).__init__()
+        super().__init__()
 
     def on_stop_not_started(self):
         # used when pool started without result handler thread.
@@ -960,7 +1016,7 @@ class ResultHandler(PoolThread):
               len(cache), self._state)
 
 
-class Pool(object):
+class Pool:
     '''
     Class which supports an async version of applying functions to arguments.
     '''
@@ -990,6 +1046,28 @@ class Pool(object):
                  max_memory_per_child=None,
                  enable_timeouts=False,
                  **kwargs):
+        # bool subclasses int; processes=True would silently spawn 1 worker,
+        # and timeout/soft_timeout/lost_worker_timeout=True would become 1s.
+        for name, value in (
+            ("processes", processes),
+            ("maxtasksperchild", maxtasksperchild),
+            ("timeout", timeout),
+            ("soft_timeout", soft_timeout),
+            ("lost_worker_timeout", lost_worker_timeout),
+            ("max_memory_per_child", max_memory_per_child),
+            ("max_restarts", max_restarts),
+            ("max_restart_freq", max_restart_freq),
+        ):
+            if isinstance(value, bool):
+                raise TypeError(
+                    f"{name} must be an int or float, not bool (got {value!r})"
+                )
+        if processes is not None and processes < 1:
+            raise ValueError("Number of processes must be at least 1")
+        if maxtasksperchild is not None and (
+                not isinstance(maxtasksperchild, int) or maxtasksperchild < 1):
+            raise ValueError("maxtasksperchild must be a positive int or None")
+
         self._ctx = context or get_context()
         self.synack = synack
         self._setup_queues()
@@ -1240,7 +1318,7 @@ class Pool(object):
                     elif sched_for and not sched_for._is_alive():
                         self.on_job_process_down(job, sched_for.pid)
 
-            for worker in values(cleaned):
+            for worker in cleaned.values():
                 if self.on_process_down:
                     if not shutdown:
                         self._process_cleanup_queues(worker)
@@ -1263,8 +1341,8 @@ class Pool(object):
     def mark_as_worker_lost(self, job, exitcode):
         try:
             raise WorkerLostError(
-                'Worker exited prematurely: {0}.'.format(
-                    human_status(exitcode)),
+                'Worker exited prematurely: {0} Job: {1}.'.format(
+                    human_status(exitcode), job._job),
             )
         except WorkerLostError:
             job._set(None, (False, ExceptionInfo()))
@@ -1308,7 +1386,7 @@ class Pool(object):
                 yield worker
 
     def _worker_active(self, worker):
-        for job in values(self._cache):
+        for job in self._cache.values():
             if worker.pid in job.worker_pids():
                 return True
         return False
@@ -1355,9 +1433,7 @@ class Pool(object):
                 raise
             except OSError as exc:
                 if get_errno(exc) == errno.ENOMEM:
-                    reraise(MemoryError,
-                            MemoryError(str(exc)),
-                            sys.exc_info()[2])
+                    raise MemoryError from exc
                 raise
 
     def _setup_queues(self):
@@ -1628,7 +1704,7 @@ class Pool(object):
         debug('pool join complete')
 
     def restart(self):
-        for e in values(self._poolctrl):
+        for e in self._poolctrl.values():
             e.set()
 
     @staticmethod
@@ -1661,7 +1737,12 @@ class Pool(object):
         debug('helping task handler/workers to finish')
         cls._help_stuff_finish(*help_stuff_finish_args)
 
-        result_handler.terminate()
+        # Send the sentinel to the result handler but don't terminate the
+        # result handler thread. This allows the thread to continue
+        # processing results in ResultHandler.finish_at_shutdown() until
+        # the cache is drained, ensuring that all task results are properly
+        # stored. A call to ResultHandler.terminate() is not necessary here
+        # because the thread will exit naturally when the cache becomes empty.
         cls._set_result_sentinel(outqueue, pool)
 
         if timeout_handler is not None:
@@ -1708,7 +1789,7 @@ class Pool(object):
 #
 
 
-class ApplyResult(object):
+class ApplyResult:
     _worker_lost = None
     _write_to = None
     _scheduled_for = None
@@ -1744,13 +1825,13 @@ class ApplyResult(object):
         cache[self._job] = self
 
     def __repr__(self):
-        return '<%s: {id} ack:{ack} ready:{ready}>'.format(
-            self.__class__.__name__,
+        return '<{name}: {id} ack:{ack} ready:{ready}>'.format(
+            name=self.__class__.__name__,
             id=self._job, ack=self._accepted, ready=self.ready(),
         )
 
     def ready(self):
-        return self._event.isSet()
+        return self._event.is_set()
 
     def accepted(self):
         return self._accepted
@@ -1794,6 +1875,8 @@ class ApplyResult(object):
         if fun:
             try:
                 fun(*args, **kwargs)
+            except MemoryError:
+                raise
             except self._callbacks_propagate:
                 raise
             except Exception as exc:
@@ -1853,13 +1936,8 @@ class ApplyResult(object):
                 except Exception:
                     response = NACK
                     # ignore other errors
-                finally:
-                    if self._send_ack and synqW_fd:
-                        return self._send_ack(
-                            response, pid, self._job, synqW_fd
-                        )
             if self._send_ack and synqW_fd:
-                self._send_ack(response, pid, self._job, synqW_fd)
+                return self._send_ack(response, pid, self._job, synqW_fd)
 
 #
 # Class whose instances are returned by `Pool.map_async()`
@@ -1927,7 +2005,7 @@ class MapResult(ApplyResult):
 #
 
 
-class IMapIterator(object):
+class IMapIterator:
     _worker_lost = None
 
     def __init__(self, cache, lost_worker_timeout=LOST_WORKER_TIMEOUT):

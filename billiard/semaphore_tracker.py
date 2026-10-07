@@ -10,7 +10,6 @@
 # the next reboot.  Without this semaphore tracker process, "killall
 # python" would probably leave unlinked semaphores.
 #
-from __future__ import absolute_import
 
 import io
 import os
@@ -28,7 +27,7 @@ from .compat import spawnv_passfds
 __all__ = ['ensure_running', 'register', 'unregister']
 
 
-class SemaphoreTracker(object):
+class SemaphoreTracker:
 
     def __init__(self):
         self._lock = threading.Lock()

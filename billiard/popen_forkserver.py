@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import io
 import os
 
@@ -16,7 +14,7 @@ __all__ = ['Popen']
 #
 
 
-class _DupFd(object):
+class _DupFd:
 
     def __init__(self, ind):
         self.ind = ind
@@ -35,7 +33,7 @@ class Popen(popen_fork.Popen):
 
     def __init__(self, process_obj):
         self._fds = []
-        super(Popen, self).__init__(process_obj)
+        super().__init__(process_obj)
 
     def duplicate_for_child(self, fd):
         self._fds.append(fd)

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import os
 import sys
 import errno
@@ -13,7 +11,7 @@ __all__ = ['Popen']
 #
 
 
-class Popen(object):
+class Popen:
     method = 'fork'
     sentinel = None
 

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import os
 import sys
 from billiard import get_context, Process, Queue
@@ -16,7 +14,7 @@ class test_spawn:
         p = ctx.Process(target=task_from_process, args=('opa',))
         p.start()
         p.join()
-        return p.exitcode
+        assert p.exitcode == 0
 
     @pytest.mark.skipif(not sys.platform.startswith('linux'),
                         reason='set_pdeathsig() is supported only in Linux')

@@ -1,11 +1,9 @@
-from __future__ import absolute_import
-
-import errno
 import numbers
 import os
+import subprocess
 import sys
 
-from .five import range, zip_longest
+from itertools import zip_longest
 
 if sys.platform == 'win32':
     try:
@@ -20,31 +18,15 @@ try:
 except ImportError:  # pragma: no cover
     resource = None
 
-try:
-    from io import UnsupportedOperation
-    FILENO_ERRORS = (AttributeError, ValueError, UnsupportedOperation)
-except ImportError:  # pragma: no cover
-    # Py2
-    FILENO_ERRORS = (AttributeError, ValueError)  # noqa
+from io import UnsupportedOperation
+FILENO_ERRORS = (AttributeError, ValueError, UnsupportedOperation)
 
-
-if sys.version_info > (2, 7, 5):
-    buf_t, is_new_buffer = memoryview, True  # noqa
-else:
-    buf_t, is_new_buffer = buffer, False  # noqa
 
 if hasattr(os, 'write'):
     __write__ = os.write
 
-    if is_new_buffer:
-
-        def send_offset(fd, buf, offset):
-            return __write__(fd, buf[offset:])
-
-    else:  # Py<2.7.6
-
-        def send_offset(fd, buf, offset):  # noqa
-            return __write__(fd, buf_t(buf, offset))
+    def send_offset(fd, buf, offset):
+        return __write__(fd, buf[offset:])
 
 else:  # non-posix platform
 
@@ -99,21 +81,6 @@ except AttributeError:
     del _fscodec
 
 
-if sys.version_info[0] == 3:
-    bytes = bytes
-else:
-    _bytes = bytes
-
-    # the 'bytes' alias in Python2 does not support an encoding argument.
-
-    class bytes(_bytes):  # noqa
-
-        def __new__(cls, *args):
-            if len(args) > 1:
-                return _bytes(args[0]).encode(*args[1:])
-            return _bytes(*args)
-
-
 def maybe_fileno(f):
     """Get object fileno, or :const:`None` if not defined."""
     if isinstance(f, numbers.Integral):
@@ -150,39 +117,67 @@ def uniq(it):
     return (seen.add(obj) or obj for obj in it if obj not in seen)
 
 
-try:
-    closerange = os.closerange
-except AttributeError:
+# Directory listing the descriptors open in the calling process.  Same
+# choice as CPython's FD_DIR (Modules/_posixsubprocess.c, Cygwin added in
+# gh-148575): /dev/fd on macOS, Cygwin, FreeBSD and DragonFly, /proc/self/fd
+# elsewhere.  On FreeBSD and DragonFly it is only trusted when fdescfs is
+# mounted, see _open_fds().
+_BSD_WITH_FDESCFS = ('freebsd', 'dragonfly')
+if sys.platform.startswith(('cygwin', 'darwin') + _BSD_WITH_FDESCFS):
+    _FD_DIR = '/dev/fd'
+else:
+    _FD_DIR = '/proc/self/fd'
 
-    def closerange(fd_low, fd_high):  # noqa
-        for fd in reversed(range(fd_low, fd_high)):
+
+def _dev_fd_is_fdescfs():
+    # devfs alone creates only /dev/fd/0-2, while fdescfs creates entries for
+    # every descriptor the process has open.  Same check as CPython's
+    # _is_fdescfs_mounted_on_dev_fd().
+    try:
+        return os.stat('/dev').st_dev != os.stat(_FD_DIR).st_dev
+    except OSError:
+        return False
+
+
+def _open_fds():
+    """Return the descriptors open in this process, or None.
+
+    None means this platform has no directory listing them, and the caller
+    has to fall back to a numeric range.
+    """
+    if sys.platform.startswith(_BSD_WITH_FDESCFS) and not _dev_fd_is_fdescfs():
+        return None
+    try:
+        names = os.listdir(_FD_DIR)
+    except OSError:
+        return None
+    return sorted(int(name) for name in names if name.isdigit())
+
+
+def close_open_fds(keep=None):
+    # must make sure this is 0-inclusive (Issue #celery/1882)
+    keep = list(uniq(sorted(
+        f for f in map(maybe_fileno, keep or []) if f is not None
+    )))
+    fds = _open_fds()
+    if fds is not None:
+        # Only the descriptors actually open are touched, so the cost does
+        # not depend on RLIMIT_NOFILE (celery/celery#9886).
+        keep = set(keep)
+        for fd in fds:
+            if fd in keep:
+                continue
             try:
                 os.close(fd)
-            except OSError as exc:
-                if exc.errno != errno.EBADF:
-                    raise
-
-    def close_open_fds(keep=None):
-        # must make sure this is 0-inclusive (Issue #celery/1882)
-        keep = list(uniq(sorted(
-            f for f in map(maybe_fileno, keep or []) if f is not None
-        )))
-        maxfd = get_fdmax(default=2048)
-        kL, kH = iter([-1] + keep), iter(keep + [maxfd])
-        for low, high in zip_longest(kL, kH):
-            if low + 1 != high:
-                closerange(low + 1, high)
-else:
-    def close_open_fds(keep=None):  # noqa
-        keep = [maybe_fileno(f)
-                for f in (keep or []) if maybe_fileno(f) is not None]
-        for fd in reversed(range(get_fdmax(default=2048))):
-            if fd not in keep:
-                try:
-                    os.close(fd)
-                except OSError as exc:
-                    if exc.errno != errno.EBADF:
-                        raise
+            except OSError:
+                # Same as os.closerange() below: closing is best effort.
+                pass
+        return
+    maxfd = get_fdmax(default=2048)
+    kL, kH = iter([-1] + keep), iter(keep + [maxfd])
+    for low, high in zip_longest(kL, kH):
+        if low + 1 != high:
+            os.closerange(low + 1, high)
 
 
 def get_errno(exc):
@@ -191,13 +186,8 @@ def get_errno(exc):
     try:
         return exc.errno
     except AttributeError:
-        try:
-            # e.args = (errno, reason)
-            if isinstance(exc.args, tuple) and len(exc.args) == 2:
-                return exc.args[0]
-        except AttributeError:
-            pass
-    return 0
+        return 0
+
 
 try:
     import _posixsubprocess
@@ -220,10 +210,18 @@ else:
         passfds = sorted(passfds)
         errpipe_read, errpipe_write = os.pipe()
         try:
-            return _posixsubprocess.fork_exec(
+            args = [
                 args, [fsencode(path)], True, tuple(passfds), None, None,
                 -1, -1, -1, -1, -1, -1, errpipe_read, errpipe_write,
-                False, False, None)
+                False, False]
+            if sys.version_info >= (3, 11):
+                args.append(-1)  # process_group
+            if sys.version_info >= (3, 9):
+                args.extend((None, None, None, -1))  # group, extra_groups, user, umask
+            args.append(None)  # preexec_fn
+            if (3, 11) <= sys.version_info < (3, 14):
+                args.append(subprocess._USE_VFORK)
+            return _posixsubprocess.fork_exec(*args)
         finally:
             os.close(errpipe_read)
             os.close(errpipe_write)

@@ -1,5 +1,3 @@
-from __future__ import absolute_import
-
 import os
 import sys
 import threading
@@ -35,7 +33,7 @@ from .exceptions import (  # noqa
 # Base type for contexts
 #
 
-class BaseContext(object):
+class BaseContext:
 
     ProcessError = ProcessError
     BufferTooShort = BufferTooShort
@@ -370,7 +368,14 @@ if sys.platform != 'win32':
         'spawn': SpawnContext(),
         'forkserver': ForkServerContext(),
     }
-    _default_context = DefaultContext(_concrete_contexts['fork'])
+    if sys.platform == 'darwin':
+        # bpo-33725: running arbitrary code after fork() is no longer
+        # reliable on macOS since macOS 10.14 (Mojave). Use spawn by
+        # default instead.
+        # See https://github.com/celery/celery/issues/9894
+        _default_context = DefaultContext(_concrete_contexts['spawn'])
+    else:
+        _default_context = DefaultContext(_concrete_contexts['fork'])
 
 else:
 

@@ -31,9 +31,8 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-from __future__ import absolute_import
 
-from billiard.five import Queue
+from queue import Queue
 
 __all__ = ['Client', 'Listener', 'Pipe']
 

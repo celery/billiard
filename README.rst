@@ -1,15 +1,20 @@
 ========
 billiard
 ========
-:version: 3.6.3.0
 
 |build-status-lin| |build-status-win| |license| |wheel| |pyversion| |pyimp|
 
-.. |build-status-lin| image:: https://secure.travis-ci.org/celery/billiard.png?branch=master
-    :alt: Build status on Linux
-    :target: https://travis-ci.org/celery/billiard
+:Version: 4.3.1
+:Web: https://billiard.readthedocs.io
+:Download: https://pypi.org/project/billiard/
+:Source: https://github.com/celery/billiard/
+:DeepWiki: |deepwiki|
 
-.. |build-status-win| image:: https://ci.appveyor.com/api/projects/status/github/celery/billiard?png=true&branch=master
+.. |build-status-lin| image:: https://github.com/celery/billiard/actions/workflows/ci.yaml/badge.svg
+    :alt: Build status on Linux
+    :target: https://github.com/celery/billiard/actions/workflows/ci.yaml
+
+.. |build-status-win| image:: https://ci.appveyor.com/api/projects/status/github/celery/billiard?png=true&branch=main
     :alt: Build status on Windows
     :target: https://ci.appveyor.com/project/ask/billiard
 
@@ -28,6 +33,11 @@ billiard
 .. |pyimp| image:: https://img.shields.io/pypi/implementation/billiard.svg
     :alt: Support Python implementations.
     :target: https://pypi.org/project/billiard/
+
+.. |deepwiki| image:: https://devin.ai/assets/deepwiki-badge.png
+    :alt: Ask http://DeepWiki.com
+    :target: https://deepwiki.com/celery/billiard
+    :width: 125px
 
 About
 -----
@@ -65,7 +75,13 @@ Please report bugs related to multiprocessing at the
 `Python bug tracker <https://bugs.python.org/>`_. Issues related to billiard
 should be reported at https://github.com/celery/billiard/issues.
 
-billiard as part of the Tidelift Subscription
--------------
+billiard is part of the Tidelift Subscription
+---------------------------------------------
 
-The maintainers of billiard and thousands of other packages are working with Tidelift to deliver commercial support and maintenance for the open source dependencies you use to build your applications. Save time, reduce risk, and improve code health, while paying the maintainers of the exact dependencies you use. [Learn more.](https://tidelift.com/subscription/pkg/pypi-billiard?utm_source=pypi-billiard&utm_medium=referral&utm_campaign=readme&utm_term=repo)
+The maintainers of ``billiard`` and thousands of other packages are working
+with Tidelift to deliver commercial support and maintenance for the open source
+dependencies you use to build your applications. Save time, reduce risk, and
+improve code health, while paying the maintainers of the exact dependencies you
+use. `Learn more`_.
+
+.. _`Learn more`: https://tidelift.com/subscription/pkg/pypi-billiard?utm_source=pypi-billiard&utm_medium=referral&utm_campaign=readme&utm_term=repo

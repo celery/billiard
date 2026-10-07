@@ -31,7 +31,6 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-from __future__ import absolute_import
 
 #
 # Imports
@@ -45,7 +44,7 @@ import array
 from threading import Lock, RLock, Semaphore, BoundedSemaphore
 from threading import Event
 
-from billiard.five import Queue
+from queue import Queue
 
 from billiard.connection import Pipe
 

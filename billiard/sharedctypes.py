@@ -6,7 +6,6 @@
 # Copyright (c) 2006-2008, R Oudkerk
 # Licensed to PSF under a Contributor Agreement.
 #
-from __future__ import absolute_import
 
 import ctypes
 import sys
@@ -15,7 +14,6 @@ import weakref
 from . import heap
 from . import get_context
 from .context import assert_spawning
-from .five import int_types
 from .reduction import ForkingPickler
 
 __all__ = ['RawValue', 'RawArray', 'Value', 'Array', 'copy', 'synchronized']
@@ -54,7 +52,7 @@ def RawArray(typecode_or_type, size_or_initializer):
     Returns a ctypes array allocated from shared memory
     '''
     type_ = typecode_to_type.get(typecode_or_type, typecode_or_type)
-    if isinstance(size_or_initializer, int_types):
+    if isinstance(size_or_initializer, int):
         type_ = type_ * size_or_initializer
         obj = _new_value(type_)
         ctypes.memset(ctypes.addressof(obj), 0, ctypes.sizeof(obj))
@@ -197,7 +195,7 @@ class_cache = weakref.WeakKeyDictionary()
 #
 
 
-class SynchronizedBase(object):
+class SynchronizedBase:
 
     def __init__(self, obj, lock=None, ctx=None):
         self._obj = obj
