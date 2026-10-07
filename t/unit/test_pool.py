@@ -92,6 +92,38 @@ class test_pool:
         # If I call to handle the timeouts I expect no exception
         next(timeout_handler.handle_timeouts())
 
+    def test_timeout_handler_times_map_chunks(self):
+        # A map() result keeps one accept time and pid per item, and
+        # imap() results keep none at all; neither may crash the handler.
+        cache = {}
+        result = billiard.pool.MapResult(cache, 2, 4, None, None, timeout=1)
+        billiard.pool.IMapIterator(cache)
+        long_ago = time.monotonic() - 10
+        result._ack(0, long_ago, 111)
+        result._ack(1, long_ago, 222)
+        result._set(0, (True, [0, 1]))
+        timeout_handler = billiard.pool.TimeoutHandler([], cache, None, None)
+        timed_out = []
+        timeout_handler.on_hard_timeout = (
+            lambda job, pid=None: timed_out.append((job, pid)))
+        next(timeout_handler.handle_timeouts())
+        # Only the chunk that is still running has timed out.
+        assert timed_out == [(result, 222)]
+
+    def test_map_hard_timeout(self):
+        pool = billiard.pool.Pool(2, timeout=1)
+        try:
+            # The pool timeout applies to each chunk, not the whole map.
+            assert pool.map(time.sleep, [0.4] * 8, chunksize=1) == [None] * 8
+            result = pool.map_async(time.sleep, [0, 30], chunksize=1)
+            with pytest.raises(Exception) as excinfo:
+                result.get(timeout=10)
+            exc = getattr(excinfo.value, 'exc', excinfo.value)
+            assert isinstance(exc, TimeLimitExceeded)
+        finally:
+            pool.terminate()
+            pool.join()
+
     def test_exception_traceback_present(self):
         pool = billiard.pool.Pool(1)
         results = [pool.apply_async(func, (i,)) for i in range(3)]
