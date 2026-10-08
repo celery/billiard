@@ -1,6 +1,7 @@
 import os
 import signal
 import time
+from unittest.mock import Mock
 
 import pytest
 
@@ -243,6 +244,35 @@ class test_pool:
                 pool.close()
                 pool.join()
                 pool.terminate()
+
+    def test_on_ready_counter_credits_worker_that_ran_the_task(self):
+        ctx = get_context()
+        counters = {101: ctx.Value('i'), 102: ctx.Value('i')}
+        cache = {}
+        handler = billiard.pool.ResultHandler(
+            None, None, cache, None, None, None, Mock(), None, None,
+            on_ready_counters=counters,
+        )
+        on_ack = handler.state_handlers[billiard.pool.ACK]
+        on_ready = handler.state_handlers[billiard.pool.READY]
+
+        # map() chunks of the same job run by different workers.
+        result = billiard.pool.MapResult(cache, 1, 2, None, None)
+        on_ack(result._job, 0, time.monotonic(), 101, None)
+        on_ack(result._job, 1, time.monotonic(), 102, None)
+        on_ready(result._job, 0, (True, [0]), None)
+        on_ready(result._job, 1, (True, [1]), None)
+        assert result.get(timeout=1) == [0, 1]
+        assert counters[101].value == 1
+        assert counters[102].value == 1
+
+        # A job that already left the cache, e.g. a map() that failed.
+        result = billiard.pool.ApplyResult(cache, None)
+        on_ack(result._job, None, time.monotonic(), 102, None)
+        del cache[result._job]
+        on_ready(result._job, None, (True, None), None)
+        assert counters[101].value == 1
+        assert counters[102].value == 2
 
     def test_graceful_shutdown_delivers_results(self):
         """Test that queued results are delivered during pool shutdown.

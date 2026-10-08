@@ -860,9 +860,21 @@ class ResultHandler(PoolThread):
         putlock = self.putlock
         restart_state = self.restart_state
         on_job_ready = self.on_job_ready
+        on_ready_counters = self.on_ready_counters
+        # Which worker is running which (job, i) task, so that a READY is
+        # credited to the on_ready_counter of the worker that sent it, even
+        # when the job is already gone from the cache.
+        worker_tasks = {}
+        task_workers = {}
 
         def on_ack(job, i, time_accepted, pid, synqW_fd):
             restart_state.R = 0
+            if on_ready_counters is not None:
+                # A worker only acks a task after sending READY for its
+                # previous one, so anything still recorded for it is stale.
+                task_workers.pop(worker_tasks.pop(pid, None), None)
+                worker_tasks[pid] = (job, i)
+                task_workers[job, i] = pid
             try:
                 cache[job]._ack(i, time_accepted, pid, synqW_fd)
             except (KeyError, AttributeError):
@@ -872,17 +884,17 @@ class ResultHandler(PoolThread):
         def on_ready(job, i, obj, inqW_fd):
             if on_job_ready is not None:
                 on_job_ready(job, i, obj, inqW_fd)
+            worker_pid = task_workers.pop((job, i), None)
+            worker_tasks.pop(worker_pid, None)
+            if on_ready_counters and worker_pid in on_ready_counters:
+                on_ready_counter = on_ready_counters[worker_pid]
+                with on_ready_counter.get_lock():
+                    on_ready_counter.value += 1
+
             try:
                 item = cache[job]
             except KeyError:
                 return
-
-            if self.on_ready_counters:
-                worker_pid = next(iter(item.worker_pids()), None)
-                if worker_pid and worker_pid in self.on_ready_counters:
-                    on_ready_counter = self.on_ready_counters[worker_pid]
-                    with on_ready_counter.get_lock():
-                        on_ready_counter.value += 1
 
             if not item.ready():
                 if putlock is not None:
