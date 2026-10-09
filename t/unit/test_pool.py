@@ -130,6 +130,24 @@ class test_pool:
             pool.terminate()
             pool.join()
 
+    def test_join_exited_workers_with_pending_imap(self):
+        # Without threads nothing consumes the imap() tasks, so the
+        # iterator is still in the cache, not accepted by any worker.
+        pool = billiard.pool.Pool(1, threads=False)
+        try:
+            pool.imap(simple_task, range(3))
+            worker = pool._pool[0]
+            worker.terminate()
+            worker.join(10)
+            # Used to raise AttributeError, crashing the Supervisor thread
+            # (which then takes the whole process down with os._exit()).
+            assert pool._join_exited_workers() == [worker.exitcode]
+            assert pool._pool == []
+        finally:
+            # Nothing will run the imap() tasks; don't wait for them.
+            pool._cache.clear()
+            pool.terminate()
+
     @skip.if_win32()
     @pytest.mark.parametrize('job', [
         announce_pid_then_sleep,
