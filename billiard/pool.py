@@ -755,7 +755,7 @@ class TimeoutHandler(PoolThread):
     def _trywaitkill(self, worker):
         debug('timeout: sending TERM to %s', worker._name)
         try:
-            if os.getpgid(worker.pid) == worker.pid:
+            if hasattr(os, 'getpgid') and hasattr(os, 'killpg') and os.getpgid(worker.pid) == worker.pid:
                 debug("worker %s is a group leader. It is safe to kill (SIGTERM) the whole group", worker.pid)
                 os.killpg(os.getpgid(worker.pid), signal.SIGTERM)
             else:
@@ -767,7 +767,7 @@ class TimeoutHandler(PoolThread):
                 return
         debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
         try:
-            if os.getpgid(worker.pid) == worker.pid:
+            if hasattr(os, 'getpgid') and hasattr(os, 'killpg') and os.getpgid(worker.pid) == worker.pid:
                 debug("worker %s is a group leader. It is safe to kill (SIGKILL) the whole group", worker.pid)
                 os.killpg(os.getpgid(worker.pid), signal.SIGKILL)
             else:

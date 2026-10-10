@@ -92,6 +92,34 @@ class test_pool:
         # If I call to handle the timeouts I expect no exception
         next(timeout_handler.handle_timeouts())
 
+    def test_timeout_handler_trywaitkill_without_getpgid(self, monkeypatch):
+        monkeypatch.delattr(os, "getpgid", raising=False)
+        monkeypatch.delattr(os, "killpg", raising=False)
+        from unittest.mock import MagicMock
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = True
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        handler._trywaitkill(worker)
+        worker.terminate.assert_called_once()
+
+    def test_timeout_handler_trywaitkill_timeout_without_getpgid(self, monkeypatch):
+        monkeypatch.delattr(os, "getpgid", raising=False)
+        monkeypatch.delattr(os, "killpg", raising=False)
+        from unittest.mock import MagicMock, patch
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill") as mock_kill:
+            handler._trywaitkill(worker)
+            worker.terminate.assert_called_once()
+            mock_kill.assert_called_once_with(worker.pid, billiard.pool.SIGKILL)
+
     def test_exception_traceback_present(self):
         pool = billiard.pool.Pool(1)
         results = [pool.apply_async(func, (i,)) for i in range(3)]
