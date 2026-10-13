@@ -1062,8 +1062,8 @@ class Pool:
                 raise TypeError(
                     f"{name} must be an int or float, not bool (got {value!r})"
                 )
-        if processes is not None and processes < 1:
-            raise ValueError("Number of processes must be at least 1")
+        if processes is not None and processes < 0:
+            raise ValueError("Number of processes must be at least 0")
         if maxtasksperchild is not None and (
                 not isinstance(maxtasksperchild, int) or maxtasksperchild < 1):
             raise ValueError("maxtasksperchild must be a positive int or None")
