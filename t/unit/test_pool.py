@@ -295,10 +295,19 @@ class test_pool:
             assert result.get() == i * 2
 
 
-    def test_rejects_fewer_than_one_process(self):
-        for processes in (0, -1):
-            with pytest.raises(ValueError, match="at least 1"):
-                billiard.pool.Pool(processes=processes)
+    def test_rejects_negative_processes(self):
+        with pytest.raises(ValueError, match="at least 0"):
+            billiard.pool.Pool(processes=-1)
+
+    def test_starts_with_zero_processes_and_grows(self):
+        # Celery's --autoscale N,0 starts the pool at its minimum.
+        pool = billiard.pool.Pool(processes=0)
+        try:
+            pool.grow(1)
+            assert pool.apply_async(simple_task, (21,)).get(timeout=10) == 42
+        finally:
+            pool.terminate()
+            pool.join()
 
     def test_rejects_non_positive_maxtasksperchild(self):
         # Worker only asserted this, so it failed with a bare AssertionError,
