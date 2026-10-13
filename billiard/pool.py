@@ -755,7 +755,7 @@ class TimeoutHandler(PoolThread):
     def _trywaitkill(self, worker):
         debug('timeout: sending TERM to %s', worker._name)
         try:
-            if os.getpgid(worker.pid) == worker.pid:
+            if sys.platform != 'win32' and hasattr(os, 'getpgid') and hasattr(os, 'killpg') and os.getpgid(worker.pid) == worker.pid:
                 debug("worker %s is a group leader. It is safe to kill (SIGTERM) the whole group", worker.pid)
                 os.killpg(os.getpgid(worker.pid), signal.SIGTERM)
             else:
@@ -767,7 +767,7 @@ class TimeoutHandler(PoolThread):
                 return
         debug('timeout: TERM timed-out, now sending KILL to %s', worker._name)
         try:
-            if os.getpgid(worker.pid) == worker.pid:
+            if sys.platform != 'win32' and hasattr(os, 'getpgid') and hasattr(os, 'killpg') and os.getpgid(worker.pid) == worker.pid:
                 debug("worker %s is a group leader. It is safe to kill (SIGKILL) the whole group", worker.pid)
                 os.killpg(os.getpgid(worker.pid), signal.SIGKILL)
             else:
@@ -1062,8 +1062,8 @@ class Pool:
                 raise TypeError(
                     f"{name} must be an int or float, not bool (got {value!r})"
                 )
-        if processes is not None and processes < 1:
-            raise ValueError("Number of processes must be at least 1")
+        if processes is not None and processes < 0:
+            raise ValueError("Number of processes must be at least 0")
         if maxtasksperchild is not None and (
                 not isinstance(maxtasksperchild, int) or maxtasksperchild < 1):
             raise ValueError("maxtasksperchild must be a positive int or None")

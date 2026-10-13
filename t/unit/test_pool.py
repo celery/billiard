@@ -1,5 +1,6 @@
 import os
 import signal
+import sys
 import time
 
 import pytest
@@ -91,6 +92,100 @@ class test_pool:
         timeout_handler = pool.TimeoutHandler(pool._pool, cache, 0, 0)
         # If I call to handle the timeouts I expect no exception
         next(timeout_handler.handle_timeouts())
+
+    def test_timeout_handler_trywaitkill_windows(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        from unittest.mock import MagicMock
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = True
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        handler._trywaitkill(worker)
+        worker.terminate.assert_called_once()
+
+    def test_timeout_handler_trywaitkill_windows_timeout_escalation(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "win32")
+        from unittest.mock import MagicMock, patch
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill") as mock_kill:
+            handler._trywaitkill(worker)
+            worker.terminate.assert_called_once()
+            mock_kill.assert_called_once_with(worker.pid, billiard.pool.SIGKILL)
+
+    def test_timeout_handler_trywaitkill_posix_group_leader(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setattr(signal, "SIGKILL", 9, raising=False)
+        monkeypatch.setattr(os, "getpgid", lambda pid: pid, raising=False)
+        from unittest.mock import MagicMock, patch
+        mock_killpg = MagicMock()
+        monkeypatch.setattr(os, "killpg", mock_killpg, raising=False)
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill") as mock_kill:
+            handler._trywaitkill(worker)
+            worker.terminate.assert_not_called()
+            mock_kill.assert_not_called()
+            assert mock_killpg.call_count == 2
+            mock_killpg.assert_any_call(12345, signal.SIGTERM)
+            mock_killpg.assert_any_call(12345, 9)
+
+    def test_timeout_handler_trywaitkill_posix_non_group_leader(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setattr(os, "getpgid", lambda pid: pid + 100, raising=False)
+        from unittest.mock import MagicMock, patch
+        mock_killpg = MagicMock()
+        monkeypatch.setattr(os, "killpg", mock_killpg, raising=False)
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill") as mock_kill:
+            handler._trywaitkill(worker)
+            mock_killpg.assert_not_called()
+            worker.terminate.assert_called_once()
+            mock_kill.assert_called_once_with(worker.pid, billiard.pool.SIGKILL)
+
+    def test_timeout_handler_trywaitkill_missing_posix_functions(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.delattr(os, "getpgid", raising=False)
+        monkeypatch.delattr(os, "killpg", raising=False)
+        from unittest.mock import MagicMock, patch
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill") as mock_kill:
+            handler._trywaitkill(worker)
+            worker.terminate.assert_called_once()
+            mock_kill.assert_called_once_with(worker.pid, billiard.pool.SIGKILL)
+
+    def test_timeout_handler_trywaitkill_oserror_suppressed(self, monkeypatch):
+        from unittest.mock import MagicMock, patch
+        worker = MagicMock()
+        worker._name = "MockWorker-1"
+        worker.pid = 12345
+        worker.terminate.side_effect = OSError("Process already dead")
+        worker._popen.wait.return_value = False
+
+        handler = billiard.pool.TimeoutHandler([], {}, 0, 0)
+        with patch("billiard.pool._kill", side_effect=OSError("Process already dead")):
+            # Should not raise OSError
+            handler._trywaitkill(worker)
 
     def test_exception_traceback_present(self):
         pool = billiard.pool.Pool(1)
@@ -313,10 +408,19 @@ class test_pool:
             assert result.get() == i * 2
 
 
-    def test_rejects_fewer_than_one_process(self):
-        for processes in (0, -1):
-            with pytest.raises(ValueError, match="at least 1"):
-                billiard.pool.Pool(processes=processes)
+    def test_rejects_negative_processes(self):
+        with pytest.raises(ValueError, match="at least 0"):
+            billiard.pool.Pool(processes=-1)
+
+    def test_starts_with_zero_processes_and_grows(self):
+        # Celery's --autoscale N,0 starts the pool at its minimum.
+        pool = billiard.pool.Pool(processes=0)
+        try:
+            pool.grow(1)
+            assert pool.apply_async(simple_task, (21,)).get(timeout=10) == 42
+        finally:
+            pool.terminate()
+            pool.join()
 
     def test_rejects_non_positive_maxtasksperchild(self):
         # Worker only asserted this, so it failed with a bare AssertionError,
