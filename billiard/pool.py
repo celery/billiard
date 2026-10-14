@@ -911,6 +911,12 @@ class ResultHandler(PoolThread):
                 if get_errno(exc) != errno.ESRCH:
                     raise
 
+        def on_worker_exit(pid):
+            # A worker killed between ACK and READY (time limit, SIGKILL)
+            # never sends READY for its last task.
+            task_workers.pop(worker_tasks.pop(pid, None), None)
+        self.on_worker_exit = on_worker_exit
+
         state_handlers = self.state_handlers = {
             ACK: on_ack, READY: on_ready, DEATH: on_death
         }
@@ -1299,6 +1305,7 @@ class Pool:
                 del self._pool[i]
                 del self._poolctrl[worker.pid]
                 del self._on_ready_counters[worker.pid]
+                self._result_handler.on_worker_exit(worker.pid)
         if cleaned:
             all_pids = [w.pid for w in self._pool]
             for job in list(self._cache.values()):

@@ -369,6 +369,14 @@ class test_pool:
         assert counters[101].value == 1
         assert counters[102].value == 2
 
+        # A worker killed between ACK and READY is forgotten when it exits.
+        result = billiard.pool.ApplyResult(cache, None)
+        on_ack(result._job, None, time.monotonic(), 101, None)
+        handler.on_worker_exit(101)
+        on_ready(result._job, None, (True, None), None)
+        assert counters[101].value == 1
+        assert counters[102].value == 2
+
     def test_graceful_shutdown_delivers_results(self):
         """Test that queued results are delivered during pool shutdown.
         
