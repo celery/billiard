@@ -466,3 +466,41 @@ class test_pool:
         ):
             with pytest.raises(TypeError, match="bool"):
                 billiard.pool.Pool(**kwargs)
+
+    @skip.if_win32()
+    def test_worker_blocks_term_signal_while_reporting_death(self,
+                                                             monkeypatch):
+        blocked_during_put = []
+        worker = billiard.pool.Worker.__new__(billiard.pool.Worker)
+        worker.on_exit = None
+        worker.outq = Mock()
+        worker.outq.put.side_effect = lambda obj: blocked_during_put.append(
+            billiard.pool.TERM_SIGNAL in signal.pthread_sigmask(
+                signal.SIG_BLOCK, set()))
+        monkeypatch.setattr(billiard.pool.time, 'sleep', Mock())
+        monkeypatch.setattr(billiard.pool.os, '_exit', Mock())
+
+        worker._do_exit(1234, 0)
+
+        worker.outq.put.assert_called_once_with(
+            (billiard.pool.DEATH, (1234, 0)))
+        assert blocked_during_put == [True]
+        assert billiard.pool.TERM_SIGNAL not in signal.pthread_sigmask(
+            signal.SIG_BLOCK, set())
+
+    def test_terminate_pool_terminates_worker_added_during_shutdown(self):
+        pool = [Mock()]
+        replacement = Mock()
+        worker_handler = Mock()
+        worker_handler.stop.side_effect = (
+            lambda timeout=None: pool.append(replacement))
+        task_handler = Mock()
+        task_handler.is_alive.return_value = False
+
+        billiard.pool.Pool._terminate_pool(
+            Mock(), Mock(), Mock(), pool, worker_handler, task_handler,
+            Mock(), {}, None, (Mock(), task_handler, pool),
+        )
+
+        pool[0].terminate.assert_called_once_with()
+        replacement.terminate.assert_called_once_with()
