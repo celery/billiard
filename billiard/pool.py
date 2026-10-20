@@ -306,7 +306,12 @@ class Worker:
 
         if sys.platform != 'win32':
             try:
-                self.outq.put((DEATH, (pid, exitcode)))
+                # on_death's TERM_SIGNAL arriving here would leave outq locked.
+                mask = signal.pthread_sigmask(signal.SIG_BLOCK, {TERM_SIGNAL})
+                try:
+                    self.outq.put((DEATH, (pid, exitcode)))
+                finally:
+                    signal.pthread_sigmask(signal.SIG_SETMASK, mask)
                 time.sleep(1)
             finally:
                 os._exit(exitcode)
@@ -1790,6 +1795,9 @@ class Pool:
 
         if timeout_handler is not None:
             timeout_handler.terminate()
+
+        # A worker added during the loop below would never be terminated.
+        stop_if_not_current(worker_handler)
 
         # Terminate workers which haven't already finished
         if pool and hasattr(pool[0], 'terminate'):
