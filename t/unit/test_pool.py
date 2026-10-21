@@ -213,6 +213,22 @@ class test_pool:
         pool.join()
         pool.terminate()
 
+    @pytest.mark.parametrize('method', ['imap', 'imap_unordered'])
+    def test_imap_raises_task_exception(self, method):
+        # One worker, so imap_unordered() yields in order too.
+        pool = billiard.pool.Pool(1)
+        try:
+            it = getattr(pool, method)(func, range(3))
+            assert it.next(timeout=10) == 0
+            assert it.next(timeout=10) == 1
+            # Used to raise a bare Exception wrapping the ExceptionInfo,
+            # unlike apply_async().get() and map().
+            with pytest.raises(ValueError):
+                it.next(timeout=10)
+        finally:
+            pool.terminate()
+            pool.join()
+
     def test_system_exit_from_task_replaces_worker(self):
         pool = billiard.pool.Pool(1)
         try:
