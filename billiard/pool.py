@@ -2034,6 +2034,8 @@ class MapResult(ApplyResult):
 
 class IMapIterator:
     _worker_lost = None
+    _write_to = None
+    _scheduled_for = None
 
     def __init__(self, cache, lost_worker_timeout=LOST_WORKER_TIMEOUT):
         self._cond = threading.Condition(threading.Lock())
