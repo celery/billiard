@@ -94,6 +94,61 @@ class test_pool:
         # If I call to handle the timeouts I expect no exception
         next(timeout_handler.handle_timeouts())
 
+    def test_timeout_handler_times_map_chunks(self):
+        # A map() result keeps one accept time and pid per item, and
+        # imap() results keep none at all; neither may crash the handler.
+        cache = {}
+        result = billiard.pool.MapResult(cache, 2, 4, None, None, timeout=1)
+        billiard.pool.IMapIterator(cache)
+        long_ago = time.monotonic() - 10
+        result._ack(0, long_ago, 111)
+        result._ack(1, long_ago, 222)
+        result._set(0, (True, [0, 1]))
+        timeout_handler = billiard.pool.TimeoutHandler([], cache, None, None)
+        timed_out = []
+        timeout_handler.on_hard_timeout = (
+            lambda job, pid=None: timed_out.append((job, pid)))
+        next(timeout_handler.handle_timeouts())
+        # Only the chunk that is still running has timed out.
+        assert timed_out == [(result, 222)]
+
+    def test_map_worker_pids_only_running_chunks(self):
+        result = billiard.pool.MapResult({}, 1, 3, None, None)
+        now = time.monotonic()
+        result._ack(0, now, 111)
+        result._ack(1, now, 222)
+        result._set(0, (True, [0]))
+        assert result.worker_pids() == [222]
+
+    def test_map_hard_timeout_kills_every_timed_out_chunk(self):
+        cache = {}
+        result = billiard.pool.MapResult(cache, 1, 2, None, None, timeout=1)
+        long_ago = time.monotonic() - 10
+        result._ack(0, long_ago, 111)
+        result._ack(1, long_ago, 222)
+        procs = [Mock(pid=111), Mock(pid=222)]
+        timeout_handler = billiard.pool.TimeoutHandler(procs, cache, None, None)
+        timeout_handler._trywaitkill = Mock()
+        next(timeout_handler.handle_timeouts())
+        # The first chunk fails the map, the second must still be killed.
+        assert result.ready()
+        killed = [c.args[0].pid for c in timeout_handler._trywaitkill.call_args_list]
+        assert killed == [111, 222]
+
+    def test_map_hard_timeout(self):
+        pool = billiard.pool.Pool(2, timeout=1)
+        try:
+            # The pool timeout applies to each chunk, not the whole map.
+            assert pool.map(time.sleep, [0.4] * 8, chunksize=1) == [None] * 8
+            result = pool.map_async(time.sleep, [0, 30], chunksize=1)
+            with pytest.raises(Exception) as excinfo:
+                result.get(timeout=10)
+            exc = getattr(excinfo.value, 'exc', excinfo.value)
+            assert isinstance(exc, TimeLimitExceeded)
+        finally:
+            pool.terminate()
+            pool.join()
+    
     def test_timeout_handler_trywaitkill_windows(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "win32")
         from unittest.mock import MagicMock
