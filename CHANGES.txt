@@ -1,3 +1,11 @@
+4.4.0 - unreleased
+------------------
+- Enforce pool soft and hard timeouts for map() chunks, and only time out and
+  kill the workers that still run a chunk (#473). `TimeoutHandler.on_soft_timeout`
+  and `on_hard_timeout` take an optional `pid`, and `MapResult` takes optional
+  `soft_timeout` and `timeout` keywords.
+
+
 4.3.1 - 2026-10-05
 ------------------
 - Reject bool for Pool numeric args (processes, timeouts, limits) - #460
