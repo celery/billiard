@@ -1522,6 +1522,10 @@ class Pool:
         if self._state != RUN:
             return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
+        if chunksize < 1:
+            raise ValueError(
+                'Chunksize must be 1+, not {0:n}'.format(chunksize),
+            )
         if chunksize == 1:
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
@@ -1532,7 +1536,6 @@ class Pool:
             ))
             return result
         else:
-            assert chunksize > 1
             task_batches = Pool._get_tasks(func, iterable, chunksize)
             result = IMapIterator(self._cache,
                                   lost_worker_timeout=lost_worker_timeout)
@@ -1551,6 +1554,10 @@ class Pool:
         if self._state != RUN:
             return
         lost_worker_timeout = lost_worker_timeout or self.lost_worker_timeout
+        if chunksize < 1:
+            raise ValueError(
+                'Chunksize must be 1+, not {0:n}'.format(chunksize),
+            )
         if chunksize == 1:
             result = IMapUnorderedIterator(
                 self._cache, lost_worker_timeout=lost_worker_timeout,
@@ -1562,7 +1569,6 @@ class Pool:
             ))
             return result
         else:
-            assert chunksize > 1
             task_batches = Pool._get_tasks(func, iterable, chunksize)
             result = IMapUnorderedIterator(
                 self._cache, lost_worker_timeout=lost_worker_timeout,
