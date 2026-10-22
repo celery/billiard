@@ -740,6 +740,12 @@ class TimeoutHandler(PoolThread):
 
     def on_hard_timeout(self, job, pid=None):
         if job.ready():
+            if isinstance(job, MapResult) and pid is not None:
+                # An earlier chunk already failed this map(); the other
+                # chunks that ran out of time still hold their workers.
+                process, _index = self._process_by_pid(pid)
+                if process:
+                    self._trywaitkill(process)
             return
         if pid is None:
             pid = job._worker_pid
@@ -2064,7 +2070,9 @@ class MapResult(ApplyResult):
                 yield chunk, time_accepted, self._worker_pid[start]
 
     def worker_pids(self):
-        return [pid for pid in self._worker_pid if pid]
+        # Only chunks that are still running: a worker that has returned
+        # its chunk no longer holds anything for this map().
+        return [pid for _, _, pid in self._running_chunks() if pid]
 
 #
 # Class whose instances are returned by `Pool.imap()`
