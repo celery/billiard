@@ -1,3 +1,9 @@
+4.4.0 - unreleased
+------------------
+- Reject non-positive chunksize in Pool.imap() and Pool.imap_unordered(),
+  including when Python runs with optimization enabled.
+
+
 4.3.1 - 2026-10-05
 ------------------
 - Reject bool for Pool numeric args (processes, timeouts, limits) - #460
