@@ -2077,7 +2077,7 @@ class IMapIterator:
         success, value = item
         if success:
             return value
-        raise Exception(value)
+        raise value.exception
 
     __next__ = next                    # XXX
 
