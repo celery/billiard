@@ -771,10 +771,16 @@ class TimeoutHandler(PoolThread):
         # A failed map() has left the cache and no longer sees results, so
         # a worker that finished its chunk meanwhile may be running another
         # task by now, and that task must not be killed.
-        return any(
-            pid in other.worker_pids()
-            for other in list(self.cache.values()) if other is not job
-        )
+        for other in list(self.cache.values()):
+            if other is job:
+                continue
+            if isinstance(other, IMapIterator):
+                pids = other._running_pids()
+            else:
+                pids = other.worker_pids()
+            if pid in pids:
+                return True
+        return False
 
     def _trywaitkill(self, worker):
         debug('timeout: sending TERM to %s', worker._name)
@@ -2110,6 +2116,7 @@ class IMapIterator:
         self._ready = False
         self._unsorted = {}
         self._worker_pids = []
+        self._running = {}
         self._lost_worker_timeout = lost_worker_timeout
         cache[self._job] = self
 
@@ -2142,6 +2149,7 @@ class IMapIterator:
 
     def _set(self, i, obj):
         with self._cond:
+            self._running.pop(i, None)
             if self._index == i:
                 self._items.append(obj)
                 self._index += 1
@@ -2167,12 +2175,18 @@ class IMapIterator:
 
     def _ack(self, i, time_accepted, pid, *args):
         self._worker_pids.append(pid)
+        self._running[i] = pid
 
     def ready(self):
         return self._ready
 
     def worker_pids(self):
         return self._worker_pids
+
+    def _running_pids(self):
+        # worker_pids() also lists the workers whose task has already
+        # returned; this lists only the ones still running a task.
+        return list(self._running.values())
 
 #
 # Class whose instances are returned by `Pool.imap_unordered()`
@@ -2183,6 +2197,7 @@ class IMapUnorderedIterator(IMapIterator):
 
     def _set(self, i, obj):
         with self._cond:
+            self._running.pop(i, None)
             self._items.append(obj)
             self._index += 1
             self._cond.notify()

@@ -215,6 +215,27 @@ class test_pool:
         assert result.ready()
         assert killed == [111]
 
+    def test_map_hard_timeout_ignores_finished_imap_tasks(self):
+        cache = {}
+        result = billiard.pool.MapResult(cache, 1, 3, None, None, timeout=1)
+        long_ago = time.monotonic() - 10
+        for chunk, pid in enumerate([111, 222, 333]):
+            result._ack(chunk, long_ago, pid)
+        # A live imap() whose first task already returned on 222 and whose
+        # second task is still running on 333.
+        imap = billiard.pool.IMapIterator(cache)
+        imap._ack(0, long_ago, 222)
+        imap._set(0, (True, None))
+        imap._ack(1, long_ago, 333)
+        procs = [Mock(pid=111), Mock(pid=222), Mock(pid=333)]
+        timeout_handler = billiard.pool.TimeoutHandler(
+            procs, cache, None, None)
+        timeout_handler._trywaitkill = Mock()
+        next(timeout_handler.handle_timeouts())
+        killed = [c.args[0].pid
+                  for c in timeout_handler._trywaitkill.call_args_list]
+        assert killed == [111, 222]
+
     def test_map_hard_timeout(self):
         pool = billiard.pool.Pool(2, timeout=1)
         try:
