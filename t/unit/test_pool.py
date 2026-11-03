@@ -250,6 +250,22 @@ class test_pool:
             pool.terminate()
             pool.join()
 
+    def test_hard_timeout_with_live_imap(self):
+        pool = billiard.pool.Pool(2, timeout=1)
+        try:
+            it = pool.imap(time.sleep, [3])
+            result = pool.apply_async(time.sleep, (30,))
+            with pytest.raises(Exception) as excinfo:
+                result.get(timeout=10)
+            exc = getattr(excinfo.value, 'exc', excinfo.value)
+            assert isinstance(exc, TimeLimitExceeded)
+            # The supervisor has to clean up the killed worker while the
+            # imap() is still running.
+            assert list(it) == [None]
+        finally:
+            pool.terminate()
+            pool.join()
+
     def test_timeout_handler_trywaitkill_windows(self, monkeypatch):
         monkeypatch.setattr(sys, "platform", "win32")
         from unittest.mock import MagicMock
