@@ -6,6 +6,19 @@
   `soft_timeout` and `timeout` keywords.
 
 
+4.3.2 - 2026-11-02
+------------------
+- Fix flaky timeout and context availability in test_on_ready_counter_is_synchronized.
+- Fix spawn when the main module is a script (#470).
+- Fix AttributeError on Windows when terminating worker on hard timeout (#471).
+- Allow a pool to start with zero processes (#477).
+- Credit READY to the worker that ran the task (#474).
+- Fix pool terminate() hang when a worker dies holding the outqueue lock (#479).
+- Raise the task's exception from imap() iterators (#480).
+- Reject non-positive chunksize in Pool.imap() and Pool.imap_unordered(),
+  including when Python runs with optimization enabled.
+
+
 4.3.1 - 2026-10-05
 ------------------
 - Reject bool for Pool numeric args (processes, timeouts, limits) - #460

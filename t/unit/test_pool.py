@@ -69,6 +69,39 @@ def announce_pid_then_fail_in_cleanup(marker):
 
 
 class test_pool:
+    @pytest.mark.parametrize('method', ['imap', 'imap_unordered'])
+    @pytest.mark.parametrize('chunksize', [0, -1])
+    @pytest.mark.parametrize('items', [[], [1, 2]])
+    def test_imap_rejects_nonpositive_chunksize(self, method, chunksize, items):
+        pool = Mock(_state=billiard.pool.RUN, _cache={})
+        iterable = iter(items)
+
+        with pytest.raises(ValueError, match=r'Chunksize must be 1\+'):
+            getattr(billiard.pool.Pool, method)(
+                pool, simple_task, iterable, chunksize=chunksize,
+            )
+
+        assert list(iterable) == items
+        assert not pool._cache
+        pool._taskqueue.put.assert_not_called()
+
+    @pytest.mark.parametrize('method', ['imap', 'imap_unordered'])
+    @pytest.mark.parametrize('chunksize', [1, 2])
+    def test_imap_valid_chunksize_after_rejection(self, method, chunksize):
+        pool = Mock(_state=billiard.pool.RUN, _cache={})
+        imap = getattr(billiard.pool.Pool, method)
+        with pytest.raises(ValueError):
+            imap(pool, simple_task, [1, 2], chunksize=0)
+        result = imap(pool, simple_task, [1, 2, 3], chunksize)
+        (tasks, set_length), = pool._taskqueue.put.call_args.args
+        count = 0
+        for _, (job, index, func, args, kwargs) in tasks:
+            pool._cache[job]._set(index, (True, func(*args, **kwargs)))
+            count += 1
+        set_length(count)
+        assert sorted(result) == [2, 4, 6]
+        assert not pool._cache
+
     def test_memory_error_from_callback_propagates(self):
         def callback(value):
             raise MemoryError(value)
@@ -293,6 +326,22 @@ class test_pool:
         pool.close()
         pool.join()
         pool.terminate()
+
+    @pytest.mark.parametrize('method', ['imap', 'imap_unordered'])
+    def test_imap_raises_task_exception(self, method):
+        # One worker, so imap_unordered() yields in order too.
+        pool = billiard.pool.Pool(1)
+        try:
+            it = getattr(pool, method)(func, range(3))
+            assert it.next(timeout=10) == 0
+            assert it.next(timeout=10) == 1
+            # Used to raise a bare Exception wrapping the ExceptionInfo,
+            # unlike apply_async().get() and map().
+            with pytest.raises(ValueError):
+                it.next(timeout=10)
+        finally:
+            pool.terminate()
+            pool.join()
 
     def test_system_exit_from_task_replaces_worker(self):
         pool = billiard.pool.Pool(1)
