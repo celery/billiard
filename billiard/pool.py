@@ -721,9 +721,11 @@ class TimeoutHandler(PoolThread):
             if proc.pid == pid
         ), (None, None))
 
-    def on_soft_timeout(self, job):
+    def on_soft_timeout(self, job, pid=None):
+        if pid is None:
+            pid = job._worker_pid
         debug('soft time limit exceeded for %r', job)
-        process, _index = self._process_by_pid(job._worker_pid)
+        process, _index = self._process_by_pid(pid)
         if not process:
             return
 
@@ -731,14 +733,22 @@ class TimeoutHandler(PoolThread):
         job.handle_timeout(soft=True)
 
         try:
-            _kill(job._worker_pid, SIG_SOFT_TIMEOUT)
+            _kill(pid, SIG_SOFT_TIMEOUT)
         except OSError as exc:
             if get_errno(exc) != errno.ESRCH:
                 raise
 
-    def on_hard_timeout(self, job):
+    def on_hard_timeout(self, job, pid=None):
         if job.ready():
+            if isinstance(job, MapResult) and pid is not None:
+                # An earlier chunk already failed this map(); the other
+                # chunks that ran out of time still hold their workers.
+                process, _index = self._process_by_pid(pid)
+                if process and not self._runs_other_job(job, pid):
+                    self._trywaitkill(process)
             return
+        if pid is None:
+            pid = job._worker_pid
         debug('hard time limit exceeded for %r', job)
         # Remove from cache and set return value to an exception
         try:
@@ -749,13 +759,28 @@ class TimeoutHandler(PoolThread):
             pass
 
         # Remove from _pool
-        process, _index = self._process_by_pid(job._worker_pid)
+        process, _index = self._process_by_pid(pid)
 
         # Run timeout callback
         job.handle_timeout(soft=False)
 
         if process:
             self._trywaitkill(process)
+
+    def _runs_other_job(self, job, pid):
+        # A failed map() has left the cache and no longer sees results, so
+        # a worker that finished its chunk meanwhile may be running another
+        # task by now, and that task must not be killed.
+        for other in list(self.cache.values()):
+            if other is job:
+                continue
+            if isinstance(other, IMapIterator):
+                pids = other._running_pids()
+            else:
+                pids = other.worker_pids()
+            if pid in pids:
+                return True
+        return False
 
     def _trywaitkill(self, worker):
         debug('timeout: sending TERM to %s', worker._name)
@@ -800,22 +825,43 @@ class TimeoutHandler(PoolThread):
             cache = copy.copy(self.cache)
 
             # Remove dirty items not in cache anymore
+            # (map chunks are tracked as ``(job_id, chunk)``).
             if dirty:
-                dirty = set(k for k in dirty if k in cache)
+                dirty = set(
+                    k for k in dirty
+                    if (k[0] if isinstance(k, tuple) else k) in cache
+                )
 
             for i, job in cache.items():
-                ack_time = job._time_accepted
+                if isinstance(job, IMapIterator):
+                    # imap() results do not record when their tasks
+                    # were accepted, so there is nothing to time.
+                    continue
                 soft_timeout = job._soft_timeout
                 if soft_timeout is None:
                     soft_timeout = t_soft
                 hard_timeout = job._timeout
                 if hard_timeout is None:
                     hard_timeout = t_hard
-                if _timed_out(ack_time, hard_timeout):
-                    on_hard_timeout(job)
-                elif i not in dirty and _timed_out(ack_time, soft_timeout):
-                    on_soft_timeout(job)
-                    dirty.add(i)
+                if isinstance(job, MapResult):
+                    # Every chunk of a map() is a separate task with its
+                    # own worker and start time.
+                    tasks = [
+                        ((i, chunk), ack_time, pid)
+                        for chunk, ack_time, pid in job._running_chunks()
+                    ]
+                else:
+                    tasks = [(i, job._time_accepted, None)]
+                for key, ack_time, pid in tasks:
+                    # Only map chunks pass the pid, so handlers that take
+                    # just ``job`` keep working for apply_async() tasks.
+                    extra = () if pid is None else (pid,)
+                    if _timed_out(ack_time, hard_timeout):
+                        on_hard_timeout(job, *extra)
+                    elif key not in dirty and _timed_out(ack_time,
+                                                         soft_timeout):
+                        on_soft_timeout(job, *extra)
+                        dirty.add(key)
             yield
 
     def body(self):
@@ -1679,7 +1725,9 @@ class Pool:
 
         task_batches = Pool._get_tasks(func, iterable, chunksize)
         result = MapResult(self._cache, chunksize, len(iterable), callback,
-                           error_callback=error_callback)
+                           error_callback=error_callback,
+                           soft_timeout=self.soft_timeout,
+                           timeout=self.timeout)
         self._taskqueue.put((((TASK, (result._job, i, mapper, (x,), {}))
                               for i, x in enumerate(task_batches)), None))
         return result
@@ -1979,9 +2027,11 @@ class ApplyResult:
 
 class MapResult(ApplyResult):
 
-    def __init__(self, cache, chunksize, length, callback, error_callback):
+    def __init__(self, cache, chunksize, length, callback, error_callback,
+                 soft_timeout=None, timeout=None):
         ApplyResult.__init__(
             self, cache, callback, error_callback=error_callback,
+            soft_timeout=soft_timeout, timeout=timeout,
         )
         self._success = True
         self._length = length
@@ -1989,6 +2039,7 @@ class MapResult(ApplyResult):
         self._accepted = [False] * length
         self._worker_pid = [None] * length
         self._time_accepted = [None] * length
+        self._chunks_done = set()
         self._chunksize = chunksize
         if chunksize <= 0:
             self._number_left = 0
@@ -2001,6 +2052,7 @@ class MapResult(ApplyResult):
         success, result = success_result
         if success:
             self._value[i * self._chunksize:(i + 1) * self._chunksize] = result
+            self._chunks_done.add(i)
             self._number_left -= 1
             if self._number_left == 0:
                 if self._callback:
@@ -2030,8 +2082,21 @@ class MapResult(ApplyResult):
     def accepted(self):
         return all(self._accepted)
 
+    def _running_chunks(self):
+        # Yield ``(chunk, time_accepted, pid)`` for every chunk that has
+        # been accepted by a worker but has not returned a result yet.
+        if self._chunksize <= 0:
+            return
+        for start in range(0, self._length, self._chunksize):
+            chunk = start // self._chunksize
+            time_accepted = self._time_accepted[start]
+            if time_accepted is not None and chunk not in self._chunks_done:
+                yield chunk, time_accepted, self._worker_pid[start]
+
     def worker_pids(self):
-        return [pid for pid in self._worker_pid if pid]
+        # Only chunks that are still running: a worker that has returned
+        # its chunk no longer holds anything for this map().
+        return [pid for _, _, pid in self._running_chunks() if pid]
 
 #
 # Class whose instances are returned by `Pool.imap()`
@@ -2040,6 +2105,8 @@ class MapResult(ApplyResult):
 
 class IMapIterator:
     _worker_lost = None
+    _write_to = None
+    _scheduled_for = None
 
     def __init__(self, cache, lost_worker_timeout=LOST_WORKER_TIMEOUT):
         self._cond = threading.Condition(threading.Lock())
@@ -2051,6 +2118,7 @@ class IMapIterator:
         self._ready = False
         self._unsorted = {}
         self._worker_pids = []
+        self._running = {}
         self._lost_worker_timeout = lost_worker_timeout
         cache[self._job] = self
 
@@ -2083,6 +2151,7 @@ class IMapIterator:
 
     def _set(self, i, obj):
         with self._cond:
+            self._running.pop(i, None)
             if self._index == i:
                 self._items.append(obj)
                 self._index += 1
@@ -2108,12 +2177,18 @@ class IMapIterator:
 
     def _ack(self, i, time_accepted, pid, *args):
         self._worker_pids.append(pid)
+        self._running[i] = pid
 
     def ready(self):
         return self._ready
 
     def worker_pids(self):
         return self._worker_pids
+
+    def _running_pids(self):
+        # worker_pids() also lists the workers whose task has already
+        # returned; this lists only the ones still running a task.
+        return list(self._running.values())
 
 #
 # Class whose instances are returned by `Pool.imap_unordered()`
@@ -2124,6 +2199,7 @@ class IMapUnorderedIterator(IMapIterator):
 
     def _set(self, i, obj):
         with self._cond:
+            self._running.pop(i, None)
             self._items.append(obj)
             self._index += 1
             self._cond.notify()
