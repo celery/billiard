@@ -845,13 +845,16 @@ class TimeoutHandler(PoolThread):
                         for chunk, ack_time, pid in job._running_chunks()
                     ]
                 else:
-                    tasks = [(i, job._time_accepted, job._worker_pid)]
+                    tasks = [(i, job._time_accepted, None)]
                 for key, ack_time, pid in tasks:
+                    # Only map chunks pass the pid, so handlers that take
+                    # just ``job`` keep working for apply_async() tasks.
+                    extra = () if pid is None else (pid,)
                     if _timed_out(ack_time, hard_timeout):
-                        on_hard_timeout(job, pid)
+                        on_hard_timeout(job, *extra)
                     elif key not in dirty and _timed_out(ack_time,
                                                          soft_timeout):
-                        on_soft_timeout(job, pid)
+                        on_soft_timeout(job, *extra)
                         dirty.add(key)
             yield
 

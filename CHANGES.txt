@@ -1,9 +1,11 @@
 4.4.0 - unreleased
 ------------------
-- Enforce pool soft and hard timeouts for map() chunks, and only time out and
-  kill the workers that still run a chunk (#473). `TimeoutHandler.on_soft_timeout`
-  and `on_hard_timeout` take an optional `pid`, and `MapResult` takes optional
-  `soft_timeout` and `timeout` keywords.
+- Enforce pool soft and hard timeouts for each map()/starmap() chunk instead
+  of crashing the TimeoutHandler, and only time out and kill the workers that
+  still run a chunk (#473). imap()/imap_unordered() results are still not
+  timed. `MapResult` takes optional `soft_timeout` and `timeout` keywords.
+  For map chunks only, `TimeoutHandler.on_soft_timeout`/`on_hard_timeout` are
+  called with the worker pid as a second argument.
 
 
 4.3.2 - 2026-11-02

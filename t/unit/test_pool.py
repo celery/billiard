@@ -145,6 +145,27 @@ class test_pool:
         # Only the chunk that is still running has timed out.
         assert timed_out == [(result, 222)]
 
+    def test_timeout_handler_job_only_overrides(self):
+        # Overrides that take just ``job`` keep working for apply_async()
+        # tasks; only map chunks are passed a pid.
+        calls = []
+
+        class Handler(billiard.pool.TimeoutHandler):
+            def on_soft_timeout(self, job):
+                calls.append(('soft', job))
+
+            def on_hard_timeout(self, job):
+                calls.append(('hard', job))
+
+        cache = {}
+        long_ago = time.monotonic() - 10
+        soft = billiard.pool.ApplyResult(cache, None, soft_timeout=1)
+        soft._ack(0, long_ago, 111, None)
+        hard = billiard.pool.ApplyResult(cache, None, timeout=1)
+        hard._ack(0, long_ago, 222, None)
+        next(Handler([], cache, None, None).handle_timeouts())
+        assert calls == [('soft', soft), ('hard', hard)]
+
     def test_map_worker_pids_only_running_chunks(self):
         result = billiard.pool.MapResult({}, 1, 3, None, None)
         now = time.monotonic()
