@@ -166,6 +166,28 @@ class test_pool:
         next(Handler([], cache, None, None).handle_timeouts())
         assert calls == [('soft', soft), ('hard', hard)]
 
+    def test_timeout_handler_soft_timeout_per_map_chunk(self):
+        # Every chunk gets exactly one soft timeout signal, including the
+        # chunks that start after an earlier one was signalled.
+        cache = {}
+        result = billiard.pool.MapResult(
+            cache, 1, 3, None, None, soft_timeout=1)
+        long_ago = time.monotonic() - 10
+        result._ack(0, long_ago, 111)
+        result._ack(1, long_ago, 222)
+        timeout_handler = billiard.pool.TimeoutHandler([], cache, None, None)
+        signalled = []
+        timeout_handler.on_soft_timeout = (
+            lambda job, pid=None: signalled.append(pid))
+        handle_timeouts = timeout_handler.handle_timeouts()
+        next(handle_timeouts)
+        next(handle_timeouts)
+        assert signalled == [111, 222]
+        result._ack(2, long_ago, 333)
+        next(handle_timeouts)
+        next(handle_timeouts)
+        assert signalled == [111, 222, 333]
+
     def test_map_worker_pids_only_running_chunks(self):
         result = billiard.pool.MapResult({}, 1, 3, None, None)
         now = time.monotonic()
